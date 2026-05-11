@@ -1,22 +1,37 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Academia Fight Club API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: students
+    description: Student profiles
+  - name: sessions
+    description: Training sessions
+  - name: attendance
+    description: Attendance tracking
+  - name: face
+    description: Facial recognition
+  - name: rankings
+    description: Attendance rankings
+  - name: stats
+    description: Dashboard statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +39,478 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [student, teacher, admin]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /students:
+    get:
+      operationId: listStudents
+      tags: [students]
+      summary: List all students with their profiles
+      parameters:
+        - name: modality
+          in: query
+          schema:
+            type: string
+            enum: [thai, jiu, both]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of students
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentProfile"
+
+  /students/{id}:
+    get:
+      operationId: getStudent
+      tags: [students]
+      summary: Get student profile by user ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Student profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProfile"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateStudent
+      tags: [students]
+      summary: Update student profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentProfileUpdate"
+      responses:
+        "200":
+          description: Updated student profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProfile"
+
+  /students/{id}/face-descriptor:
+    post:
+      operationId: saveFaceDescriptor
+      tags: [students, face]
+      summary: Save face descriptor for a student
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FaceDescriptorInput"
+      responses:
+        "200":
+          description: Face descriptor saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /face/identify:
+    post:
+      operationId: identifyFace
+      tags: [face]
+      summary: Identify students from a photo descriptor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FaceIdentifyInput"
+      responses:
+        "200":
+          description: Identified students
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FaceMatch"
+
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List training sessions
+      parameters:
+        - name: modality
+          in: query
+          schema:
+            type: string
+            enum: [thai, jiu]
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingSession"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a training session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainingSessionInput"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingSession"
+
+  /sessions/{id}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a training session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingSession"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete a training session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /attendance:
+    get:
+      operationId: listAttendance
+      tags: [attendance]
+      summary: List attendance records
+      parameters:
+        - name: sessionId
+          in: query
+          schema:
+            type: integer
+        - name: studentId
+          in: query
+          schema:
+            type: integer
+        - name: modality
+          in: query
+          schema:
+            type: string
+            enum: [thai, jiu]
+      responses:
+        "200":
+          description: List of attendance records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceRecord"
+    post:
+      operationId: createAttendance
+      tags: [attendance]
+      summary: Create attendance record (mark student present)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceInput"
+      responses:
+        "201":
+          description: Attendance recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttendanceRecord"
+
+  /attendance/{id}:
+    delete:
+      operationId: deleteAttendance
+      tags: [attendance]
+      summary: Remove an attendance record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /rankings:
+    get:
+      operationId: listRankings
+      tags: [rankings]
+      summary: Get attendance rankings
+      parameters:
+        - name: modality
+          in: query
+          schema:
+            type: string
+            enum: [thai, jiu, both]
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [week, month, year, all]
+      responses:
+        "200":
+          description: Ranked students by attendance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StudentRanking"
+
+  /stats/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [stats]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /stats/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [stats]
+      summary: Get recent training activity
+      responses:
+        "200":
+          description: Recent activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +521,320 @@ components:
       required:
         - status
 
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    RegisterInput:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        role:
+          type: string
+          enum: [student, teacher]
+        phone:
+          type: string
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, name, email, role, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [student, teacher, admin]
+        phone:
+          type: ["string", "null"]
+        profilePhotoUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        profilePhotoUrl:
+          type: string
+
+    StudentProfile:
+      type: object
+      required: [id, userId, name, email, modalityThai, modalityJiu, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        modalityThai:
+          type: boolean
+        modalityJiu:
+          type: boolean
+        thaiGrade:
+          type: ["string", "null"]
+        jiuGrade:
+          type: ["string", "null"]
+        thaiGradeColor:
+          type: ["string", "null"]
+        jiuGradeColor:
+          type: ["string", "null"]
+        hasFaceDescriptor:
+          type: boolean
+        totalAttendanceThai:
+          type: integer
+        totalAttendanceJiu:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    StudentProfileUpdate:
+      type: object
+      properties:
+        modalityThai:
+          type: boolean
+        modalityJiu:
+          type: boolean
+        thaiGrade:
+          type: string
+        jiuGrade:
+          type: string
+        thaiGradeColor:
+          type: string
+        jiuGradeColor:
+          type: string
+
+    FaceDescriptorInput:
+      type: object
+      required: [descriptor]
+      properties:
+        descriptor:
+          type: array
+          items:
+            type: number
+        photoUrl:
+          type: string
+
+    FaceIdentifyInput:
+      type: object
+      required: [descriptors]
+      properties:
+        descriptors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+
+    FaceMatch:
+      type: object
+      required: [studentId, name, distance, matched]
+      properties:
+        studentId:
+          type: integer
+        name:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        distance:
+          type: number
+        matched:
+          type: boolean
+
+    TrainingSession:
+      type: object
+      required: [id, modality, sessionDate, teacherId, teacherName, createdAt]
+      properties:
+        id:
+          type: integer
+        modality:
+          type: string
+          enum: [thai, jiu]
+        sessionDate:
+          type: string
+          format: date-time
+        description:
+          type: ["string", "null"]
+        teacherId:
+          type: integer
+        teacherName:
+          type: string
+        attendanceCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    TrainingSessionInput:
+      type: object
+      required: [modality, sessionDate, teacherId]
+      properties:
+        modality:
+          type: string
+          enum: [thai, jiu]
+        sessionDate:
+          type: string
+          format: date-time
+        description:
+          type: string
+        teacherId:
+          type: integer
+
+    AttendanceRecord:
+      type: object
+      required: [id, sessionId, studentId, studentName, modality, createdAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        studentId:
+          type: integer
+        studentName:
+          type: string
+        studentPhotoUrl:
+          type: ["string", "null"]
+        modality:
+          type: string
+          enum: [thai, jiu]
+        postTrainingPhotoUrl:
+          type: ["string", "null"]
+        faceRecognized:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    AttendanceInput:
+      type: object
+      required: [sessionId, studentId]
+      properties:
+        sessionId:
+          type: integer
+        studentId:
+          type: integer
+        postTrainingPhotoUrl:
+          type: string
+        faceRecognized:
+          type: boolean
+
+    StudentRanking:
+      type: object
+      required: [rank, studentId, name, totalSessions, presentCount, percentage]
+      properties:
+        rank:
+          type: integer
+        studentId:
+          type: integer
+        name:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        thaiGrade:
+          type: ["string", "null"]
+        jiuGrade:
+          type: ["string", "null"]
+        thaiGradeColor:
+          type: ["string", "null"]
+        jiuGradeColor:
+          type: ["string", "null"]
+        totalSessions:
+          type: integer
+        presentCount:
+          type: integer
+        percentage:
+          type: number
+        modality:
+          type: string
+
+    DashboardStats:
+      type: object
+      required: [totalStudents, totalTeachers, totalSessionsThai, totalSessionsJiu, attendanceTodayThai, attendanceTodayJiu, totalAttendanceThisMonth]
+      properties:
+        totalStudents:
+          type: integer
+        totalTeachers:
+          type: integer
+        totalSessionsThai:
+          type: integer
+        totalSessionsJiu:
+          type: integer
+        attendanceTodayThai:
+          type: integer
+        attendanceTodayJiu:
+          type: integer
+        totalAttendanceThisMonth:
+          type: integer
+        studentsThaiOnly:
+          type: integer
+        studentsJiuOnly:
+          type: integer
+        studentsBoth:
+          type: integer
+
+    ActivityItem:
+      type: object
+      required: [id, type, description, createdAt]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [attendance, session, registration, graduation]
+        description:
+          type: string
+        studentName:
+          type: ["string", "null"]
+        studentPhotoUrl:
+          type: ["string", "null"]
+        modality:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
