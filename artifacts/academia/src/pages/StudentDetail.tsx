@@ -11,6 +11,7 @@ import { ArrowLeft, Camera, CheckCircle, XCircle, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 const THAI_GRADES = ["Iniciante", "Intermediario", "Avancado", "Instrutor", "Kru"];
 const THAI_COLORS = [
@@ -53,6 +54,8 @@ export default function StudentDetail() {
   const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) }
@@ -175,9 +178,18 @@ export default function StudentDetail() {
                     </Select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Cor do Mongkol</label>
-                    <Select value={student.thaiGradeColor ?? ""} onValueChange={(v) => handleGradeUpdate("thaiGradeColor", v)}>
-                      <SelectTrigger data-testid="select-thai-color"><SelectValue placeholder="Cor..." /></SelectTrigger>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      Cor do Prajied
+                      {!isMaster && <span className="ml-1 text-[10px] text-primary/70">(somente mestre)</span>}
+                    </label>
+                    <Select
+                      value={student.thaiGradeColor ?? ""}
+                      onValueChange={(v) => handleGradeUpdate("thaiGradeColor", v)}
+                      disabled={!isMaster}
+                    >
+                      <SelectTrigger data-testid="select-thai-color" disabled={!isMaster}>
+                        <SelectValue placeholder="Cor..." />
+                      </SelectTrigger>
                       <SelectContent>
                         {THAI_COLORS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                       </SelectContent>
