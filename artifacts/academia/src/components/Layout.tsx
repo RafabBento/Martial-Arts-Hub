@@ -31,10 +31,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Students", href: "/students", icon: Users },
-    { name: "Sessions", href: "/sessions", icon: CalendarDays },
-    { name: "Attendance", href: "/attendance", icon: Camera },
+    { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Alunos", href: "/students", icon: Users },
+    { name: "Sessões", href: "/sessions", icon: CalendarDays },
+    { name: "Presenças", href: "/attendance", icon: Camera },
     { name: "Rankings", href: "/rankings", icon: Trophy },
   ];
 
@@ -96,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-3 px-3 py-3 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all mb-2"
           >
             <UserIcon size={20} />
-            Profile
+            Perfil
           </Link>
           <Button
             variant="destructive"
@@ -105,7 +105,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             disabled={logoutMutation.isPending}
           >
             <LogOut size={20} />
-            Logout
+            Sair
           </Button>
         </div>
       </div>

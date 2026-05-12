@@ -17,8 +17,8 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("E-mail inválido"),
+  password: z.string().min(1, "Senha é obrigatória"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -48,8 +48,8 @@ export default function Login() {
         onError: (error: any) => {
           toast({
             variant: "destructive",
-            title: "Login failed",
-            description: error.message || "Invalid credentials. Please try again.",
+            title: "Falha no login",
+            description: error.message || "Credenciais inválidas. Tente novamente.",
           });
         },
       }
@@ -58,7 +58,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-background dark text-foreground flex">
-      {/* Left side - Image */}
+      {/* Lado esquerdo — imagem */}
       <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1555597673-b21d5c935865?q=80&w=1500&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-background to-transparent"></div>
@@ -67,25 +67,25 @@ export default function Login() {
             A
           </div>
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
-            Enter <br /> The Arena
+            Entre <br /> Na Arena
           </h2>
           <p className="mt-4 text-zinc-400 text-lg max-w-md">
-            Log in to track your progress, view your rankings, and manage your training sessions.
+            Acesse sua conta para acompanhar seu progresso, ver seu ranking e gerenciar seus treinos.
           </p>
         </div>
       </div>
 
-      {/* Right side - Form */}
+      {/* Lado direito — formulário */}
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24">
         <div className="w-full max-w-sm mx-auto space-y-8">
           <div className="space-y-2 lg:hidden">
             <div className="w-10 h-10 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-xl mb-6">
               A
             </div>
-            <h1 className="text-3xl font-black uppercase tracking-tighter">Welcome Back</h1>
+            <h1 className="text-3xl font-black uppercase tracking-tighter">Bem-vindo de volta</h1>
           </div>
-          
-          <h1 className="text-3xl font-black uppercase tracking-tighter hidden lg:block">Login</h1>
+
+          <h1 className="text-3xl font-black uppercase tracking-tighter hidden lg:block">Entrar</h1>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -94,9 +94,9 @@ export default function Login() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Email</FormLabel>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">E-mail</FormLabel>
                     <FormControl>
-                      <Input placeholder="fighter@academia.com" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
+                      <Input placeholder="lutador@academia.com" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -107,24 +107,24 @@ export default function Login() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Password</FormLabel>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
+                      <Input type="password" placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" autoComplete="current-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <Button type="submit" className="w-full h-12 text-lg font-bold uppercase tracking-wide" disabled={loginMutation.isPending}>
-                {loginMutation.isPending ? "Authenticating..." : "Login"}
+                {loginMutation.isPending ? "Autenticando..." : "Entrar"}
               </Button>
             </form>
           </Form>
 
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Não tem uma conta?{" "}
             <Link href="/register" className="text-primary font-bold hover:underline">
-              Join the club
+              Cadastre-se
             </Link>
           </p>
         </div>

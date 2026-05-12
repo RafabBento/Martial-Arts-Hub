@@ -13,36 +13,35 @@ export default function Home() {
         </div>
         <div className="flex gap-4">
           <Link href="/login">
-            <Button variant="ghost" className="font-semibold text-foreground hover:bg-white/10">LOGIN</Button>
+            <Button variant="ghost" className="font-semibold text-foreground hover:bg-white/10">ENTRAR</Button>
           </Link>
         </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden">
-        {/* Background Gradients/Noise */}
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-20 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background to-background"></div>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-30 pointer-events-none"></div>
 
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
           <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-[0.9]">
-            Discipline <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-red-800">Is Everything</span>
+            Disciplina <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-red-800">É Tudo</span>
           </h1>
-          
+
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto font-medium">
-            The complete management platform for serious combat sports. Muay Thai & Jiu-Jitsu tracking, rankings, and facial-recognition attendance.
+            A plataforma completa para academias de artes marciais. Controle de Muay Thai & Jiu-Jitsu, rankings e presença por reconhecimento facial.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
             <Link href="/register">
               <Button size="lg" className="w-full sm:w-auto h-14 px-8 text-lg font-bold uppercase tracking-wide">
-                Join the Club
+                Cadastrar-se
               </Button>
             </Link>
             <Link href="/login">
               <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 px-8 text-lg font-bold uppercase tracking-wide border-2">
-                Member Login
+                Entrar
               </Button>
             </Link>
           </div>
