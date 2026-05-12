@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useUpdateUser, useListAttendance, getListAttendanceQueryKey, getListUsersQueryKey } from "@workspace/api-client-react";
+import { useUpdateUser, useListAttendance, useGetStudent, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { User, Camera, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,21 @@ export default function Profile() {
   const queryClient = useQueryClient();
 
   const updateMutation = useUpdateUser();
+
+  const { data: studentData } = useGetStudent(user?.id ?? 0, {
+    query: { enabled: !!user?.id && user?.role === "student", queryKey: getGetStudentQueryKey(user?.id ?? 0) },
+  });
+
+  const hasThai = user?.role !== "student" ? true : (studentData?.modalityThai ?? true);
+  const hasJiu  = user?.role !== "student" ? true : (studentData?.modalityJiu  ?? false);
+  const showToggle   = hasThai && hasJiu;
+  const showJiuLogo  = hasJiu && (modality === "jiu" || !showToggle);
+
+  useEffect(() => {
+    if (studentData && !studentData.modalityThai && studentData.modalityJiu) {
+      setModality("jiu");
+    }
+  }, [studentData]);
 
   const { data: attendance } = useListAttendance(
     { studentId: user?.id, modality },
@@ -72,29 +87,31 @@ export default function Profile() {
             <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
             <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
           </div>
-          <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit mx-auto">
-            <Button
-              data-testid="button-profile-thai"
-              variant={modality === "thai" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setModality("thai")}
-            >
-              Muay Thai
-            </Button>
-            <Button
-              data-testid="button-profile-jiu"
-              variant={modality === "jiu" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setModality("jiu")}
-            >
-              Jiu-Jitsu
-            </Button>
-          </div>
+          {showToggle && (
+            <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit mx-auto">
+              <Button
+                data-testid="button-profile-thai"
+                variant={modality === "thai" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setModality("thai")}
+              >
+                Muay Thai
+              </Button>
+              <Button
+                data-testid="button-profile-jiu"
+                variant={modality === "jiu" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setModality("jiu")}
+              >
+                Jiu-Jitsu
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Logo Jiu — visível só no modo Jiu, espaço reservado no Thai */}
+        {/* Logo Jiu — visível quando showJiuLogo, espaço reservado caso contrário */}
         <div className="shrink-0" style={{ width: 140, height: 140 }}>
-          {modality === "jiu" && (
+          {showJiuLogo && (
             <img
               src={logoJiu}
               alt="Bollacha Wrestling BJJ"

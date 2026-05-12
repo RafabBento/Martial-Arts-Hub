@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
+import logoThai from "/logo-thai.png";
+import logoJiu from "/logo-jiu.png";
 
 const THAI_GRADES = ["Iniciante", "Intermediario", "Avancado", "Instrutor", "Kru"];
 const THAI_COLORS = [
@@ -118,6 +120,16 @@ export default function StudentDetail() {
           <div className="flex flex-wrap gap-2 justify-center">
             {student.modalityThai && <span className="px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 text-sm font-bold">MUAY THAI</span>}
             {student.modalityJiu && <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-sm font-bold">JIU-JITSU</span>}
+          </div>
+
+          {/* Logos da equipe conforme modalidade */}
+          <div className="flex items-center justify-center">
+            {student.modalityThai && (
+              <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 90, height: 90 }} />
+            )}
+            {student.modalityJiu && (
+              <img src={logoJiu} alt="Bollacha Wrestling BJJ" className="object-contain" style={{ width: 90, height: 90, marginLeft: student.modalityThai ? -20 : 0 }} />
+            )}
           </div>
 
           <div className="w-full pt-3 border-t border-border">
