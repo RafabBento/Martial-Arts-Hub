@@ -56,45 +56,46 @@ export default function Profile() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
-        <p className="text-muted-foreground mt-1">Gerencie suas informações pessoais</p>
-      </div>
-
-      {/* Toggle de modalidade */}
-      <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit">
-        <Button
-          data-testid="button-profile-thai"
-          variant={modality === "thai" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setModality("thai")}
-        >
-          Muay Thai
-        </Button>
-        <Button
-          data-testid="button-profile-jiu"
-          variant={modality === "jiu" ? "default" : "ghost"}
-          size="sm"
-          onClick={() => setModality("jiu")}
-        >
-          Jiu-Jitsu
-        </Button>
-      </div>
-
-      {/* Logos da equipe */}
-      <div className="flex items-center justify-center gap-6 py-4">
-        <img
-          src={logoThai}
-          alt="Front Artes Marciais"
-          className="h-36 w-36 object-contain drop-shadow-lg"
-        />
-        {modality === "jiu" && (
+      {/* Cabeçalho com logo ao lado do título */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
           <img
-            src={logoJiu}
-            alt="Bollacha Wrestling BJJ"
-            className="h-36 w-36 object-contain drop-shadow-lg"
+            src={logoThai}
+            alt="Front Artes Marciais"
+            className="h-16 w-16 object-contain"
           />
-        )}
+          {modality === "jiu" && (
+            <img
+              src={logoJiu}
+              alt="Bollacha Wrestling BJJ"
+              className="h-16 w-16 object-contain"
+            />
+          )}
+          <div>
+            <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
+            <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
+          </div>
+        </div>
+
+        {/* Toggle de modalidade */}
+        <div className="flex gap-2 bg-card border border-border rounded-lg p-1 shrink-0">
+          <Button
+            data-testid="button-profile-thai"
+            variant={modality === "thai" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setModality("thai")}
+          >
+            Muay Thai
+          </Button>
+          <Button
+            data-testid="button-profile-jiu"
+            variant={modality === "jiu" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setModality("jiu")}
+          >
+            Jiu-Jitsu
+          </Button>
+        </div>
       </div>
 
       {/* Dados do perfil */}
