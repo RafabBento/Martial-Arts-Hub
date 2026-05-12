@@ -122,15 +122,20 @@ export default function StudentDetail() {
             {student.modalityJiu && <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 text-sm font-bold">JIU-JITSU</span>}
           </div>
 
-          {/* Logos da equipe conforme modalidade */}
-          <div className="flex items-center justify-center">
-            {student.modalityThai && (
-              <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 90, height: 90 }} />
-            )}
-            {student.modalityJiu && (
-              <img src={logoJiu} alt="Bollacha Wrestling BJJ" className="object-contain" style={{ width: 90, height: 90, marginLeft: student.modalityThai ? -20 : 0 }} />
-            )}
-          </div>
+          {/* Logos da equipe conforme modalidade ativa */}
+          {(() => {
+            const showJiuLogo = student.modalityJiu && (activeModality === "jiu" || !showToggle);
+            return (
+              <div className="flex items-center justify-center gap-5">
+                {student.modalityThai && (
+                  <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 88, height: 88 }} />
+                )}
+                {showJiuLogo && (
+                  <img src={logoJiu} alt="Bollacha Wrestling BJJ" className="object-contain" style={{ width: 88, height: 88 }} />
+                )}
+              </div>
+            );
+          })()}
 
           <div className="w-full pt-3 border-t border-border">
             <div className="flex items-center gap-2 text-sm">
