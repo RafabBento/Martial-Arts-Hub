@@ -7,19 +7,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
+import logoThai from "/logo-thai.png";
+import logoJiu from "/logo-jiu.png";
+
+type Modality = "thai" | "jiu";
+
 export default function Profile() {
   const { user, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [modality, setModality] = useState<Modality>("thai");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const updateMutation = useUpdateUser();
 
   const { data: attendance } = useListAttendance(
-    { studentId: user?.id },
-    { query: { enabled: !!user?.id && user.role === "student", queryKey: getListAttendanceQueryKey({ studentId: user?.id }) } }
+    { studentId: user?.id, modality },
+    {
+      query: {
+        enabled: !!user?.id && user.role === "student",
+        queryKey: getListAttendanceQueryKey({ studentId: user?.id, modality }),
+      },
+    }
   );
 
   const handleSave = () => {
@@ -40,33 +51,93 @@ export default function Profile() {
 
   if (!user) return null;
 
-  const rolePt = user.role === "admin" ? "Administrador" : user.role === "teacher" ? "Professor" : "Aluno";
+  const rolePt =
+    user.role === "admin" ? "Administrador" : user.role === "teacher" ? "Professor" : "Aluno";
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
-        <p className="text-muted-foreground mt-1">Gerencie suas informacoes pessoais</p>
+        <p className="text-muted-foreground mt-1">Gerencie suas informações pessoais</p>
       </div>
 
+      {/* Toggle de modalidade */}
+      <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit">
+        <Button
+          data-testid="button-profile-thai"
+          variant={modality === "thai" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setModality("thai")}
+        >
+          Muay Thai
+        </Button>
+        <Button
+          data-testid="button-profile-jiu"
+          variant={modality === "jiu" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setModality("jiu")}
+        >
+          Jiu-Jitsu
+        </Button>
+      </div>
+
+      {/* Logos da equipe */}
+      <div className="flex items-center justify-center gap-6 py-4">
+        <img
+          src={logoThai}
+          alt="Front Artes Marciais"
+          className="h-36 w-36 object-contain drop-shadow-lg"
+        />
+        {modality === "jiu" && (
+          <img
+            src={logoJiu}
+            alt="Bollacha Wrestling BJJ"
+            className="h-36 w-36 object-contain drop-shadow-lg"
+          />
+        )}
+      </div>
+
+      {/* Dados do perfil */}
       <div className="bg-card border border-border rounded-lg p-6 space-y-6">
         <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-full bg-muted border-2 border-border overflow-hidden shrink-0 relative">
-            {user.profilePhotoUrl
-              ? <img src={user.profilePhotoUrl} alt={user.name} className="w-full h-full object-cover" />
-              : <div className="w-full h-full flex items-center justify-center text-3xl font-black text-muted-foreground">{user.name.charAt(0)}</div>
-            }
+          <div className="w-20 h-20 rounded-full bg-muted border-2 border-border overflow-hidden shrink-0">
+            {user.profilePhotoUrl ? (
+              <img
+                src={user.profilePhotoUrl}
+                alt={user.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-3xl font-black text-muted-foreground">
+                {user.name.charAt(0)}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-2xl font-bold">{user.name}</div>
             <div className="text-sm text-muted-foreground">{user.email}</div>
-            <span className={`mt-1 inline-block px-3 py-0.5 rounded-full text-xs font-bold ${
-              user.role === "admin" ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-              : user.role === "teacher" ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-              : "bg-primary/20 text-primary border border-primary/30"
-            }`}>
-              {rolePt}
-            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <span
+                className={`inline-block px-3 py-0.5 rounded-full text-xs font-bold ${
+                  user.role === "admin"
+                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                    : user.role === "teacher"
+                    ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+                    : "bg-primary/20 text-primary border border-primary/30"
+                }`}
+              >
+                {rolePt}
+              </span>
+              <span
+                className={`inline-block px-3 py-0.5 rounded-full text-xs font-bold ${
+                  modality === "thai"
+                    ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                    : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                }`}
+              >
+                {modality === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -90,11 +161,17 @@ export default function Profile() {
               />
             </div>
             <div className="flex gap-3">
-              <Button data-testid="button-save-profile" onClick={handleSave} disabled={updateMutation.isPending}>
+              <Button
+                data-testid="button-save-profile"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
                 <Save size={16} className="mr-2" />
                 {updateMutation.isPending ? "Salvando..." : "Salvar"}
               </Button>
-              <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setEditing(false)}>
+                Cancelar
+              </Button>
             </div>
           </div>
         ) : (
@@ -109,10 +186,10 @@ export default function Profile() {
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Telefone</span>
-              <span>{user.phone ?? "Nao informado"}</span>
+              <span>{user.phone ?? "Não informado"}</span>
             </div>
             <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Funcao</span>
+              <span className="text-muted-foreground">Função</span>
               <span>{rolePt}</span>
             </div>
             <div className="flex justify-between items-center text-sm">
@@ -124,7 +201,11 @@ export default function Profile() {
               variant="outline"
               size="sm"
               className="mt-2"
-              onClick={() => { setName(user.name); setPhone(user.phone ?? ""); setEditing(true); }}
+              onClick={() => {
+                setName(user.name);
+                setPhone(user.phone ?? "");
+                setEditing(true);
+              }}
             >
               <User size={14} className="mr-2" /> Editar Perfil
             </Button>
@@ -132,28 +213,52 @@ export default function Profile() {
         )}
       </div>
 
+      {/* Histórico de presenças — apenas alunos */}
       {user.role === "student" && (
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <Camera size={18} className="text-primary" />
-            <h2 className="font-bold text-lg uppercase tracking-wide">Historico de Presencas</h2>
-            <span className="ml-auto text-sm text-muted-foreground">{attendance?.length ?? 0} treinos</span>
+            <h2 className="font-bold text-lg uppercase tracking-wide">Histórico de Presenças</h2>
+            <span
+              className={`ml-2 text-xs font-bold px-2 py-0.5 rounded ${
+                modality === "thai"
+                  ? "bg-red-500/20 text-red-400"
+                  : "bg-blue-500/20 text-blue-400"
+              }`}
+            >
+              {modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"}
+            </span>
+            <span className="ml-auto text-sm text-muted-foreground">
+              {attendance?.length ?? 0} treinos
+            </span>
           </div>
           {attendance && attendance.length > 0 ? (
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {attendance.map((rec) => (
-                <div key={rec.id} data-testid={`row-my-att-${rec.id}`} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0 text-sm">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${rec.modality === "thai" ? "bg-red-400" : "bg-blue-400"}`} />
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${rec.modality === "thai" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}`}>
-                    {rec.modality === "thai" ? "MT" : "JJ"}
+                <div
+                  key={rec.id}
+                  data-testid={`row-my-att-${rec.id}`}
+                  className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0 text-sm"
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      rec.modality === "thai" ? "bg-red-400" : "bg-blue-400"
+                    }`}
+                  />
+                  <span className="flex-1 text-muted-foreground">
+                    {new Date(rec.createdAt).toLocaleDateString("pt-BR")}
                   </span>
-                  <span className="flex-1 text-muted-foreground">{new Date(rec.createdAt).toLocaleDateString("pt-BR")}</span>
-                  {rec.faceRecognized && <span className="text-xs text-green-400">Reconhecido</span>}
+                  {rec.faceRecognized && (
+                    <span className="text-xs text-green-400">Reconhecido</span>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground text-sm">Nenhuma presenca registrada</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              Nenhuma presença registrada em{" "}
+              {modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"}
+            </div>
           )}
         </div>
       )}
