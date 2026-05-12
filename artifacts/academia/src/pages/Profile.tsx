@@ -56,25 +56,29 @@ export default function Profile() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Cabeçalho com logo ao lado do título */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+      {/* Logos das equipes */}
+      <div className="flex items-center justify-center gap-1">
+        <img
+          src={logoThai}
+          alt="Front Artes Marciais"
+          className="object-contain"
+          style={{ width: 300, height: 300 }}
+        />
+        {modality === "jiu" && (
           <img
-            src={logoThai}
-            alt="Front Artes Marciais"
-            className="h-[92px] w-[92px] object-contain"
+            src={logoJiu}
+            alt="Bollacha Wrestling BJJ"
+            className="object-contain"
+            style={{ width: 300, height: 300 }}
           />
-          {modality === "jiu" && (
-            <img
-              src={logoJiu}
-              alt="Bollacha Wrestling BJJ"
-              className="h-[92px] w-[92px] object-contain"
-            />
-          )}
-          <div>
-            <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
-            <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
-          </div>
+        )}
+      </div>
+
+      {/* Título e toggle */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
         </div>
 
         {/* Toggle de modalidade */}
