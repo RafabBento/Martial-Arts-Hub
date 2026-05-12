@@ -7,7 +7,7 @@ export default function Home() {
       <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
           <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[130px] w-[130px] object-contain shrink-0" />
-          <span className="font-bold text-2xl tracking-tighter uppercase -ml-8 leading-tight">Front Artes Marciais</span>
+          <span className="font-bold text-2xl tracking-tighter uppercase -ml-2 leading-tight">Front Artes Marciais</span>
         </div>
         <div className="flex gap-4">
           <Link href="/login">
