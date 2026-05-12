@@ -58,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="h-16 flex items-center justify-between px-6 border-b border-border">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shrink-0">
-              <Skull size={18} className="text-primary" />
+              <Skull size={26} className="text-primary" />
             </div>
             <span className="font-bold text-xl tracking-tight uppercase leading-tight">FRONT ARTES MARCIAIS</span>
           </Link>
