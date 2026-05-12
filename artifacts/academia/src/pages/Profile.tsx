@@ -56,49 +56,51 @@ export default function Profile() {
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Logos das equipes */}
-      <div className="flex items-center justify-center">
+      {/* Cabeçalho: logos nas laterais, título no centro */}
+      <div className="flex items-center gap-6">
+        {/* Logo Thai — sempre visível */}
         <img
           src={logoThai}
           alt="Front Artes Marciais"
-          className="object-contain"
-          style={{ width: 300, height: 300 }}
+          className="object-contain shrink-0"
+          style={{ width: 140, height: 140 }}
         />
-        {modality === "jiu" && (
-          <img
-            src={logoJiu}
-            alt="Bollacha Wrestling BJJ"
-            className="object-contain"
-            style={{ width: 300, height: 300, marginLeft: -160 }}
-          />
-        )}
-      </div>
 
-      {/* Título e toggle */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
+        {/* Título e toggle — centro */}
+        <div className="flex-1 text-center space-y-3">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
+            <p className="text-muted-foreground mt-0.5 text-sm">Gerencie suas informações pessoais</p>
+          </div>
+          <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit mx-auto">
+            <Button
+              data-testid="button-profile-thai"
+              variant={modality === "thai" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setModality("thai")}
+            >
+              Muay Thai
+            </Button>
+            <Button
+              data-testid="button-profile-jiu"
+              variant={modality === "jiu" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setModality("jiu")}
+            >
+              Jiu-Jitsu
+            </Button>
+          </div>
         </div>
 
-        {/* Toggle de modalidade */}
-        <div className="flex gap-2 bg-card border border-border rounded-lg p-1 shrink-0">
-          <Button
-            data-testid="button-profile-thai"
-            variant={modality === "thai" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setModality("thai")}
-          >
-            Muay Thai
-          </Button>
-          <Button
-            data-testid="button-profile-jiu"
-            variant={modality === "jiu" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setModality("jiu")}
-          >
-            Jiu-Jitsu
-          </Button>
+        {/* Logo Jiu — visível só no modo Jiu, espaço reservado no Thai */}
+        <div className="shrink-0" style={{ width: 140, height: 140 }}>
+          {modality === "jiu" && (
+            <img
+              src={logoJiu}
+              alt="Bollacha Wrestling BJJ"
+              className="object-contain w-full h-full"
+            />
+          )}
         </div>
       </div>
 
