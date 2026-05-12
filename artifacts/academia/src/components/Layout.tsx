@@ -56,8 +56,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-border">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="/logo-thai.png" alt="Front Artes Marciais" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-xl tracking-tight uppercase">FRONT ARTES MARCIAIS</span>
+            <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[100px] w-[100px] object-contain shrink-0" />
+            <span className="font-bold text-xl tracking-tight uppercase -ml-12 leading-tight">FRONT ARTES MARCIAIS</span>
           </Link>
           <button
             className="lg:hidden text-muted-foreground hover:text-foreground"
