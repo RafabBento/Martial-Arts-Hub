@@ -69,7 +69,7 @@ export default function Profile() {
             src={logoJiu}
             alt="Bollacha Wrestling BJJ"
             className="object-contain"
-            style={{ width: 300, height: 300, marginLeft: -200 }}
+            style={{ width: 300, height: 300, marginLeft: -100 }}
           />
         )}
       </div>
