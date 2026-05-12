@@ -5,9 +5,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background dark text-foreground flex flex-col">
       <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
-        <div className="flex items-center gap-3">
-          <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[130px] w-[130px] object-contain shrink-0 -ml-7 invert brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.4)]" />
-          <span className="font-bold text-2xl tracking-tighter uppercase -ml-2 leading-tight">Front Artes Marciais</span>
+        <div className="flex items-center">
+          <span className="font-bold text-2xl tracking-tighter uppercase leading-tight">Front Artes Marciais</span>
         </div>
         <div className="flex gap-4">
           <Link href="/login">
