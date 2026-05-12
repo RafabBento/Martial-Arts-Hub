@@ -8,11 +8,7 @@ export default function Home() {
         <div className="flex items-center">
           <span className="font-bold text-2xl tracking-tighter uppercase leading-tight">Front Artes Marciais</span>
         </div>
-        <div className="flex gap-4">
-          <Link href="/login">
-            <Button variant="ghost" className="font-semibold text-foreground hover:bg-white/10">ENTRAR</Button>
-          </Link>
-        </div>
+        <div />
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden">
