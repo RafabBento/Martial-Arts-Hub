@@ -57,7 +57,7 @@ export default function Profile() {
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Logos das equipes */}
-      <div className="flex items-center justify-center gap-1">
+      <div className="flex items-center justify-center">
         <img
           src={logoThai}
           alt="Front Artes Marciais"
@@ -69,7 +69,7 @@ export default function Profile() {
             src={logoJiu}
             alt="Bollacha Wrestling BJJ"
             className="object-contain"
-            style={{ width: 300, height: 300 }}
+            style={{ width: 300, height: 300, marginLeft: -80 }}
           />
         )}
       </div>
