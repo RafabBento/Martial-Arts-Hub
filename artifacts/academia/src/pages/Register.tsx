@@ -70,14 +70,15 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-background dark text-foreground flex">
-      {/* Lado esquerdo — formulário */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 overflow-y-auto py-12">
-        <div className="w-full max-w-sm mx-auto space-y-8">
-          <div className="space-y-2 lg:hidden">
-            <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[100px] w-[100px] object-contain mb-4" />
-          </div>
+    <div className="min-h-screen bg-background dark text-foreground flex relative overflow-hidden">
+      {/* Marca d'água em tela cheia */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img src="/logo-thai.png" alt="" aria-hidden className="w-[70vmin] h-[70vmin] object-contain opacity-[0.06]" />
+      </div>
 
+      {/* Lado esquerdo — formulário */}
+      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 overflow-y-auto py-12 relative z-10">
+        <div className="w-full max-w-sm mx-auto space-y-8">
           <h1 className="text-3xl font-black uppercase tracking-tighter">Junte-se ao Clube</h1>
           <p className="text-muted-foreground">Cadastre-se para começar a acompanhar sua jornada nas artes marciais.</p>
 
@@ -172,7 +173,7 @@ export default function Register() {
       </div>
 
       {/* Lado direito — imagem */}
-      <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden">
+      <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=1500&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-l from-background to-transparent"></div>
         <div className="relative z-10 flex flex-col justify-end p-12 w-full text-right items-end">

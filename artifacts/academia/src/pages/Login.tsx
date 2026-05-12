@@ -57,13 +57,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background dark text-foreground flex">
+    <div className="min-h-screen bg-background dark text-foreground flex relative overflow-hidden">
+      {/* Marca d'água em tela cheia */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+        <img src="/logo-thai.png" alt="" aria-hidden className="w-[70vmin] h-[70vmin] object-contain opacity-[0.06]" />
+      </div>
+
       {/* Lado esquerdo — imagem */}
-      <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden">
+      <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1555597673-b21d5c935865?q=80&w=1500&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-background to-transparent"></div>
         <div className="relative z-10 flex flex-col justify-end p-12 w-full">
-          <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[100px] w-[100px] object-contain mb-4" />
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
             Entre <br /> Na Arena
           </h2>
@@ -74,10 +78,9 @@ export default function Login() {
       </div>
 
       {/* Lado direito — formulário */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24">
+      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 relative z-10">
         <div className="w-full max-w-sm mx-auto space-y-8">
-          <div className="space-y-2 lg:hidden">
-            <img src="/logo-thai.png" alt="Front Artes Marciais" className="h-[100px] w-[100px] object-contain mb-4" />
+          <div className="lg:hidden">
             <h1 className="text-3xl font-black uppercase tracking-tighter">Bem-vindo de volta</h1>
           </div>
 
