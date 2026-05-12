@@ -9,7 +9,7 @@ export default function Home() {
           <div className="w-10 h-10 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-xl">
             A
           </div>
-          <span className="font-bold text-2xl tracking-tighter uppercase">Academia FC</span>
+          <span className="font-bold text-2xl tracking-tighter uppercase">Front Artes Marciais</span>
         </div>
         <div className="flex gap-4">
           <Link href="/login">

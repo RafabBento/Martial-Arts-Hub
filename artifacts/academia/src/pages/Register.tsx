@@ -182,7 +182,7 @@ export default function Register() {
             Comprometa-se <br /> com a Grandeza
           </h2>
           <p className="mt-4 text-zinc-400 text-lg max-w-md text-right">
-            Disciplina é tudo. Entre na Academia FC e acompanhe sua jornada nas artes marciais.
+            Disciplina é tudo. Entre na Front Artes Marciais e acompanhe sua jornada nas artes marciais.
           </p>
         </div>
       </div>

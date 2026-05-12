@@ -59,7 +59,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="w-8 h-8 bg-primary rounded flex items-center justify-center font-black text-primary-foreground">
               A
             </div>
-            <span className="font-bold text-xl tracking-tight uppercase">ACADEMIA FC</span>
+            <span className="font-bold text-xl tracking-tight uppercase">FRONT ARTES MARCIAIS</span>
           </Link>
           <button
             className="lg:hidden text-muted-foreground hover:text-foreground"
