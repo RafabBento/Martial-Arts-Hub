@@ -62,13 +62,13 @@ export default function Profile() {
           <img
             src={logoThai}
             alt="Front Artes Marciais"
-            className="h-16 w-16 object-contain"
+            className="h-9 w-9 object-contain"
           />
           {modality === "jiu" && (
             <img
               src={logoJiu}
               alt="Bollacha Wrestling BJJ"
-              className="h-16 w-16 object-contain"
+              className="h-9 w-9 object-contain"
             />
           )}
           <div>
