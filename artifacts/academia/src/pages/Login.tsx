@@ -63,9 +63,7 @@ export default function Login() {
         <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1555597673-b21d5c935865?q=80&w=1500&auto=format&fit=crop')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-background to-transparent"></div>
         <div className="relative z-10 flex flex-col justify-end p-12 w-full">
-          <div className="w-12 h-12 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-2xl mb-6">
-            A
-          </div>
+          <img src="/logo-thai.png" alt="Front Artes Marciais" className="w-12 h-12 object-contain mb-6" />
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
             Entre <br /> Na Arena
           </h2>
@@ -79,9 +77,7 @@ export default function Login() {
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24">
         <div className="w-full max-w-sm mx-auto space-y-8">
           <div className="space-y-2 lg:hidden">
-            <div className="w-10 h-10 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-xl mb-6">
-              A
-            </div>
+            <img src="/logo-thai.png" alt="Front Artes Marciais" className="w-10 h-10 object-contain mb-6" />
             <h1 className="text-3xl font-black uppercase tracking-tighter">Bem-vindo de volta</h1>
           </div>
 

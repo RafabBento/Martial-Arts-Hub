@@ -6,9 +6,7 @@ export default function Home() {
     <div className="min-h-screen bg-background dark text-foreground flex flex-col">
       <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-xl">
-            A
-          </div>
+          <img src="/logo-thai.png" alt="Front Artes Marciais" className="w-10 h-10 object-contain" />
           <span className="font-bold text-2xl tracking-tighter uppercase">Front Artes Marciais</span>
         </div>
         <div className="flex gap-4">

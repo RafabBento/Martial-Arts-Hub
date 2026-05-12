@@ -75,9 +75,7 @@ export default function Register() {
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 overflow-y-auto py-12">
         <div className="w-full max-w-sm mx-auto space-y-8">
           <div className="space-y-2 lg:hidden">
-            <div className="w-10 h-10 bg-primary text-primary-foreground font-black flex items-center justify-center rounded-sm text-xl mb-6">
-              A
-            </div>
+            <img src="/logo-thai.png" alt="Front Artes Marciais" className="w-10 h-10 object-contain mb-6" />
           </div>
 
           <h1 className="text-3xl font-black uppercase tracking-tighter">Junte-se ao Clube</h1>
