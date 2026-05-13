@@ -12,7 +12,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden">
-        <img src="/bg-home.png" alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain object-center opacity-80 pointer-events-none" />
+        <div className="absolute inset-0 bg-[url('/bg-home.png')] bg-cover bg-center opacity-80"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-zinc-900/70 to-black"></div>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjwvc3ZnPg==')] opacity-30 pointer-events-none"></div>
 
