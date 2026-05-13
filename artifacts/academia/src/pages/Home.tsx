@@ -38,6 +38,8 @@ export default function Home() {
               </Button>
             </Link>
           </div>
+
+          <p className="text-sm font-bold uppercase tracking-[0.3em] text-zinc-500 pt-4">Front Artes Marciais</p>
         </div>
       </main>
     </div>
