@@ -4,13 +4,6 @@ import { Button } from "@/components/ui/button";
 export default function Home() {
   return (
     <div className="min-h-screen bg-background dark text-foreground flex flex-col">
-      <header className="absolute top-0 w-full p-6 flex justify-between items-center z-10">
-        <div className="flex items-center">
-          <span className="font-bold text-2xl tracking-tighter uppercase leading-tight">Front Artes Marciais</span>
-        </div>
-        <div />
-      </header>
-
       <main className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('/bg-home.png')] bg-cover bg-center opacity-80"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-zinc-900/70 to-black"></div>
