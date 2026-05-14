@@ -5,6 +5,7 @@ import { Link, useLocation } from "wouter";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -74,6 +75,15 @@ export default function Register() {
       {/* Marca d'água em tela cheia */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
         <img src="/logo-thai.png" alt="" aria-hidden className="w-[70vmin] h-[70vmin] object-contain opacity-[0.06]" />
+      </div>
+
+      {/* Botão voltar */}
+      <div className="absolute top-4 left-4 z-20">
+        <Link href="/">
+          <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10">
+            <ArrowLeft size={20} />
+          </Button>
+        </Link>
       </div>
 
       {/* Lado esquerdo — formulário */}
