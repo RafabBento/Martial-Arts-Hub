@@ -2,10 +2,12 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   useListSessions, getListSessionsQueryKey,
   useListStudents, getListStudentsQueryKey,
+  useListUsers, getListUsersQueryKey,
+  useCreateSession,
   useCreateAttendance, useListAttendance, getListAttendanceQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus } from "lucide-react";
+import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus, CalendarCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +15,38 @@ import { useAuth } from "../contexts/AuthContext";
 
 type ModelStatus = "idle" | "loading" | "ready" | "error";
 type ScanStatus = "idle" | "scanning" | "found" | "notfound";
+
+// ---------- Cronograma semanal ----------
+// days: 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+const WEEKLY_SCHEDULE = [
+  { days: [1,2,3,4,5], hour: 19, minute: 0,  modality: "jiu"  as const, instructorKey: "Ewerton"  },
+  { days: [1,3,5],      hour: 20, minute: 30, modality: "thai" as const, instructorKey: "Ewerton"  },
+  { days: [2,4],        hour: 20, minute: 30, modality: "thai" as const, instructorKey: "Luis"     },
+  { days: [6],          hour: 10, minute: 30, modality: "thai" as const, instructorKey: "Nilberto" },
+];
+
+function detectCurrentClass(now = new Date()) {
+  const day   = now.getDay();
+  const total = now.getHours() * 60 + now.getMinutes();
+  for (const entry of WEEKLY_SCHEDULE) {
+    if (entry.days.includes(day)) {
+      const start = entry.hour * 60 + entry.minute;
+      if (total >= start - 30 && total <= start + 90) return entry;
+    }
+  }
+  return null;
+}
+
+function isToday(date: Date) {
+  const t = new Date();
+  return date.getFullYear() === t.getFullYear()
+      && date.getMonth()    === t.getMonth()
+      && date.getDate()     === t.getDate();
+}
+
+function fmtTime(hour: number, minute: number) {
+  return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+}
 
 interface IdentifyMatch {
   studentId: number;
@@ -52,12 +86,82 @@ export default function Attendance() {
   const [mode, setMode] = useState<"face" | "gallery" | "manual">("face");
   const [manualStudent, setManualStudent] = useState("");
   const [galleryScanning, setGalleryScanning] = useState(false);
+  const [autoCreating, setAutoCreating] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const { data: sessions } = useListSessions(
     { modality: undefined },
     { query: { queryKey: getListSessionsQueryKey() } }
   );
+
+  const { data: teachers } = useListUsers(
+    { role: "teacher" },
+    { query: { queryKey: getListUsersQueryKey({ role: "teacher" }) } }
+  );
+
+  const createSessionMutation = useCreateSession();
+
+  // ---- Detecção inteligente da aula atual ----
+  const currentClass = detectCurrentClass();
+
+  const currentTeacher = currentClass && teachers
+    ? teachers.find(t => t.name.toLowerCase().includes(currentClass.instructorKey.toLowerCase()))
+    : null;
+
+  const todaySession = currentClass && sessions
+    ? sessions.find(s =>
+        s.modality === currentClass.modality &&
+        isToday(new Date(s.sessionDate))
+      )
+    : null;
+
+  // Auto-seleciona sessão de hoje quando carregada
+  useEffect(() => {
+    if (todaySession && !selectedSession) {
+      setSelectedSession(String(todaySession.id));
+    }
+  }, [todaySession, selectedSession]);
+
+  const handleAutoSession = async () => {
+    if (!currentClass) return;
+    if (todaySession) {
+      setSelectedSession(String(todaySession.id));
+      toast({ title: "Sessão de hoje selecionada!" });
+      return;
+    }
+    if (!currentTeacher) {
+      toast({ title: "Instrutor não encontrado no sistema. Cadastre-o primeiro.", variant: "destructive" });
+      return;
+    }
+    setAutoCreating(true);
+    const now = new Date();
+    const sessionDate = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(),
+      currentClass.hour, currentClass.minute, 0
+    );
+    createSessionMutation.mutate(
+      {
+        data: {
+          modality: currentClass.modality,
+          sessionDate: sessionDate.toISOString(),
+          teacherId: currentTeacher.id,
+          description: undefined,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+          setSelectedSession(String(created.id));
+          toast({ title: "Sessão criada e selecionada automaticamente!" });
+          setAutoCreating(false);
+        },
+        onError: () => {
+          toast({ title: "Erro ao criar sessão automática", variant: "destructive" });
+          setAutoCreating(false);
+        },
+      }
+    );
+  };
 
   const { data: students } = useListStudents(
     {},
@@ -283,8 +387,51 @@ export default function Attendance() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+
+          {/* Banner inteligente de aula atual */}
+          {currentClass ? (
+            <div className={`rounded-xl border p-4 flex items-center gap-4 ${
+              todaySession
+                ? "bg-green-500/10 border-green-500/30"
+                : "bg-primary/10 border-primary/30"
+            }`}>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                todaySession ? "bg-green-500/20" : "bg-primary/20"
+              }`}>
+                {todaySession ? <CalendarCheck size={20} className="text-green-400" /> : <Clock size={20} className="text-primary" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm">
+                  {currentClass.modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"} — {fmtTime(currentClass.hour, currentClass.minute)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {currentTeacher ? currentTeacher.name : `Instrutor: ${currentClass.instructorKey}`}
+                  {todaySession ? " · Sessão já aberta" : " · Nenhuma sessão criada hoje"}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant={todaySession ? "outline" : "default"}
+                disabled={autoCreating}
+                onClick={handleAutoSession}
+              >
+                {autoCreating
+                  ? <><Loader2 size={13} className="animate-spin mr-1" />Criando...</>
+                  : todaySession
+                    ? <><CalendarCheck size={13} className="mr-1" />Selecionar</>
+                    : <><Zap size={13} className="mr-1" />Abrir aula</>
+                }
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-muted/30 p-3 flex items-center gap-3 text-muted-foreground text-sm">
+              <Clock size={16} />
+              <span>Nenhuma aula no cronograma para este horário</span>
+            </div>
+          )}
+
           <div className="bg-card border border-border rounded-lg p-4">
-            <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Sessao de Treino</label>
+            <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Sessão de Treino</label>
             <Select value={selectedSession} onValueChange={setSelectedSession} data-testid="select-session">
               <SelectTrigger data-testid="select-session-trigger">
                 <SelectValue placeholder="Selecione a sessao..." />
