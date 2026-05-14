@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
   useGetStudent, getGetStudentQueryKey,
@@ -7,13 +7,23 @@ import {
   getListStudentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Camera, CheckCircle, XCircle, Shield } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
 import logoThai from "/logo-thai.png";
 import logoJiu from "/logo-jiu.png";
+
+const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
+
+async function loadFaceApi() {
+  const faceapi = await import("face-api.js");
+  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
+  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
+  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
+  return faceapi;
+}
 
 const THAI_GRADES = ["Iniciante", "Intermediario", "Avancado", "Instrutor", "Kru"];
 const THAI_COLORS = [
@@ -54,10 +64,53 @@ export default function StudentDetail() {
   const [, setLocation] = useLocation();
   const studentId = params ? parseInt(params.id, 10) : 0;
   const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai");
+  const [faceUploading, setFaceUploading] = useState(false);
+  const faceInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isMaster = user?.role === "teacher" || user?.role === "admin";
+
+  const handleGalleryFace = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFaceUploading(true);
+    try {
+      const faceapi = await loadFaceApi();
+      const img = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0);
+      const detection = await faceapi
+        .detectSingleFace(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      if (!detection) {
+        toast({ title: "Nenhum rosto detectado na foto", variant: "destructive" });
+        return;
+      }
+      const descriptor = Array.from(detection.descriptor);
+      const resp = await fetch(`/api/students/${studentId}/face-descriptor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ descriptor, photoUrl: null }),
+      });
+      if (!resp.ok) throw new Error("Falha ao salvar");
+      queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+      toast({ title: "Rosto cadastrado com sucesso!" });
+    } catch (err: any) {
+      if (err?.message !== "Falha ao salvar") {
+        toast({ title: "Erro ao processar a foto", variant: "destructive" });
+      } else {
+        toast({ title: "Erro ao salvar o descritor", variant: "destructive" });
+      }
+    } finally {
+      setFaceUploading(false);
+      if (faceInputRef.current) faceInputRef.current.value = "";
+    }
+  };
 
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) }
@@ -137,13 +190,36 @@ export default function StudentDetail() {
             );
           })()}
 
-          <div className="w-full pt-3 border-t border-border">
+          <div className="w-full pt-3 border-t border-border space-y-2">
             <div className="flex items-center gap-2 text-sm">
               {student.hasFaceDescriptor
                 ? <><CheckCircle size={16} className="text-green-400" /><span className="text-green-400">Rosto cadastrado</span></>
-                : <><XCircle size={16} className="text-muted-foreground" /><span className="text-muted-foreground">Rosto nao cadastrado</span></>
+                : <><XCircle size={16} className="text-muted-foreground" /><span className="text-muted-foreground">Rosto não cadastrado</span></>
               }
             </div>
+            {isMaster && (
+              <>
+                <input
+                  ref={faceInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleGalleryFace}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  disabled={faceUploading}
+                  onClick={() => faceInputRef.current?.click()}
+                >
+                  {faceUploading
+                    ? <><Loader2 size={14} className="animate-spin mr-2" />Processando...</>
+                    : <><ImagePlus size={14} className="mr-2" />{student.hasFaceDescriptor ? "Atualizar foto da galeria" : "Cadastrar pelo galeria"}</>
+                  }
+                </Button>
+              </>
+            )}
           </div>
 
           <div className="w-full space-y-2 text-sm text-muted-foreground">

@@ -5,7 +5,7 @@ import {
   useCreateAttendance, useListAttendance, getListAttendanceQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap } from "lucide-react";
+import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -49,8 +49,10 @@ export default function Attendance() {
   const [selectedSession, setSelectedSession] = useState("");
   const [matches, setMatches] = useState<IdentifyMatch[]>([]);
   const [confirmedIds, setConfirmedIds] = useState<Set<number>>(new Set());
-  const [mode, setMode] = useState<"face" | "manual">("face");
+  const [mode, setMode] = useState<"face" | "gallery" | "manual">("face");
   const [manualStudent, setManualStudent] = useState("");
+  const [galleryScanning, setGalleryScanning] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const { data: sessions } = useListSessions(
     { modality: undefined },
@@ -213,6 +215,63 @@ export default function Attendance() {
     setManualStudent("");
   };
 
+  const handleGalleryScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!selectedSession) {
+      toast({ title: "Selecione uma sessão primeiro", variant: "destructive" });
+      return;
+    }
+    setGalleryScanning(true);
+    setMatches([]);
+    setScanStatus("scanning");
+    try {
+      if (!faceApiRef.current) {
+        faceApiRef.current = await loadFaceApi();
+      }
+      const faceapi = faceApiRef.current;
+      const img = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0);
+      const detections = await faceapi
+        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+      if (detections.length === 0) {
+        setScanStatus("notfound");
+        toast({ title: "Nenhum rosto detectado na foto", variant: "destructive" });
+        setTimeout(() => setScanStatus("idle"), 2000);
+        return;
+      }
+      const descriptors = detections.map(d => Array.from(d.descriptor));
+      const resp = await fetch("/api/face/identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ descriptors }),
+      });
+      if (!resp.ok) throw new Error("Identify failed");
+      const result: IdentifyMatch[] = await resp.json();
+      const found = result.filter(r => r.matched);
+      if (found.length > 0) {
+        setMatches(found);
+        setScanStatus("found");
+      } else {
+        setScanStatus("notfound");
+        toast({ title: "Nenhum aluno identificado na foto", variant: "destructive" });
+        setTimeout(() => setScanStatus("idle"), 2000);
+      }
+    } catch {
+      setScanStatus("idle");
+      toast({ title: "Erro ao processar a foto", variant: "destructive" });
+    } finally {
+      setGalleryScanning(false);
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
+    }
+  };
+
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
 
   return (
@@ -243,18 +302,25 @@ export default function Attendance() {
             </Select>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               data-testid="button-mode-face"
               variant={mode === "face" ? "default" : "outline"}
-              onClick={() => { setMode("face"); stopContinuousScan(); }}
+              onClick={() => { setMode("face"); stopContinuousScan(); setMatches([]); setScanStatus("idle"); }}
             >
-              <ScanFace size={16} className="mr-2" /> Facial
+              <ScanFace size={16} className="mr-2" /> Câmera
+            </Button>
+            <Button
+              data-testid="button-mode-gallery"
+              variant={mode === "gallery" ? "default" : "outline"}
+              onClick={() => { setMode("gallery"); stopCamera(); setMatches([]); setScanStatus("idle"); }}
+            >
+              <ImagePlus size={16} className="mr-2" /> Galeria
             </Button>
             <Button
               data-testid="button-mode-manual"
               variant={mode === "manual" ? "default" : "outline"}
-              onClick={() => { setMode("manual"); stopCamera(); }}
+              onClick={() => { setMode("manual"); stopCamera(); setMatches([]); setScanStatus("idle"); }}
             >
               <Users size={16} className="mr-2" /> Manual
             </Button>
@@ -363,6 +429,76 @@ export default function Attendance() {
                         ) : (
                           <Button
                             data-testid={`button-confirm-${m.studentId}`}
+                            size="sm"
+                            onClick={() => confirmAttendance(m.studentId, true)}
+                            disabled={createAttMutation.isPending}
+                          >
+                            <UserCheck size={14} className="mr-1" /> Confirmar
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {mode === "gallery" && (
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="p-5 space-y-4">
+                <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Identificar por Foto da Galeria</h3>
+                <p className="text-xs text-muted-foreground">Envie uma foto com o(s) rosto(s) do(s) aluno(s) para identificação automática.</p>
+
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleGalleryScan}
+                />
+                <Button
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={galleryScanning || !selectedSession}
+                  className="w-full"
+                >
+                  {galleryScanning
+                    ? <><Loader2 size={16} className="animate-spin mr-2" />Analisando foto...</>
+                    : <><ImagePlus size={16} className="mr-2" />Selecionar foto da galeria</>
+                  }
+                </Button>
+
+                {scanStatus === "scanning" && (
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" /> Identificando rostos...
+                  </div>
+                )}
+                {scanStatus === "notfound" && (
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <XCircle size={14} /> Nenhum aluno identificado
+                  </div>
+                )}
+                {matches.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-green-400 flex items-center gap-2">
+                      <CheckCircle size={14} /> {matches.length} aluno{matches.length > 1 ? "s" : ""} identificado{matches.length > 1 ? "s" : ""}
+                    </div>
+                    {matches.map(m => (
+                      <div key={m.studentId} className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                        <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
+                          {m.profilePhotoUrl
+                            ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
+                          }
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold">{m.name}</div>
+                          <div className="text-xs text-muted-foreground">Dist: {m.distance.toFixed(3)}</div>
+                        </div>
+                        {attendedIds.has(m.studentId) || confirmedIds.has(m.studentId) ? (
+                          <span className="text-xs text-green-400 font-bold">Já registrado</span>
+                        ) : (
+                          <Button
                             size="sm"
                             onClick={() => confirmAttendance(m.studentId, true)}
                             disabled={createAttMutation.isPending}
