@@ -5,20 +5,20 @@ import { Search, Users, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+const PRIMARY_COLOR_MAP: Record<string, string> = {
+  white: "bg-white text-black border-gray-300",
+  blue: "bg-blue-600 text-white border-blue-700",
+  purple: "bg-purple-600 text-white border-purple-700",
+  brown: "bg-amber-800 text-white border-amber-900",
+  black: "bg-gray-900 text-white border-gray-700",
+  yellow: "bg-yellow-400 text-black border-yellow-500",
+  red: "bg-red-600 text-white border-red-700",
+  green: "bg-green-600 text-white border-green-700",
+};
+
 function BeltBadge({ grade, color, label }: { grade: string | null | undefined; color: string | null | undefined; label: string }) {
   if (!grade) return null;
-  const colorMap: Record<string, string> = {
-    white: "bg-white text-black border-gray-300",
-    blue: "bg-blue-600 text-white border-blue-700",
-    purple: "bg-purple-600 text-white border-purple-700",
-    brown: "bg-amber-800 text-white border-amber-900",
-    black: "bg-gray-900 text-white border-gray-700",
-    yellow: "bg-yellow-400 text-black border-yellow-500",
-    orange: "bg-orange-500 text-white border-orange-600",
-    red: "bg-red-600 text-white border-red-700",
-    green: "bg-green-600 text-white border-green-700",
-  };
-  const cls = colorMap[color ?? ""] ?? "bg-muted text-foreground border-border";
+  const cls = PRIMARY_COLOR_MAP[color ?? ""] ?? "bg-muted text-foreground border-border";
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded border ${cls}`}>
       {label}: {grade}

@@ -25,15 +25,18 @@ async function loadFaceApi() {
   return faceapi;
 }
 
-const THAI_GRADES = ["Iniciante", "Intermediario", "Avancado", "Instrutor", "Kru"];
-const THAI_COLORS = [
-  { value: "white", label: "Branco" },
-  { value: "yellow", label: "Amarelo" },
-  { value: "orange", label: "Laranja" },
-  { value: "green", label: "Verde" },
-  { value: "blue", label: "Azul" },
-  { value: "red", label: "Vermelho" },
-  { value: "black", label: "Preto" },
+const PRAJIED_GRADES = [
+  { value: "branco",                  label: "Branco",                  primary: "white",  secondary: null    },
+  { value: "branco-ponta-vermelha",   label: "Branco ponta vermelha",   primary: "white",  secondary: "red"   },
+  { value: "vermelha",                label: "Vermelha",                primary: "red",    secondary: null    },
+  { value: "vermelha-ponta-amarela",  label: "Vermelha ponta amarela",  primary: "red",    secondary: "yellow"},
+  { value: "amarela",                 label: "Amarela",                 primary: "yellow", secondary: null    },
+  { value: "amarela-ponta-verde",     label: "Amarela ponta verde",     primary: "yellow", secondary: "green" },
+  { value: "verde",                   label: "Verde",                   primary: "green",  secondary: null    },
+  { value: "verde-ponta-azul",        label: "Verde ponta azul",        primary: "green",  secondary: "blue"  },
+  { value: "azul",                    label: "Azul",                    primary: "blue",   secondary: null    },
+  { value: "azul-ponta-preta",        label: "Azul ponta preta",        primary: "blue",   secondary: "black" },
+  { value: "preta",                   label: "Preta",                   primary: "black",  secondary: null    },
 ];
 const JIU_GRADES = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
 const JIU_COLORS = [
@@ -44,19 +47,42 @@ const JIU_COLORS = [
   { value: "black", label: "Preta" },
 ];
 
+const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
+  "branco":                 { primary: "bg-white" },
+  "branco-ponta-vermelha":  { primary: "bg-white",    secondary: "bg-red-600"   },
+  "vermelha":               { primary: "bg-red-600"   },
+  "vermelha-ponta-amarela": { primary: "bg-red-600",   secondary: "bg-yellow-400"},
+  "amarela":                { primary: "bg-yellow-400" },
+  "amarela-ponta-verde":    { primary: "bg-yellow-400",secondary: "bg-green-600" },
+  "verde":                  { primary: "bg-green-600" },
+  "verde-ponta-azul":       { primary: "bg-green-600", secondary: "bg-blue-600"  },
+  "azul":                   { primary: "bg-blue-600"  },
+  "azul-ponta-preta":       { primary: "bg-blue-600",  secondary: "bg-gray-900"  },
+  "preta":                  { primary: "bg-gray-900"  },
+};
+
+const JIU_COLOR_MAP: Record<string, string> = {
+  white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
+  brown: "bg-amber-800", black: "bg-gray-900",
+};
+
+function PrajiedStripe({ grade }: { grade: string }) {
+  const entry = PRAJIED_MAP[grade];
+  if (!entry) return null;
+  if (!entry.secondary) {
+    return <div className={`h-2.5 w-20 rounded-full border border-white/20 ${entry.primary}`} />;
+  }
+  return (
+    <div className="h-2.5 w-20 rounded-full border border-white/20 overflow-hidden flex">
+      <div className={`flex-1 ${entry.primary}`} />
+      <div className={`w-5 ${entry.secondary}`} />
+    </div>
+  );
+}
+
 function BeltStripe({ color }: { color: string }) {
-  const colorMap: Record<string, string> = {
-    white: "bg-white",
-    blue: "bg-blue-600",
-    purple: "bg-purple-600",
-    brown: "bg-amber-800",
-    black: "bg-gray-900",
-    yellow: "bg-yellow-400",
-    orange: "bg-orange-500",
-    red: "bg-red-600",
-    green: "bg-green-600",
-  };
-  return <div className={`h-2 w-16 rounded-full ${colorMap[color] ?? "bg-muted"}`} />;
+  const cls = JIU_COLOR_MAP[color] ?? "bg-muted";
+  return <div className={`h-2.5 w-20 rounded-full border border-white/20 ${cls}`} />;
 }
 
 export default function StudentDetail() {
@@ -131,9 +157,26 @@ export default function StudentDetail() {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
           queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
-          toast({ title: "Graduacao atualizada com sucesso" });
+          toast({ title: "Graduação atualizada com sucesso" });
         },
-        onError: () => toast({ title: "Erro ao atualizar graduacao", variant: "destructive" }),
+        onError: () => toast({ title: "Erro ao atualizar graduação", variant: "destructive" }),
+      }
+    );
+  };
+
+  const handleThaiPrajied = (value: string) => {
+    if (!studentId) return;
+    const entry = PRAJIED_GRADES.find(p => p.value === value);
+    if (!entry) return;
+    updateStudentMutation.mutate(
+      { id: studentId, data: { thaiGrade: entry.label, thaiGradeColor: entry.primary } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+          queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+          toast({ title: "Prajied atualizado com sucesso" });
+        },
+        onError: () => toast({ title: "Erro ao atualizar prajied", variant: "destructive" }),
       }
     );
   };
@@ -259,35 +302,41 @@ export default function StudentDetail() {
             {(activeModality === "thai" || !showToggle) && student.modalityThai && (
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Muay Thai</div>
-                {student.thaiGradeColor && <BeltStripe color={student.thaiGradeColor} />}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Nivel</label>
-                    <Select value={student.thaiGrade ?? ""} onValueChange={(v) => handleGradeUpdate("thaiGrade", v)}>
-                      <SelectTrigger data-testid="select-thai-grade"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {THAI_GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">
-                      Cor do Prajied
-                      {!isMaster && <span className="ml-1 text-[10px] text-primary/70">(somente mestre)</span>}
-                    </label>
-                    <Select
-                      value={student.thaiGradeColor ?? ""}
-                      onValueChange={(v) => handleGradeUpdate("thaiGradeColor", v)}
-                      disabled={!isMaster}
-                    >
-                      <SelectTrigger data-testid="select-thai-color" disabled={!isMaster}>
-                        <SelectValue placeholder="Cor..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {THAI_COLORS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {student.thaiGrade && <PrajiedStripe grade={
+                  PRAJIED_GRADES.find(p => p.label === student.thaiGrade)?.value ?? student.thaiGrade
+                } />}
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Prajied
+                    {!isMaster && <span className="ml-1 text-[10px] text-primary/70">(somente mestre)</span>}
+                  </label>
+                  <Select
+                    value={PRAJIED_GRADES.find(p => p.label === student.thaiGrade)?.value ?? student.thaiGrade ?? ""}
+                    onValueChange={handleThaiPrajied}
+                    disabled={!isMaster}
+                  >
+                    <SelectTrigger data-testid="select-thai-grade" disabled={!isMaster}>
+                      <SelectValue placeholder="Selecionar prajied..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRAJIED_GRADES.map((p, i) => (
+                        <SelectItem key={p.value} value={p.value}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                            {p.secondary ? (
+                              <span className="inline-flex h-2.5 w-10 rounded-full overflow-hidden border border-white/20 shrink-0">
+                                <span className={`flex-1 ${PRAJIED_MAP[p.value]?.primary}`} />
+                                <span className={`w-3 ${PRAJIED_MAP[p.value]?.secondary}`} />
+                              </span>
+                            ) : (
+                              <span className={`inline-block h-2.5 w-10 rounded-full border border-white/20 shrink-0 ${PRAJIED_MAP[p.value]?.primary}`} />
+                            )}
+                            <span>{p.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}

@@ -16,7 +16,7 @@ function BeltDot({ color }: { color: string | null | undefined }) {
   const colorMap: Record<string, string> = {
     white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
     brown: "bg-amber-800", black: "bg-gray-900", yellow: "bg-yellow-400",
-    orange: "bg-orange-500", red: "bg-red-600", green: "bg-green-600",
+    red: "bg-red-600", green: "bg-green-600",
   };
   return <span className={`inline-block w-3 h-3 rounded-full border border-border ${colorMap[color] ?? "bg-muted"}`} />;
 }
