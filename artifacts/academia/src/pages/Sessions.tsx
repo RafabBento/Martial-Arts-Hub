@@ -6,7 +6,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { CalendarDays, Plus, ChevronRight, Users } from "lucide-react";
+import { CalendarDays, Plus, ChevronRight, Users, Clock, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -53,18 +53,52 @@ export default function Sessions() {
     );
   };
 
+  const SCHEDULE = [
+    { time: "19:00", modality: "jiu" as const, days: "Seg – Sex", instructor: "Instrutor Ewerton" },
+    { time: "20:30", modality: "thai" as const, days: "Seg, Qua e Sex", instructor: "Mestre Ewerton" },
+    { time: "20:30", modality: "thai" as const, days: "Ter e Qui", instructor: "Instrutor Luis" },
+    { time: "10:30", modality: "thai" as const, days: "Sábado", instructor: "Instrutor Nilberto" },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">Sessoes</h1>
-          <p className="text-muted-foreground mt-1">{sessions?.length ?? 0} sessoes registradas</p>
+          <h1 className="text-3xl font-black tracking-tight uppercase">Sessões</h1>
+          <p className="text-muted-foreground mt-1">{sessions?.length ?? 0} sessões registradas</p>
         </div>
         {(user?.role === "teacher" || user?.role === "admin") && (
           <Button data-testid="button-new-session" onClick={() => setOpen(true)}>
-            <Plus size={16} className="mr-2" /> Nova Sessao
+            <Plus size={16} className="mr-2" /> Nova Sessão
           </Button>
         )}
+      </div>
+
+      {/* Cronograma semanal */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Cronograma Semanal</span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin size={11} /> Av. Julio Buono, 2224
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+          {SCHEDULE.map((item, i) => (
+            <div key={i} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 border ${item.modality === "thai" ? "bg-red-500/10 border-red-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
+              <div className="flex items-center gap-1 shrink-0">
+                <Clock size={12} className="text-muted-foreground" />
+                <span className="font-black text-sm">{item.time}</span>
+              </div>
+              <div className="min-w-0">
+                <div className={`text-xs font-bold ${item.modality === "thai" ? "text-red-400" : "text-blue-400"}`}>
+                  {item.modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">{item.days}</div>
+                <div className="text-xs text-muted-foreground truncate">{item.instructor}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="flex gap-2">
