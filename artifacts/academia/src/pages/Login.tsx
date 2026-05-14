@@ -65,7 +65,7 @@ export default function Login() {
 
       {/* Lado esquerdo — imagem */}
       <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
-        <div className="absolute inset-0 bg-[url('/bg-login.jpg')] bg-cover bg-center opacity-40 mix-blend-luminosity"></div>
+        <div className="absolute inset-0 bg-[url('/bg-login.jpg')] bg-cover bg-center opacity-80"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-background to-transparent"></div>
         <div className="relative z-10 flex flex-col justify-end p-12 w-full">
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
