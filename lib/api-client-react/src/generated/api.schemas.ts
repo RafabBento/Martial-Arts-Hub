@@ -29,6 +29,9 @@ export interface RegisterInput {
   password: string;
   role: RegisterInputRole;
   phone?: string;
+  birthDate?: string | null;
+  modalityThai?: boolean | null;
+  modalityJiu?: boolean | null;
 }
 
 export interface LoginInput {
@@ -53,6 +56,20 @@ export interface User {
   phone?: string | null;
   /** @nullable */
   profilePhotoUrl?: string | null;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  modalityThai?: boolean | null;
+  /** @nullable */
+  modalityJiu?: boolean | null;
+  /** @nullable */
+  thaiGrade?: string | null;
+  /** @nullable */
+  thaiGradeColor?: string | null;
+  /** @nullable */
+  jiuGrade?: string | null;
+  /** @nullable */
+  jiuGradeColor?: string | null;
   createdAt: string;
 }
 
@@ -65,6 +82,13 @@ export interface UserUpdate {
   name?: string;
   phone?: string;
   profilePhotoUrl?: string;
+  birthDate?: string | null;
+  modalityThai?: boolean | null;
+  modalityJiu?: boolean | null;
+  thaiGrade?: string | null;
+  thaiGradeColor?: string | null;
+  jiuGrade?: string | null;
+  jiuGradeColor?: string | null;
 }
 
 export interface StudentProfile {

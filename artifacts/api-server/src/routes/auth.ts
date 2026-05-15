@@ -13,6 +13,25 @@ function hashPassword(password: string): string {
   return createHash("sha256").update(password + "academia_salt_2024").digest("hex");
 }
 
+function serializeUser(user: typeof usersTable.$inferSelect) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone ?? null,
+    profilePhotoUrl: user.profilePhotoUrl ?? null,
+    birthDate: user.birthDate ?? null,
+    modalityThai: user.modalityThai ?? null,
+    modalityJiu: user.modalityJiu ?? null,
+    thaiGrade: user.thaiGrade ?? null,
+    thaiGradeColor: user.thaiGradeColor ?? null,
+    jiuGrade: user.jiuGrade ?? null,
+    jiuGradeColor: user.jiuGradeColor ?? null,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
@@ -20,7 +39,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role, phone } = parsed.data;
+  const { name, email, password, role, phone, birthDate, modalityThai, modalityJiu } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing.length > 0) {
@@ -34,6 +53,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     passwordHash: hashPassword(password),
     role: role as "student" | "teacher" | "admin",
     phone,
+    birthDate: birthDate ?? null,
+    modalityThai: modalityThai ?? null,
+    modalityJiu: modalityJiu ?? null,
   }).returning();
 
   if (role === "student") {
@@ -46,21 +68,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const token = Buffer.from(`${user.id}:${user.email}:${Date.now()}`).toString("base64");
 
-  (req.session as Record<string, unknown>).userId = user.id;
-  (req.session as Record<string, unknown>).token = token;
+  (req.session as unknown as Record<string, unknown>).userId = user.id;
+  (req.session as unknown as Record<string, unknown>).token = token;
 
-  res.status(201).json({
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone ?? null,
-      profilePhotoUrl: user.profilePhotoUrl ?? null,
-      createdAt: user.createdAt.toISOString(),
-    },
-    token,
-  });
+  res.status(201).json({ user: serializeUser(user), token });
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
@@ -79,21 +90,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = Buffer.from(`${user.id}:${user.email}:${Date.now()}`).toString("base64");
-  (req.session as Record<string, unknown>).userId = user.id;
-  (req.session as Record<string, unknown>).token = token;
+  (req.session as unknown as Record<string, unknown>).userId = user.id;
+  (req.session as unknown as Record<string, unknown>).token = token;
 
-  res.json({
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone ?? null,
-      profilePhotoUrl: user.profilePhotoUrl ?? null,
-      createdAt: user.createdAt.toISOString(),
-    },
-    token,
-  });
+  res.json({ user: serializeUser(user), token });
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
@@ -102,7 +102,7 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
 });
 
 router.get("/auth/me", async (req, res): Promise<void> => {
-  const userId = (req.session as Record<string, unknown>).userId as number | undefined;
+  const userId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
   if (!userId) {
     res.status(401).json({ error: "Not authenticated" });
     return;
@@ -114,15 +114,7 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user.phone ?? null,
-    profilePhotoUrl: user.profilePhotoUrl ?? null,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.json(serializeUser(user));
 });
 
 export default router;

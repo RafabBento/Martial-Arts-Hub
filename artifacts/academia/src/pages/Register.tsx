@@ -15,6 +15,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,9 @@ const registerSchema = z.object({
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   role: z.enum(["student", "teacher"]),
   phone: z.string().optional(),
+  birthDate: z.string().optional(),
+  modalityThai: z.boolean().optional(),
+  modalityJiu: z.boolean().optional(),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -48,12 +52,24 @@ export default function Register() {
       password: "",
       role: "student",
       phone: "",
+      birthDate: "",
+      modalityThai: false,
+      modalityJiu: false,
     },
   });
 
+  const watchedRole = form.watch("role");
+
   const onSubmit = (values: RegisterFormValues) => {
     registerMutation.mutate(
-      { data: values },
+      {
+        data: {
+          ...values,
+          birthDate: values.birthDate || undefined,
+          modalityThai: values.role === "teacher" ? (values.modalityThai ?? false) : undefined,
+          modalityJiu: values.role === "teacher" ? (values.modalityJiu ?? false) : undefined,
+        },
+      },
       {
         onSuccess: (data) => {
           setUser(data.user);
@@ -135,6 +151,19 @@ export default function Register() {
               />
               <FormField
                 control={form.control}
+                name="birthDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Data de Nascimento</FormLabel>
+                    <FormControl>
+                      <Input type="date" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="password"
                 render={({ field }) => (
                   <FormItem>
@@ -160,13 +189,53 @@ export default function Register() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="student">Aluno</SelectItem>
-                        <SelectItem value="teacher">Professor</SelectItem>
+                        <SelectItem value="teacher">Professor / Mestre</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {/* Modalidades — exibido apenas para professores */}
+              {watchedRole === "teacher" && (
+                <div className="space-y-3 rounded-lg border border-border bg-card/30 p-4">
+                  <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Modalidades que leciona</p>
+                  <FormField
+                    control={form.control}
+                    name="modalityThai"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="border-red-400 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-semibold cursor-pointer">Muay Thai</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="modalityJiu"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-3 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                          />
+                        </FormControl>
+                        <FormLabel className="font-semibold cursor-pointer">Jiu-Jitsu</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
               <Button type="submit" className="w-full h-12 text-lg font-bold uppercase tracking-wide mt-4" disabled={registerMutation.isPending}>
                 {registerMutation.isPending ? "Cadastrando..." : "Cadastrar"}
               </Button>

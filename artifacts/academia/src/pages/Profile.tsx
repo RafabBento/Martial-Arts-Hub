@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useUpdateUser, useListAttendance, useGetStudent, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save, Shield } from "lucide-react";
+import { User, Camera, Save, Shield, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,20 @@ const JIU_COLOR_MAP: Record<string, string> = {
   brown: "bg-amber-800", black: "bg-gray-900",
 };
 
+const PRAJIED_OPTIONS = [
+  "Branco", "Branco ponta vermelha", "Vermelha", "Vermelha ponta amarela",
+  "Amarela", "Amarela ponta verde", "Verde", "Verde ponta azul",
+  "Azul", "Azul ponta preta", "Preta",
+];
+
+const JIU_GRADE_OPTIONS: { label: string; value: string; color: string }[] = [
+  { label: "Branca", value: "Branca", color: "white" },
+  { label: "Azul",   value: "Azul",   color: "blue"  },
+  { label: "Roxa",   value: "Roxa",   color: "purple"},
+  { label: "Marrom", value: "Marrom", color: "brown" },
+  { label: "Preta",  value: "Preta",  color: "black" },
+];
+
 function PrajiedStripe({ grade }: { grade: string }) {
   const key = PRAJIED_LABELS[grade] ?? grade;
   const entry = PRAJIED_MAP[key];
@@ -59,11 +73,26 @@ function JiuStripe({ color }: { color: string }) {
   return <div className={`h-3 w-24 rounded-full border border-white/20 ${JIU_COLOR_MAP[color] ?? "bg-muted"}`} />;
 }
 
+function isBirthdayToday(birthDate: string | null | undefined): boolean {
+  if (!birthDate) return false;
+  const today = new Date();
+  const [, month, day] = birthDate.split("-");
+  return (
+    parseInt(month, 10) === today.getMonth() + 1 &&
+    parseInt(day, 10) === today.getDate()
+  );
+}
+
 export default function Profile() {
   const { user, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
+  const [birthDate, setBirthDate] = useState(user?.birthDate ?? "");
+  const [editThaiGrade, setEditThaiGrade] = useState(user?.thaiGrade ?? "");
+  const [editThaiGradeColor, setEditThaiGradeColor] = useState(user?.thaiGradeColor ?? "");
+  const [editJiuGrade, setEditJiuGrade] = useState(user?.jiuGrade ?? "");
+  const [editJiuGradeColor, setEditJiuGradeColor] = useState(user?.jiuGradeColor ?? "");
   const [modality, setModality] = useState<Modality>("thai");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -74,16 +103,26 @@ export default function Profile() {
     query: { enabled: !!user?.id && user?.role === "student", queryKey: getGetStudentQueryKey(user?.id ?? 0) },
   });
 
-  const hasThai = user?.role !== "student" ? true : (studentData?.modalityThai ?? true);
-  const hasJiu  = user?.role !== "student" ? true : (studentData?.modalityJiu  ?? false);
-  const showToggle   = hasThai && hasJiu;
-  const showJiuLogo  = hasJiu && (modality === "jiu" || !showToggle);
+  const isTeacherOrAdmin = user?.role === "teacher" || user?.role === "admin";
+
+  const hasThai = isTeacherOrAdmin
+    ? (user?.modalityThai ?? false)
+    : (studentData?.modalityThai ?? false);
+  const hasJiu = isTeacherOrAdmin
+    ? (user?.modalityJiu ?? false)
+    : (studentData?.modalityJiu ?? false);
+
+  const showToggle  = hasThai && hasJiu;
+  const showJiuLogo = hasJiu && (modality === "jiu" || !showToggle);
 
   useEffect(() => {
-    if (studentData && !studentData.modalityThai && studentData.modalityJiu) {
+    if (!isTeacherOrAdmin && studentData && !studentData.modalityThai && studentData.modalityJiu) {
       setModality("jiu");
     }
-  }, [studentData]);
+    if (isTeacherOrAdmin && !hasThai && hasJiu) {
+      setModality("jiu");
+    }
+  }, [studentData, isTeacherOrAdmin, hasThai, hasJiu]);
 
   const { data: attendance } = useListAttendance(
     { studentId: user?.id, modality },
@@ -98,7 +137,20 @@ export default function Profile() {
   const handleSave = () => {
     if (!user) return;
     updateMutation.mutate(
-      { id: user.id, data: { name: name || undefined, phone: phone || undefined } },
+      {
+        id: user.id,
+        data: {
+          name: name || undefined,
+          phone: phone || undefined,
+          birthDate: birthDate || undefined,
+          ...(isTeacherOrAdmin && {
+            thaiGrade: editThaiGrade || undefined,
+            thaiGradeColor: editThaiGradeColor || undefined,
+            jiuGrade: editJiuGrade || undefined,
+            jiuGradeColor: editJiuGradeColor || undefined,
+          }),
+        },
+      },
       {
         onSuccess: (updated) => {
           setUser(updated);
@@ -116,11 +168,21 @@ export default function Profile() {
   const rolePt =
     user.role === "admin" ? "Administrador" : user.role === "teacher" ? "Professor" : "Aluno";
 
+  const isToday = isBirthdayToday(user.birthDate);
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
+
+      {/* Banner de aniversário */}
+      {isToday && (
+        <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-5 py-4 text-yellow-300">
+          <Gift size={22} className="shrink-0" />
+          <span className="font-bold">Feliz aniversário, {user.name.split(" ")[0]}! 🎂 A academia inteira te deseja um ótimo dia!</span>
+        </div>
+      )}
+
       {/* Cabeçalho: logos nas laterais, título no centro */}
       <div className="flex items-center gap-6">
-        {/* Logo Thai — sempre visível */}
         <img
           src={logoThai}
           alt="Front Artes Marciais"
@@ -128,7 +190,6 @@ export default function Profile() {
           style={{ width: 140, height: 140 }}
         />
 
-        {/* Título e toggle — centro */}
         <div className="flex-1 text-center space-y-3">
           <div>
             <h1 className="text-3xl font-black tracking-tight uppercase">Meu Perfil</h1>
@@ -156,7 +217,6 @@ export default function Profile() {
           )}
         </div>
 
-        {/* Logo Jiu — visível quando showJiuLogo, espaço reservado caso contrário */}
         <div className="shrink-0" style={{ width: 140, height: 140 }}>
           {showJiuLogo && (
             <img
@@ -231,6 +291,60 @@ export default function Profile() {
                 placeholder="(11) 99999-0000"
               />
             </div>
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">Data de Nascimento</label>
+              <Input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+              />
+            </div>
+
+            {/* Campos de graduação para professores */}
+            {isTeacherOrAdmin && user.modalityThai && (
+              <div className="space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-red-400">Graduação — Muay Thai</p>
+                <select
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  value={editThaiGrade}
+                  onChange={(e) => {
+                    const grade = e.target.value;
+                    setEditThaiGrade(grade);
+                    const key = PRAJIED_LABELS[grade];
+                    if (key) {
+                      const primaryClass = PRAJIED_MAP[key]?.primary ?? "";
+                      const colorName = primaryClass.replace("bg-", "").split("-")[0];
+                      setEditThaiGradeColor(colorName);
+                    }
+                  }}
+                >
+                  <option value="">Selecione o prajied</option>
+                  {PRAJIED_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {isTeacherOrAdmin && user.modalityJiu && (
+              <div className="space-y-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-blue-400">Graduação — Jiu-Jitsu</p>
+                <select
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  value={editJiuGrade}
+                  onChange={(e) => {
+                    const opt = JIU_GRADE_OPTIONS.find((o) => o.value === e.target.value);
+                    setEditJiuGrade(e.target.value);
+                    setEditJiuGradeColor(opt?.color ?? "");
+                  }}
+                >
+                  <option value="">Selecione a faixa</option>
+                  {JIU_GRADE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <Button
                 data-testid="button-save-profile"
@@ -260,6 +374,14 @@ export default function Profile() {
               <span>{user.phone ?? "Não informado"}</span>
             </div>
             <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Aniversário</span>
+              <span>
+                {user.birthDate
+                  ? new Date(user.birthDate + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
+                  : "Não informado"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Função</span>
               <span>{rolePt}</span>
             </div>
@@ -275,6 +397,11 @@ export default function Profile() {
               onClick={() => {
                 setName(user.name);
                 setPhone(user.phone ?? "");
+                setBirthDate(user.birthDate ?? "");
+                setEditThaiGrade(user.thaiGrade ?? "");
+                setEditThaiGradeColor(user.thaiGradeColor ?? "");
+                setEditJiuGrade(user.jiuGrade ?? "");
+                setEditJiuGradeColor(user.jiuGradeColor ?? "");
                 setEditing(true);
               }}
             >
@@ -286,14 +413,12 @@ export default function Profile() {
 
       {/* Graduação — visível para todos */}
       {user.role === "student" ? (
-        /* Alunos: mostra prajied e/ou faixa conforme modalidades */
         (studentData?.modalityThai || studentData?.modalityJiu) && (
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-primary" />
               <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {studentData.modalityThai && (
                 <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
@@ -309,7 +434,6 @@ export default function Profile() {
                   )}
                 </div>
               )}
-
               {studentData.modalityJiu && (
                 <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
                   <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
@@ -328,25 +452,45 @@ export default function Profile() {
           </div>
         )
       ) : (
-        /* Professores e admins: exibe papel e modalidades */
-        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Shield size={18} className="text-primary" />
-            <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
-              <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
-              <p className="font-semibold text-sm">{rolePt}</p>
-              <p className="text-xs text-muted-foreground">Função na academia</p>
+        /* Professores / Admins: graduação real + opção de editar via Editar Perfil */
+        (user.modalityThai || user.modalityJiu) && (
+          <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Shield size={18} className="text-primary" />
+              <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
             </div>
-            <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
-              <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
-              <p className="font-semibold text-sm">{rolePt}</p>
-              <p className="text-xs text-muted-foreground">Função na academia</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {user.modalityThai && (
+                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
+                  <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
+                  {user.thaiGrade ? (
+                    <>
+                      <PrajiedStripe grade={user.thaiGrade} />
+                      <p className="font-semibold text-sm">{user.thaiGrade}</p>
+                      <p className="text-xs text-muted-foreground">Prajied</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Não atribuído</p>
+                  )}
+                </div>
+              )}
+              {user.modalityJiu && (
+                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
+                  <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
+                  {user.jiuGrade ? (
+                    <>
+                      {user.jiuGradeColor && <JiuStripe color={user.jiuGradeColor} />}
+                      <p className="font-semibold text-sm">Faixa {user.jiuGrade}</p>
+                      <p className="text-xs text-muted-foreground">Faixa</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Não atribuída</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Histórico de presenças — apenas alunos */}

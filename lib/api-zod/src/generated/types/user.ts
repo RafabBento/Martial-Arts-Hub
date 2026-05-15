@@ -16,5 +16,19 @@ export interface User {
   phone?: string | null;
   /** @nullable */
   profilePhotoUrl?: string | null;
+  /** @nullable */
+  birthDate?: string | null;
+  /** @nullable */
+  modalityThai?: boolean | null;
+  /** @nullable */
+  modalityJiu?: boolean | null;
+  /** @nullable */
+  thaiGrade?: string | null;
+  /** @nullable */
+  thaiGradeColor?: string | null;
+  /** @nullable */
+  jiuGrade?: string | null;
+  /** @nullable */
+  jiuGradeColor?: string | null;
   createdAt: Date;
 }

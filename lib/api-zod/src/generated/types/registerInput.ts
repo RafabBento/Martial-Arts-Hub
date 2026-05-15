@@ -15,4 +15,7 @@ export interface RegisterInput {
   password: string;
   role: RegisterInputRole;
   phone?: string;
+  birthDate?: string | null;
+  modalityThai?: boolean | null;
+  modalityJiu?: boolean | null;
 }

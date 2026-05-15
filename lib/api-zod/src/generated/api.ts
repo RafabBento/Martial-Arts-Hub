@@ -27,6 +27,9 @@ export const RegisterBody = zod.object({
   password: zod.string().min(registerBodyPasswordMin),
   role: zod.enum(["student", "teacher"]),
   phone: zod.string().optional(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
 });
 
 /**
@@ -45,6 +48,13 @@ export const LoginResponse = zod.object({
     role: zod.enum(["student", "teacher", "admin"]),
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
+    birthDate: zod.string().nullish(),
+    modalityThai: zod.boolean().nullish(),
+    modalityJiu: zod.boolean().nullish(),
+    thaiGrade: zod.string().nullish(),
+    thaiGradeColor: zod.string().nullish(),
+    jiuGrade: zod.string().nullish(),
+    jiuGradeColor: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
   token: zod.string(),
@@ -67,6 +77,13 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -85,6 +102,13 @@ export const ListUsersResponseItem = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
@@ -103,6 +127,13 @@ export const GetUserResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -117,6 +148,13 @@ export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
   phone: zod.string().optional(),
   profilePhotoUrl: zod.string().optional(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -126,6 +164,13 @@ export const UpdateUserResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
+  birthDate: zod.string().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
   createdAt: zod.coerce.date(),
 });
 

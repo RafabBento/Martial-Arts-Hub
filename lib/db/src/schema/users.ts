@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,13 @@ export const usersTable = pgTable("users", {
   role: roleEnum("role").notNull().default("student"),
   phone: text("phone"),
   profilePhotoUrl: text("profile_photo_url"),
+  birthDate: date("birth_date"),
+  modalityThai: boolean("modality_thai"),
+  modalityJiu: boolean("modality_jiu"),
+  thaiGrade: text("thai_grade"),
+  thaiGradeColor: text("thai_grade_color"),
+  jiuGrade: text("jiu_grade"),
+  jiuGradeColor: text("jiu_grade_color"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -11,6 +11,25 @@ import {
 
 const router: IRouter = Router();
 
+function serializeUser(user: typeof usersTable.$inferSelect) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone ?? null,
+    profilePhotoUrl: user.profilePhotoUrl ?? null,
+    birthDate: user.birthDate ?? null,
+    modalityThai: user.modalityThai ?? null,
+    modalityJiu: user.modalityJiu ?? null,
+    thaiGrade: user.thaiGrade ?? null,
+    thaiGradeColor: user.thaiGradeColor ?? null,
+    jiuGrade: user.jiuGrade ?? null,
+    jiuGradeColor: user.jiuGradeColor ?? null,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
+
 router.get("/users", async (req, res): Promise<void> => {
   const query = ListUsersQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -30,15 +49,7 @@ router.get("/users", async (req, res): Promise<void> => {
   }
 
   const users = await dbQuery;
-  res.json(users.map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    phone: u.phone ?? null,
-    profilePhotoUrl: u.profilePhotoUrl ?? null,
-    createdAt: u.createdAt.toISOString(),
-  })));
+  res.json(users.map(serializeUser));
 });
 
 router.get("/users/:id", async (req, res): Promise<void> => {
@@ -54,15 +65,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user.phone ?? null,
-    profilePhotoUrl: user.profilePhotoUrl ?? null,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.json(serializeUser(user));
 });
 
 router.patch("/users/:id", async (req, res): Promise<void> => {
@@ -89,15 +92,7 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    phone: user.phone ?? null,
-    profilePhotoUrl: user.profilePhotoUrl ?? null,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.json(serializeUser(user));
 });
 
 router.delete("/users/:id", async (req, res): Promise<void> => {

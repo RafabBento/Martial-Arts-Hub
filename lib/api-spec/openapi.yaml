@@ -547,6 +547,15 @@ components:
           enum: [student, teacher]
         phone:
           type: string
+        birthDate:
+          type: string
+          nullable: true
+        modalityThai:
+          type: boolean
+          nullable: true
+        modalityJiu:
+          type: boolean
+          nullable: true
 
     LoginInput:
       type: object
@@ -584,6 +593,20 @@ components:
           type: ["string", "null"]
         profilePhotoUrl:
           type: ["string", "null"]
+        birthDate:
+          type: ["string", "null"]
+        modalityThai:
+          type: ["boolean", "null"]
+        modalityJiu:
+          type: ["boolean", "null"]
+        thaiGrade:
+          type: ["string", "null"]
+        thaiGradeColor:
+          type: ["string", "null"]
+        jiuGrade:
+          type: ["string", "null"]
+        jiuGradeColor:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -597,6 +620,27 @@ components:
           type: string
         profilePhotoUrl:
           type: string
+        birthDate:
+          type: string
+          nullable: true
+        modalityThai:
+          type: boolean
+          nullable: true
+        modalityJiu:
+          type: boolean
+          nullable: true
+        thaiGrade:
+          type: string
+          nullable: true
+        thaiGradeColor:
+          type: string
+          nullable: true
+        jiuGrade:
+          type: string
+          nullable: true
+        jiuGradeColor:
+          type: string
+          nullable: true
 
     StudentProfile:
       type: object
