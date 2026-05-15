@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useUpdateUser, useListAttendance, useGetStudent, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save } from "lucide-react";
+import { User, Camera, Save, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +11,53 @@ import logoThai from "/logo-thai.png";
 import logoJiu from "/logo-jiu.png";
 
 type Modality = "thai" | "jiu";
+
+const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
+  "branco":                 { primary: "bg-white" },
+  "branco-ponta-vermelha":  { primary: "bg-white",     secondary: "bg-red-600"    },
+  "vermelha":               { primary: "bg-red-600"    },
+  "vermelha-ponta-amarela": { primary: "bg-red-600",   secondary: "bg-yellow-400" },
+  "amarela":                { primary: "bg-yellow-400" },
+  "amarela-ponta-verde":    { primary: "bg-yellow-400",secondary: "bg-green-600"  },
+  "verde":                  { primary: "bg-green-600"  },
+  "verde-ponta-azul":       { primary: "bg-green-600", secondary: "bg-blue-600"   },
+  "azul":                   { primary: "bg-blue-600"   },
+  "azul-ponta-preta":       { primary: "bg-blue-600",  secondary: "bg-gray-900"   },
+  "preta":                  { primary: "bg-gray-900"   },
+};
+
+const PRAJIED_LABELS: Record<string, string> = {
+  "Branco": "branco", "Branco ponta vermelha": "branco-ponta-vermelha",
+  "Vermelha": "vermelha", "Vermelha ponta amarela": "vermelha-ponta-amarela",
+  "Amarela": "amarela", "Amarela ponta verde": "amarela-ponta-verde",
+  "Verde": "verde", "Verde ponta azul": "verde-ponta-azul",
+  "Azul": "azul", "Azul ponta preta": "azul-ponta-preta",
+  "Preta": "preta",
+};
+
+const JIU_COLOR_MAP: Record<string, string> = {
+  white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
+  brown: "bg-amber-800", black: "bg-gray-900",
+};
+
+function PrajiedStripe({ grade }: { grade: string }) {
+  const key = PRAJIED_LABELS[grade] ?? grade;
+  const entry = PRAJIED_MAP[key];
+  if (!entry) return null;
+  if (!entry.secondary) {
+    return <div className={`h-3 w-24 rounded-full border border-white/20 ${entry.primary}`} />;
+  }
+  return (
+    <div className="h-3 w-24 rounded-full border border-white/20 overflow-hidden flex">
+      <div className={`flex-1 ${entry.primary}`} />
+      <div className={`w-6 ${entry.secondary}`} />
+    </div>
+  );
+}
+
+function JiuStripe({ color }: { color: string }) {
+  return <div className={`h-3 w-24 rounded-full border border-white/20 ${JIU_COLOR_MAP[color] ?? "bg-muted"}`} />;
+}
 
 export default function Profile() {
   const { user, setUser } = useAuth();
@@ -236,6 +283,71 @@ export default function Profile() {
           </div>
         )}
       </div>
+
+      {/* Graduação — visível para todos */}
+      {user.role === "student" ? (
+        /* Alunos: mostra prajied e/ou faixa conforme modalidades */
+        (studentData?.modalityThai || studentData?.modalityJiu) && (
+          <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Shield size={18} className="text-primary" />
+              <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {studentData.modalityThai && (
+                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
+                  <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
+                  {studentData.thaiGrade ? (
+                    <>
+                      <PrajiedStripe grade={studentData.thaiGrade} />
+                      <p className="font-semibold text-sm">{studentData.thaiGrade}</p>
+                      <p className="text-xs text-muted-foreground">Prajied</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Não atribuído</p>
+                  )}
+                </div>
+              )}
+
+              {studentData.modalityJiu && (
+                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
+                  <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
+                  {studentData.jiuGrade ? (
+                    <>
+                      {studentData.jiuGradeColor && <JiuStripe color={studentData.jiuGradeColor} />}
+                      <p className="font-semibold text-sm">Faixa {studentData.jiuGrade}</p>
+                      <p className="text-xs text-muted-foreground">Faixa</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Não atribuída</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      ) : (
+        /* Professores e admins: exibe papel e modalidades */
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Shield size={18} className="text-primary" />
+            <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
+              <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
+              <p className="font-semibold text-sm">{rolePt}</p>
+              <p className="text-xs text-muted-foreground">Função na academia</p>
+            </div>
+            <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
+              <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
+              <p className="font-semibold text-sm">{rolePt}</p>
+              <p className="text-xs text-muted-foreground">Função na academia</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Histórico de presenças — apenas alunos */}
       {user.role === "student" && (
