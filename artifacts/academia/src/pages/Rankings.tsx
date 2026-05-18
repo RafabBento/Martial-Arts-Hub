@@ -11,14 +11,36 @@ function RankBadge({ rank }: { rank: number }) {
   return <div className="w-8 h-8 rounded-full bg-muted border border-border flex items-center justify-center text-sm font-bold text-muted-foreground">{rank}</div>;
 }
 
+const BELT_BG_MAP: Record<string, string> = {
+  white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
+  brown: "bg-amber-800", black: "bg-gray-900", yellow: "bg-yellow-400",
+  red: "bg-red-600", green: "bg-green-600",
+};
+
+const BELT_TEXT_MAP: Record<string, string> = {
+  white:  "text-white  border-white/40",
+  blue:   "text-blue-400   border-blue-400/40",
+  purple: "text-purple-400 border-purple-400/40",
+  brown:  "text-amber-600  border-amber-600/40",
+  black:  "text-gray-300   border-gray-500/40",
+  yellow: "text-yellow-400 border-yellow-400/40",
+  red:    "text-red-400    border-red-400/40",
+  green:  "text-green-400  border-green-400/40",
+};
+
 function BeltDot({ color }: { color: string | null | undefined }) {
   if (!color) return null;
-  const colorMap: Record<string, string> = {
-    white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
-    brown: "bg-amber-800", black: "bg-gray-900", yellow: "bg-yellow-400",
-    red: "bg-red-600", green: "bg-green-600",
-  };
-  return <span className={`inline-block w-3 h-3 rounded-full border border-border ${colorMap[color] ?? "bg-muted"}`} />;
+  return <span className={`inline-block w-3 h-3 rounded-full border border-border ${BELT_BG_MAP[color] ?? "bg-muted"}`} />;
+}
+
+function GradeLabel({ label, grade, color }: { label: string; grade: string | null | undefined; color: string | null | undefined }) {
+  if (!grade) return null;
+  const cls = BELT_TEXT_MAP[color ?? ""] ?? "text-muted-foreground border-transparent";
+  return (
+    <span className={`text-xs font-semibold border rounded px-1.5 py-0.5 ${cls}`}>
+      {label}: {grade}
+    </span>
+  );
 }
 
 export default function Rankings() {
@@ -98,10 +120,8 @@ export default function Rankings() {
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold">{r.name}</div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    {r.thaiGradeColor && <BeltDot color={r.thaiGradeColor} />}
-                    {r.thaiGrade && <span className="text-xs text-muted-foreground">Thai: {r.thaiGrade}</span>}
-                    {r.jiuGradeColor && <BeltDot color={r.jiuGradeColor} />}
-                    {r.jiuGrade && <span className="text-xs text-muted-foreground">Jiu: {r.jiuGrade}</span>}
+                    <GradeLabel label="Thai" grade={r.thaiGrade} color={r.thaiGradeColor} />
+                    <GradeLabel label="Jiu" grade={r.jiuGrade} color={r.jiuGradeColor} />
                   </div>
                 </div>
                 <div className="text-right shrink-0">
