@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { PaymentReminder } from "./components/PaymentReminder";
 import { Layout } from "./components/Layout";
 
 import Home from "./pages/Home";
@@ -107,6 +108,7 @@ function App() {
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <Router />
           </WouterRouter>
+          <PaymentReminder />
           <Toaster />
         </TooltipProvider>
       </AuthProvider>

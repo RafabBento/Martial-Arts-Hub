@@ -16,6 +16,11 @@ export interface RegisterInput {
   role: RegisterInputRole;
   phone?: string;
   birthDate?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 31
+   */
+  paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
 }

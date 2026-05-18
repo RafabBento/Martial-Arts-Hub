@@ -11,6 +11,7 @@ export interface UserUpdate {
   phone?: string;
   profilePhotoUrl?: string;
   birthDate?: string | null;
+  paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
   thaiGrade?: string | null;

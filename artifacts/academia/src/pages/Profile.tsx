@@ -89,6 +89,7 @@ export default function Profile() {
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [birthDate, setBirthDate] = useState(user?.birthDate ?? "");
+  const [paymentDay, setPaymentDay] = useState<number | "">(user?.paymentDay ?? "");
   const [editThaiGrade, setEditThaiGrade] = useState(user?.thaiGrade ?? "");
   const [editThaiGradeColor, setEditThaiGradeColor] = useState(user?.thaiGradeColor ?? "");
   const [editJiuGrade, setEditJiuGrade] = useState(user?.jiuGrade ?? "");
@@ -143,6 +144,7 @@ export default function Profile() {
           name: name || undefined,
           phone: phone || undefined,
           birthDate: birthDate || undefined,
+          paymentDay: paymentDay !== "" ? paymentDay : undefined,
           ...(isTeacherOrAdmin && {
             thaiGrade: editThaiGrade || undefined,
             thaiGradeColor: editThaiGradeColor || undefined,
@@ -299,6 +301,17 @@ export default function Profile() {
                 onChange={(e) => setBirthDate(e.target.value)}
               />
             </div>
+            <div>
+              <label className="text-sm text-muted-foreground block mb-1">Dia de Pagamento da Mensalidade</label>
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                placeholder="Ex: 10"
+                value={paymentDay}
+                onChange={(e) => setPaymentDay(e.target.value === "" ? "" : Number(e.target.value))}
+              />
+            </div>
 
             {/* Campos de graduação para professores */}
             {isTeacherOrAdmin && user.modalityThai && (
@@ -382,6 +395,12 @@ export default function Profile() {
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Dia de pagamento</span>
+              <span>
+                {user.paymentDay ? `Todo dia ${user.paymentDay}` : "Não informado"}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Função</span>
               <span>{rolePt}</span>
             </div>
@@ -398,6 +417,7 @@ export default function Profile() {
                 setName(user.name);
                 setPhone(user.phone ?? "");
                 setBirthDate(user.birthDate ?? "");
+                setPaymentDay(user.paymentDay ?? "");
                 setEditThaiGrade(user.thaiGrade ?? "");
                 setEditThaiGradeColor(user.thaiGradeColor ?? "");
                 setEditJiuGrade(user.jiuGrade ?? "");

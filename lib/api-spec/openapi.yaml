@@ -550,6 +550,11 @@ components:
         birthDate:
           type: string
           nullable: true
+        paymentDay:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 31
         modalityThai:
           type: boolean
           nullable: true
@@ -595,6 +600,8 @@ components:
           type: ["string", "null"]
         birthDate:
           type: ["string", "null"]
+        paymentDay:
+          type: ["integer", "null"]
         modalityThai:
           type: ["boolean", "null"]
         modalityJiu:
@@ -622,6 +629,9 @@ components:
           type: string
         birthDate:
           type: string
+          nullable: true
+        paymentDay:
+          type: integer
           nullable: true
         modalityThai:
           type: boolean

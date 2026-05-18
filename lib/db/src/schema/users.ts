@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean, date, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, boolean, date, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,6 +13,7 @@ export const usersTable = pgTable("users", {
   phone: text("phone"),
   profilePhotoUrl: text("profile_photo_url"),
   birthDate: date("birth_date"),
+  paymentDay: integer("payment_day"),
   modalityThai: boolean("modality_thai"),
   modalityJiu: boolean("modality_jiu"),
   thaiGrade: text("thai_grade"),

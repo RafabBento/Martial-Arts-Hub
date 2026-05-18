@@ -22,6 +22,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
+    paymentDay: user.paymentDay ?? null,
     modalityThai: user.modalityThai ?? null,
     modalityJiu: user.modalityJiu ?? null,
     thaiGrade: user.thaiGrade ?? null,
@@ -39,7 +40,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role, phone, birthDate, modalityThai, modalityJiu } = parsed.data;
+  const { name, email, password, role, phone, birthDate, paymentDay, modalityThai, modalityJiu } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing.length > 0) {
@@ -54,6 +55,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     role: role as "student" | "teacher" | "admin",
     phone,
     birthDate: birthDate ?? null,
+    paymentDay: paymentDay ?? null,
     modalityThai: modalityThai ?? null,
     modalityJiu: modalityJiu ?? null,
   }).returning();

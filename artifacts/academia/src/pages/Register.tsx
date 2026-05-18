@@ -32,6 +32,7 @@ const registerSchema = z.object({
   role: z.enum(["student", "teacher"]),
   phone: z.string().optional(),
   birthDate: z.string().optional(),
+  paymentDay: z.coerce.number().min(1).max(31).optional(),
   modalityThai: z.boolean().optional(),
   modalityJiu: z.boolean().optional(),
 });
@@ -53,6 +54,7 @@ export default function Register() {
       role: "student",
       phone: "",
       birthDate: "",
+      paymentDay: undefined,
       modalityThai: false,
       modalityJiu: false,
     },
@@ -66,6 +68,7 @@ export default function Register() {
         data: {
           ...values,
           birthDate: values.birthDate || undefined,
+          paymentDay: values.paymentDay || undefined,
           modalityThai: values.role === "teacher" ? (values.modalityThai ?? false) : undefined,
           modalityJiu: values.role === "teacher" ? (values.modalityJiu ?? false) : undefined,
         },
@@ -157,6 +160,28 @@ export default function Register() {
                     <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Data de Nascimento</FormLabel>
                     <FormControl>
                       <Input type="date" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="paymentDay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Dia de Pagamento da Mensalidade</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        placeholder="Ex: 10"
+                        className="h-12 bg-card/50 border-border focus-visible:ring-primary"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

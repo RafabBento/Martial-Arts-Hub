@@ -19,6 +19,8 @@ export interface User {
   /** @nullable */
   birthDate?: string | null;
   /** @nullable */
+  paymentDay?: number | null;
+  /** @nullable */
   modalityThai?: boolean | null;
   /** @nullable */
   modalityJiu?: boolean | null;

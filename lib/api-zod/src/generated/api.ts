@@ -21,6 +21,8 @@ export const registerBodyNameMin = 2;
 
 export const registerBodyPasswordMin = 6;
 
+export const registerBodyPaymentDayMax = 31;
+
 export const RegisterBody = zod.object({
   name: zod.string().min(registerBodyNameMin),
   email: zod.string().email(),
@@ -28,6 +30,7 @@ export const RegisterBody = zod.object({
   role: zod.enum(["student", "teacher"]),
   phone: zod.string().optional(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().min(1).max(registerBodyPaymentDayMax).nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
 });
@@ -49,6 +52,7 @@ export const LoginResponse = zod.object({
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
     birthDate: zod.string().nullish(),
+    paymentDay: zod.number().nullish(),
     modalityThai: zod.boolean().nullish(),
     modalityJiu: zod.boolean().nullish(),
     thaiGrade: zod.string().nullish(),
@@ -78,6 +82,7 @@ export const GetMeResponse = zod.object({
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   thaiGrade: zod.string().nullish(),
@@ -103,6 +108,7 @@ export const ListUsersResponseItem = zod.object({
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   thaiGrade: zod.string().nullish(),
@@ -128,6 +134,7 @@ export const GetUserResponse = zod.object({
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   thaiGrade: zod.string().nullish(),
@@ -149,6 +156,7 @@ export const UpdateUserBody = zod.object({
   phone: zod.string().optional(),
   profilePhotoUrl: zod.string().optional(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   thaiGrade: zod.string().nullish(),
@@ -165,6 +173,7 @@ export const UpdateUserResponse = zod.object({
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   thaiGrade: zod.string().nullish(),

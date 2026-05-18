@@ -20,6 +20,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
+    paymentDay: user.paymentDay ?? null,
     modalityThai: user.modalityThai ?? null,
     modalityJiu: user.modalityJiu ?? null,
     thaiGrade: user.thaiGrade ?? null,

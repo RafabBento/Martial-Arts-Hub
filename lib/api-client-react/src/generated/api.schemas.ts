@@ -30,6 +30,11 @@ export interface RegisterInput {
   role: RegisterInputRole;
   phone?: string;
   birthDate?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 31
+   */
+  paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
 }
@@ -59,6 +64,8 @@ export interface User {
   /** @nullable */
   birthDate?: string | null;
   /** @nullable */
+  paymentDay?: number | null;
+  /** @nullable */
   modalityThai?: boolean | null;
   /** @nullable */
   modalityJiu?: boolean | null;
@@ -83,6 +90,7 @@ export interface UserUpdate {
   phone?: string;
   profilePhotoUrl?: string;
   birthDate?: string | null;
+  paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
   thaiGrade?: string | null;
