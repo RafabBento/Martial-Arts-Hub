@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
 
 type ModelStatus = "idle" | "loading" | "ready" | "error";
-type ScanStatus = "idle" | "scanning" | "found" | "notfound";
+type ScanStatus = "idle" | "scanning" | "upscaling" | "detecting" | "found" | "notfound";
 
 // ---------- Cronograma semanal ----------
 // days: 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
@@ -348,13 +348,33 @@ export default function Attendance() {
         faceApiRef.current = await loadFaceApi();
       }
       const faceapi = faceApiRef.current;
+
+      // Carrega a imagem
       const img = await createImageBitmap(file);
+
+      // Upscaling: amplia 2x para melhorar detecção de rostos pequenos,
+      // mas limita o lado maior a 6400px para não estourar memória.
+      setScanStatus("upscaling");
+      const MAX_SIDE = 6400;
+      const SCALE = 2;
+      const scaledW = Math.min(img.width * SCALE, MAX_SIDE);
+      const scaledH = Math.round(img.height * (scaledW / img.width));
+
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      canvas.getContext("2d")!.drawImage(img, 0, 0);
+      canvas.width = scaledW;
+      canvas.height = scaledH;
+      const ctx = canvas.getContext("2d")!;
+      // imageSmoothingQuality alto para preservar detalhes ao ampliar
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, scaledW, scaledH);
+
+      // Aguarda o próximo frame para o browser renderizar o status
+      await new Promise(r => setTimeout(r, 50));
+      setScanStatus("detecting");
+
       const detections = await faceapi
-        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
         .withFaceLandmarks()
         .withFaceDescriptors();
       if (detections.length === 0) {
@@ -674,9 +694,17 @@ export default function Attendance() {
                     className="w-full max-h-72 object-cover"
                   />
                   {galleryScanning && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3">
                       <Loader2 size={36} className="animate-spin text-primary" />
-                      <span className="text-sm font-semibold text-white">Analisando rostos...</span>
+                      <span className="text-sm font-semibold text-white">
+                        {scanStatus === "upscaling" ? "Ampliando imagem para alta resolução…" :
+                         scanStatus === "detecting" ? "Detectando rostos…" :
+                         "Analisando…"}
+                      </span>
+                      <span className="text-xs text-white/60">
+                        {scanStatus === "upscaling" ? "2× upscale · preservando detalhes" :
+                         scanStatus === "detecting" ? "Comparando com base de alunos…" : ""}
+                      </span>
                     </div>
                   )}
                   {matches.length > 0 && !galleryScanning && (
