@@ -116,7 +116,8 @@ export default function Profile() {
   const showToggle  = hasThai && hasJiu;
   // Bollacha logo only for students who explicitly chose Front + Bollacha
   const isBollacha  = !isTeacherOrAdmin && (studentData?.bollacha === true);
-  const showJiuLogo = hasJiu && isBollacha && (modality === "jiu" || !showToggle);
+  // Sempre mostra a logo da Bollacha no cabeçalho se o aluno for da equipe — independente da aba ativa
+  const showJiuLogo = hasJiu && isBollacha;
 
   useEffect(() => {
     if (!isTeacherOrAdmin && studentData && !studentData.modalityThai && studentData.modalityJiu) {
