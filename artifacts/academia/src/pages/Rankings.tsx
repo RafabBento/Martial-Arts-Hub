@@ -40,25 +40,32 @@ function PrajiedStripe({ grade }: { grade: string | null | undefined }) {
   );
 }
 
-/** BJJ belt with degree stripes */
+/** BJJ belt bar + degree dots side by side */
 function JiuBelt({ color, degree }: { color: string | null | undefined; degree: number | null | undefined }) {
   if (!color) return null;
   const bg = JIU_BG[color] ?? "bg-muted";
-  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
+  const earned = Math.min(Math.max(degree ?? 0, 0), 4);
   const isWhite = color === "white";
 
   return (
-    <div className={`relative h-4 w-16 rounded-sm border overflow-hidden shrink-0 ${bg} ${isWhite ? "border-gray-300/50" : "border-white/20"}`}>
-      {/* center line (seam) */}
-      <div className={`absolute inset-x-0 top-1/2 -translate-y-px h-px ${isWhite ? "bg-gray-300/40" : "bg-black/30"}`} />
-      {/* degree stripes — right-aligned */}
-      {stripes > 0 && (
-        <div className="absolute right-1 top-0.5 bottom-0.5 flex gap-0.5">
-          {Array.from({ length: stripes }).map((_, i) => (
-            <div key={i} className={`w-1.5 h-full rounded-[1px] ${isWhite ? "bg-gray-700/60" : "bg-white/80"}`} />
-          ))}
-        </div>
-      )}
+    <div className="flex items-center gap-1.5">
+      {/* belt bar */}
+      <div className={`relative h-3 w-14 rounded-sm border overflow-hidden shrink-0 ${bg} ${isWhite ? "border-gray-400/50" : "border-white/20"}`}>
+        <div className={`absolute inset-x-0 top-1/2 -translate-y-px h-px ${isWhite ? "bg-gray-300/40" : "bg-black/25"}`} />
+      </div>
+      {/* degree dots */}
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className={`w-2 h-2 rounded-full border ${
+              i < earned
+                ? "bg-white border-white/80"
+                : "bg-transparent border-white/30"
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
