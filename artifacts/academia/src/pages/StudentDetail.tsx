@@ -225,10 +225,10 @@ export default function StudentDetail() {
             return (
               <div className="flex items-center justify-center gap-5">
                 {(student.modalityThai || student.modalityJiu) && (
-                  <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 88, height: 88, mixBlendMode: "multiply", filter: "contrast(1.4) brightness(0.9)" }} />
+                  <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 88, height: 88, filter: "drop-shadow(0 0 6px rgba(0,0,0,0.8)) contrast(1.15)" }} />
                 )}
                 {showJiuLogo && (
-                  <img src={logoJiu} alt="Bollacha Wrestling BJJ" className="object-contain" style={{ width: 88, height: 88, mixBlendMode: "multiply", filter: "contrast(1.4) brightness(0.9)" }} />
+                  <img src={logoJiu} alt="Bollacha Wrestling BJJ" className="object-contain" style={{ width: 88, height: 88, filter: "drop-shadow(0 0 6px rgba(0,0,0,0.8)) contrast(1.15)" }} />
                 )}
               </div>
             );
