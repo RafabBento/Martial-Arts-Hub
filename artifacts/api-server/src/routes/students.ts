@@ -62,10 +62,11 @@ router.get("/students", async (req, res): Promise<void> => {
 
   const students = await joinQuery;
 
+  // Saturday Thai sessions count double
   const thaiAttendance = await db
     .select({
       studentId: attendanceTable.studentId,
-      count: sql<number>`count(*)::int`,
+      count: sql<number>`SUM(CASE WHEN EXTRACT(DOW FROM ${trainingSessionsTable.sessionDate}) = 6 THEN 2 ELSE 1 END)::int`,
     })
     .from(attendanceTable)
     .innerJoin(trainingSessionsTable, eq(attendanceTable.sessionId, trainingSessionsTable.id))
@@ -140,8 +141,11 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Saturday Thai sessions count double
   const thaiCount = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: sql<number>`SUM(CASE WHEN EXTRACT(DOW FROM ${trainingSessionsTable.sessionDate}) = 6 THEN 2 ELSE 1 END)::int`,
+    })
     .from(attendanceTable)
     .innerJoin(trainingSessionsTable, eq(attendanceTable.sessionId, trainingSessionsTable.id))
     .where(and(eq(attendanceTable.studentId, student.userId), eq(trainingSessionsTable.modality, "thai")));

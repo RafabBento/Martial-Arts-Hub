@@ -16,8 +16,15 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
     dateFilter = new Date(now.getFullYear(), 0, 1);
   }
 
+  // Saturday (DOW=6) Thai sessions count double
+  const isThai = modality === "thai";
+
   const [{ count: totalSessions }] = await db
-    .select({ count: sql<number>`count(*)::int` })
+    .select({
+      count: isThai
+        ? sql<number>`SUM(CASE WHEN EXTRACT(DOW FROM session_date) = 6 THEN 2 ELSE 1 END)::int`
+        : sql<number>`count(*)::int`,
+    })
     .from(trainingSessionsTable)
     .where(
       and(
@@ -26,11 +33,34 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       )
     );
 
-  const modalityCol = modality === "thai"
+  const modalityCol = isThai
     ? studentProfilesTable.modalityThai
     : studentProfilesTable.modalityJiu;
 
-  const rows = await db
+  // For Thai: correlated subquery with Saturday double-weight; for Jiu: normal count via LEFT JOIN
+  const presentCountExpr = isThai
+    ? sql<number>`COALESCE((
+        SELECT SUM(CASE WHEN EXTRACT(DOW FROM ts.session_date) = 6 THEN 2 ELSE 1 END)::int
+        FROM attendance a
+        JOIN training_sessions ts ON ts.id = a.session_id
+        WHERE a.student_id = ${usersTable.id}
+          AND ts.modality = 'thai'
+          ${dateFilter ? sql`AND ts.session_date >= ${dateFilter}` : sql``}
+      ), 0)`
+    : sql<number>`count(${attendanceTable.id})::int`;
+
+  const orderExpr = isThai
+    ? sql`COALESCE((
+        SELECT SUM(CASE WHEN EXTRACT(DOW FROM ts.session_date) = 6 THEN 2 ELSE 1 END)
+        FROM attendance a
+        JOIN training_sessions ts ON ts.id = a.session_id
+        WHERE a.student_id = ${usersTable.id}
+          AND ts.modality = 'thai'
+          ${dateFilter ? sql`AND ts.session_date >= ${dateFilter}` : sql``}
+      ), 0) DESC, ${usersTable.name} ASC`
+    : sql`count(${attendanceTable.id}) DESC, ${usersTable.name} ASC`;
+
+  const query = db
     .select({
       userId: usersTable.id,
       name: usersTable.name,
@@ -40,21 +70,12 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       thaiGradeColor: studentProfilesTable.thaiGradeColor,
       jiuGradeColor: studentProfilesTable.jiuGradeColor,
       jiuDegree: studentProfilesTable.jiuDegree,
-      presentCount: sql<number>`count(${attendanceTable.id})::int`,
+      presentCount: presentCountExpr,
     })
     .from(usersTable)
     .innerJoin(studentProfilesTable, and(
       eq(usersTable.id, studentProfilesTable.userId),
       eq(modalityCol, true),
-    ))
-    .leftJoin(attendanceTable, and(
-      eq(attendanceTable.studentId, usersTable.id),
-      sql`EXISTS (
-        SELECT 1 FROM training_sessions ts
-        WHERE ts.id = ${attendanceTable.sessionId}
-        AND ts.modality = ${modality}
-        ${dateFilter ? sql`AND ts.session_date >= ${dateFilter}` : sql``}
-      )`
     ))
     .where(eq(usersTable.role, "student"))
     .groupBy(
@@ -67,7 +88,49 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       studentProfilesTable.jiuGradeColor,
       studentProfilesTable.jiuDegree,
     )
-    .orderBy(sql`count(${attendanceTable.id}) DESC, ${usersTable.name} ASC`);
+    .orderBy(orderExpr);
+
+  // For Jiu we still need the LEFT JOIN to count via GROUP BY
+  const rows = isThai
+    ? await query
+    : await db
+        .select({
+          userId: usersTable.id,
+          name: usersTable.name,
+          profilePhotoUrl: usersTable.profilePhotoUrl,
+          thaiGrade: studentProfilesTable.thaiGrade,
+          jiuGrade: studentProfilesTable.jiuGrade,
+          thaiGradeColor: studentProfilesTable.thaiGradeColor,
+          jiuGradeColor: studentProfilesTable.jiuGradeColor,
+          jiuDegree: studentProfilesTable.jiuDegree,
+          presentCount: sql<number>`count(${attendanceTable.id})::int`,
+        })
+        .from(usersTable)
+        .innerJoin(studentProfilesTable, and(
+          eq(usersTable.id, studentProfilesTable.userId),
+          eq(studentProfilesTable.modalityJiu, true),
+        ))
+        .leftJoin(attendanceTable, and(
+          eq(attendanceTable.studentId, usersTable.id),
+          sql`EXISTS (
+            SELECT 1 FROM training_sessions ts
+            WHERE ts.id = ${attendanceTable.sessionId}
+            AND ts.modality = 'jiu'
+            ${dateFilter ? sql`AND ts.session_date >= ${dateFilter}` : sql``}
+          )`
+        ))
+        .where(eq(usersTable.role, "student"))
+        .groupBy(
+          usersTable.id,
+          usersTable.name,
+          usersTable.profilePhotoUrl,
+          studentProfilesTable.thaiGrade,
+          studentProfilesTable.jiuGrade,
+          studentProfilesTable.thaiGradeColor,
+          studentProfilesTable.jiuGradeColor,
+          studentProfilesTable.jiuDegree,
+        )
+        .orderBy(sql`count(${attendanceTable.id}) DESC, ${usersTable.name} ASC`);
 
   return rows.map((s, index) => ({
     rank: index + 1,
