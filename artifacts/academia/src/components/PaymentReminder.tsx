@@ -10,7 +10,25 @@ export function PaymentReminder() {
   const shown = useRef(false);
 
   useEffect(() => {
-    if (!user?.paymentDay || shown.current) return;
+    if (!user || shown.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const isTest = params.get("testReminder") === "true";
+
+    if (isTest) {
+      shown.current = true;
+      const day = user.paymentDay ?? new Date().getDate();
+      setTimeout(() => {
+        toast({
+          title: "Hoje é seu dia de pagamento!",
+          description: `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontartesmarciais@gmail.com`,
+          duration: 8000,
+        });
+      }, 600);
+      return;
+    }
+
+    if (!user.paymentDay) return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
 
     const today = new Date().getDate();
@@ -22,7 +40,7 @@ export function PaymentReminder() {
 
     if (diff === 0) {
       title = "Hoje é seu dia de pagamento!";
-      description = `Lembre-se de pagar a mensalidade hoje (dia ${day}).`;
+      description = `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontartesmarciais@gmail.com`;
     } else if (diff === 1) {
       title = "Mensalidade vence amanhã!";
       description = `Seu pagamento vence amanhã, dia ${day}. Não deixe para última hora!`;
