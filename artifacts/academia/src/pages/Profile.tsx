@@ -73,6 +73,25 @@ function JiuStripe({ color }: { color: string }) {
   return <div className={`h-3 w-24 rounded-full border border-white/20 ${JIU_COLOR_MAP[color] ?? "bg-muted"}`} />;
 }
 
+function JiuBeltWithDegree({ color, degree }: { color: string | null | undefined; degree?: number | null }) {
+  if (!color) return null;
+  const bg = JIU_COLOR_MAP[color] ?? "bg-muted";
+  const earned = Math.min(Math.max(degree ?? 0, 0), 4);
+  const isWhite = color === "white";
+  return (
+    <div className="flex items-center gap-2">
+      <div className={`relative h-4 w-20 rounded-sm border overflow-hidden shrink-0 ${bg} ${isWhite ? "border-gray-400/50" : "border-white/20"}`}>
+        <div className={`absolute inset-x-0 top-1/2 -translate-y-px h-px ${isWhite ? "bg-gray-300/40" : "bg-black/25"}`} />
+      </div>
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className={`w-2.5 h-2.5 rounded-full border ${i < earned ? "bg-white border-white/80" : "bg-transparent border-white/30"}`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function isBirthdayToday(birthDate: string | null | undefined): boolean {
   if (!birthDate) return false;
   const today = new Date();
@@ -463,9 +482,11 @@ export default function Profile() {
                   <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
                   {studentData.jiuGrade ? (
                     <>
-                      {studentData.jiuGradeColor && <JiuStripe color={studentData.jiuGradeColor} />}
+                      <JiuBeltWithDegree color={studentData.jiuGradeColor} degree={studentData.jiuDegree} />
                       <p className="font-semibold text-sm">Faixa {studentData.jiuGrade}</p>
-                      <p className="text-xs text-muted-foreground">Faixa</p>
+                      {(studentData.jiuDegree ?? 0) > 0 && (
+                        <p className="text-xs text-muted-foreground">{studentData.jiuDegree}º grau</p>
+                      )}
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">Não atribuída</p>

@@ -186,11 +186,22 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [profile] = await db
-    .update(studentProfilesTable)
-    .set(body.data)
-    .where(eq(studentProfilesTable.userId, params.data.id))
-    .returning();
+  // Lookup requester's role from session
+  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
+  const requesterIsStudent = requesterId
+    ? (await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, requesterId)))[0]?.role === "student"
+    : false;
+
+  // Students cannot change grade fields — strip them from the update
+  const GRADE_FIELDS = ["thaiGrade", "thaiGradeColor", "jiuGrade", "jiuGradeColor", "jiuDegree"] as const;
+  const updateData = requesterIsStudent
+    ? Object.fromEntries(Object.entries(body.data).filter(([k]) => !GRADE_FIELDS.includes(k as typeof GRADE_FIELDS[number])))
+    : body.data;
+
+  // If nothing left to update (student sent only grade fields), just return current data
+  const [profile] = Object.keys(updateData).length > 0
+    ? await db.update(studentProfilesTable).set(updateData).where(eq(studentProfilesTable.userId, params.data.id)).returning()
+    : await db.select().from(studentProfilesTable).where(eq(studentProfilesTable.userId, params.data.id));
 
   if (!profile) {
     res.status(404).json({ error: "Student not found" });
