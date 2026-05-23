@@ -32,5 +32,7 @@ export interface User {
   jiuGrade?: string | null;
   /** @nullable */
   jiuGradeColor?: string | null;
+  /** @nullable */
+  jiuDegree?: number | null;
   createdAt: Date;
 }

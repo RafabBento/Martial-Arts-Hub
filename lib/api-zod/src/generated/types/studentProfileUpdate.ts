@@ -14,4 +14,5 @@ export interface StudentProfileUpdate {
   jiuGrade?: string;
   thaiGradeColor?: string;
   jiuGradeColor?: string;
+  jiuDegree?: number;
 }

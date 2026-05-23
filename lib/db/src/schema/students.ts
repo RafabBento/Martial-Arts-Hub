@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, jsonb, smallint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -11,6 +11,7 @@ export const studentProfilesTable = pgTable("student_profiles", {
   bollacha: boolean("bollacha").notNull().default(false),
   thaiGrade: text("thai_grade"),
   jiuGrade: text("jiu_grade"),
+  jiuDegree: smallint("jiu_degree"),
   thaiGradeColor: text("thai_grade_color"),
   jiuGradeColor: text("jiu_grade_color"),
   faceDescriptor: jsonb("face_descriptor"),

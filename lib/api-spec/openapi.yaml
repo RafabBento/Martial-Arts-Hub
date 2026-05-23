@@ -617,6 +617,8 @@ components:
           type: ["string", "null"]
         jiuGradeColor:
           type: ["string", "null"]
+        jiuDegree:
+          type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
@@ -654,6 +656,9 @@ components:
         jiuGradeColor:
           type: string
           nullable: true
+        jiuDegree:
+          type: integer
+          nullable: true
 
     StudentProfile:
       type: object
@@ -683,6 +688,8 @@ components:
           type: ["string", "null"]
         jiuGradeColor:
           type: ["string", "null"]
+        jiuDegree:
+          type: ["integer", "null"]
         hasFaceDescriptor:
           type: boolean
         totalAttendanceThai:
@@ -710,6 +717,8 @@ components:
           type: string
         jiuGradeColor:
           type: string
+        jiuDegree:
+          type: integer
 
     FaceDescriptorInput:
       type: object

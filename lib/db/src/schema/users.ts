@@ -20,6 +20,7 @@ export const usersTable = pgTable("users", {
   thaiGradeColor: text("thai_grade_color"),
   jiuGrade: text("jiu_grade"),
   jiuGradeColor: text("jiu_grade_color"),
+  jiuDegree: integer("jiu_degree"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

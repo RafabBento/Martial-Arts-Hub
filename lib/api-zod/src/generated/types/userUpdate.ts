@@ -18,4 +18,5 @@ export interface UserUpdate {
   thaiGradeColor?: string | null;
   jiuGrade?: string | null;
   jiuGradeColor?: string | null;
+  jiuDegree?: number | null;
 }

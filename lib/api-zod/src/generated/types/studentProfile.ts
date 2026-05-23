@@ -24,6 +24,8 @@ export interface StudentProfile {
   thaiGradeColor?: string | null;
   /** @nullable */
   jiuGradeColor?: string | null;
+  /** @nullable */
+  jiuDegree?: number | null;
   hasFaceDescriptor?: boolean;
   totalAttendanceThai?: number;
   totalAttendanceJiu?: number;

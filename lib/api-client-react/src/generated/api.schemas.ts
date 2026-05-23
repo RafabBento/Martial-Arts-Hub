@@ -78,6 +78,8 @@ export interface User {
   jiuGrade?: string | null;
   /** @nullable */
   jiuGradeColor?: string | null;
+  /** @nullable */
+  jiuDegree?: number | null;
   createdAt: string;
 }
 
@@ -98,6 +100,7 @@ export interface UserUpdate {
   thaiGradeColor?: string | null;
   jiuGrade?: string | null;
   jiuGradeColor?: string | null;
+  jiuDegree?: number | null;
 }
 
 export interface StudentProfile {
@@ -118,6 +121,8 @@ export interface StudentProfile {
   thaiGradeColor?: string | null;
   /** @nullable */
   jiuGradeColor?: string | null;
+  /** @nullable */
+  jiuDegree?: number | null;
   hasFaceDescriptor?: boolean;
   totalAttendanceThai?: number;
   totalAttendanceJiu?: number;
@@ -132,6 +137,7 @@ export interface StudentProfileUpdate {
   jiuGrade?: string;
   thaiGradeColor?: string;
   jiuGradeColor?: string;
+  jiuDegree?: number;
 }
 
 export interface FaceDescriptorInput {

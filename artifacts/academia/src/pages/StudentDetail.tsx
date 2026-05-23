@@ -149,7 +149,7 @@ export default function StudentDetail() {
 
   const updateStudentMutation = useUpdateStudent();
 
-  const handleGradeUpdate = (field: string, value: string) => {
+  const handleGradeUpdate = (field: string, value: string | number | null) => {
     if (!studentId) return;
     updateStudentMutation.mutate(
       { id: studentId, data: { [field]: value } },
@@ -345,12 +345,26 @@ export default function StudentDetail() {
             {(activeModality === "jiu" || !showToggle) && student.modalityJiu && (
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Jiu-Jitsu</div>
-                {student.jiuGradeColor && <BeltStripe color={student.jiuGradeColor} />}
+                {student.jiuGradeColor && (
+                  <div className="flex items-center gap-3">
+                    <BeltStripe color={student.jiuGradeColor} />
+                    {student.jiuDegree != null && student.jiuDegree > 0 && (
+                      <div className="flex gap-1">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-2.5 h-2.5 rounded-full border ${i < student.jiuDegree! ? "bg-white border-white/40" : "bg-transparent border-white/20"}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Faixa</label>
-                    <Select value={student.jiuGrade ?? ""} onValueChange={(v) => handleGradeUpdate("jiuGrade", v)}>
-                      <SelectTrigger data-testid="select-jiu-grade"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                    <Select value={student.jiuGrade ?? ""} onValueChange={(v) => handleGradeUpdate("jiuGrade", v)} disabled={!isMaster}>
+                      <SelectTrigger data-testid="select-jiu-grade" disabled={!isMaster}><SelectValue placeholder="Selecionar..." /></SelectTrigger>
                       <SelectContent>
                         {JIU_GRADES.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
                       </SelectContent>
@@ -358,12 +372,34 @@ export default function StudentDetail() {
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Cor da Faixa</label>
-                    <Select value={student.jiuGradeColor ?? ""} onValueChange={(v) => handleGradeUpdate("jiuGradeColor", v)}>
-                      <SelectTrigger data-testid="select-jiu-color"><SelectValue placeholder="Cor..." /></SelectTrigger>
+                    <Select value={student.jiuGradeColor ?? ""} onValueChange={(v) => handleGradeUpdate("jiuGradeColor", v)} disabled={!isMaster}>
+                      <SelectTrigger data-testid="select-jiu-color" disabled={!isMaster}><SelectValue placeholder="Cor..." /></SelectTrigger>
                       <SelectContent>
                         {JIU_COLORS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Grau
+                    {!isMaster && <span className="ml-1 text-[10px] text-primary/70">(somente mestre)</span>}
+                  </label>
+                  <div className="flex gap-2">
+                    {[0, 1, 2, 3, 4].map((grau) => (
+                      <button
+                        key={grau}
+                        disabled={!isMaster}
+                        onClick={() => isMaster && handleGradeUpdate("jiuDegree", grau === 0 ? null : grau)}
+                        className={`w-10 h-10 rounded-lg border text-sm font-bold transition-colors
+                          ${(student.jiuDegree ?? 0) === grau
+                            ? "bg-blue-600 border-blue-500 text-white"
+                            : "bg-card border-border text-muted-foreground hover:border-blue-500/50 hover:text-foreground"}
+                          ${!isMaster ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        {grau === 0 ? "—" : grau}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

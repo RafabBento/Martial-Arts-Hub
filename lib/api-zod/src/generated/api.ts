@@ -60,6 +60,7 @@ export const LoginResponse = zod.object({
     thaiGradeColor: zod.string().nullish(),
     jiuGrade: zod.string().nullish(),
     jiuGradeColor: zod.string().nullish(),
+    jiuDegree: zod.number().nullish(),
     createdAt: zod.coerce.date(),
   }),
   token: zod.string(),
@@ -90,6 +91,7 @@ export const GetMeResponse = zod.object({
   thaiGradeColor: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -116,6 +118,7 @@ export const ListUsersResponseItem = zod.object({
   thaiGradeColor: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 export const ListUsersResponse = zod.array(ListUsersResponseItem);
@@ -142,6 +145,7 @@ export const GetUserResponse = zod.object({
   thaiGradeColor: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -164,6 +168,7 @@ export const UpdateUserBody = zod.object({
   thaiGradeColor: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
 });
 
 export const UpdateUserResponse = zod.object({
@@ -181,6 +186,7 @@ export const UpdateUserResponse = zod.object({
   thaiGradeColor: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   createdAt: zod.coerce.date(),
 });
 
@@ -216,6 +222,7 @@ export const ListStudentsResponseItem = zod.object({
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   hasFaceDescriptor: zod.boolean().optional(),
   totalAttendanceThai: zod.number().optional(),
   totalAttendanceJiu: zod.number().optional(),
@@ -243,6 +250,7 @@ export const GetStudentResponse = zod.object({
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   hasFaceDescriptor: zod.boolean().optional(),
   totalAttendanceThai: zod.number().optional(),
   totalAttendanceJiu: zod.number().optional(),
@@ -264,6 +272,7 @@ export const UpdateStudentBody = zod.object({
   jiuGrade: zod.string().optional(),
   thaiGradeColor: zod.string().optional(),
   jiuGradeColor: zod.string().optional(),
+  jiuDegree: zod.number().optional(),
 });
 
 export const UpdateStudentResponse = zod.object({
@@ -279,6 +288,7 @@ export const UpdateStudentResponse = zod.object({
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   hasFaceDescriptor: zod.boolean().optional(),
   totalAttendanceThai: zod.number().optional(),
   totalAttendanceJiu: zod.number().optional(),
