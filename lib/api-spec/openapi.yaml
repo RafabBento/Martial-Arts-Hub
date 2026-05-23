@@ -211,6 +211,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: unit
+          in: query
+          schema:
+            type: string
+            enum: [matriz, panobianco, upfitness]
       responses:
         "200":
           description: List of students
@@ -633,6 +638,10 @@ components:
         role:
           type: string
           enum: [student, teacher]
+        unit:
+          type: string
+          enum: [matriz, panobianco, upfitness]
+          nullable: true
         phone:
           type: string
         birthDate:
@@ -689,7 +698,7 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, createdAt]
+      required: [id, name, email, role, unit, createdAt]
       properties:
         id:
           type: integer
@@ -700,6 +709,9 @@ components:
         role:
           type: string
           enum: [student, teacher, admin]
+        unit:
+          type: string
+          enum: [matriz, panobianco, upfitness]
         phone:
           type: ["string", "null"]
         profilePhotoUrl:
@@ -731,6 +743,10 @@ components:
       properties:
         name:
           type: string
+        unit:
+          type: string
+          enum: [matriz, panobianco, upfitness]
+          nullable: true
         phone:
           type: string
         profilePhotoUrl:
@@ -765,7 +781,7 @@ components:
 
     StudentProfile:
       type: object
-      required: [id, userId, name, email, modalityThai, modalityJiu, bollacha, createdAt]
+      required: [id, userId, name, email, unit, modalityThai, modalityJiu, bollacha, createdAt]
       properties:
         id:
           type: integer
@@ -775,6 +791,9 @@ components:
           type: string
         email:
           type: string
+        unit:
+          type: string
+          enum: [matriz, panobianco, upfitness]
         profilePhotoUrl:
           type: ["string", "null"]
         modalityThai:

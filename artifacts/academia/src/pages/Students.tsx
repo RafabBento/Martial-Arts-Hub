@@ -1,9 +1,23 @@
 import { useState } from "react";
 import { useListStudents, getListStudentsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Search, Users, ChevronRight } from "lucide-react";
+import { Search, Users, ChevronRight, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "../contexts/AuthContext";
+
+const UNIT_LABELS: Record<string, string> = {
+  matriz:     "Front Matriz",
+  panobianco: "Front Panobianco",
+  upfitness:  "Front Up Fitness",
+};
+
+const UNIT_FILTER_OPTIONS = [
+  { value: "",           label: "Todas" },
+  { value: "matriz",     label: "Matriz" },
+  { value: "panobianco", label: "Panobianco" },
+  { value: "upfitness",  label: "Up Fitness" },
+];
 
 const PRIMARY_COLOR_MAP: Record<string, string> = {
   white: "bg-white text-black border-gray-300",
@@ -27,12 +41,22 @@ function BeltBadge({ grade, color, label }: { grade: string | null | undefined; 
 }
 
 export default function Students() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
+
   const [search, setSearch] = useState("");
   const [modality, setModality] = useState<"" | "thai" | "jiu" | "both">("");
+  const [unit, setUnit] = useState<"" | "matriz" | "panobianco" | "upfitness">("");
+
+  const queryParams = {
+    search: search || undefined,
+    modality: modality || undefined,
+    unit: (isMaster && unit) ? unit : undefined,
+  };
 
   const { data: students, isLoading } = useListStudents(
-    { search: search || undefined, modality: modality || undefined },
-    { query: { queryKey: getListStudentsQueryKey({ search: search || undefined, modality: modality || undefined }) } }
+    queryParams,
+    { query: { queryKey: getListStudentsQueryKey(queryParams) } }
   );
 
   const modalityOptions = [
@@ -77,6 +101,23 @@ export default function Students() {
         </div>
       </div>
 
+      {/* Filtro de unidade — visível apenas para professor/admin */}
+      {isMaster && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <MapPin size={14} className="text-muted-foreground" />
+          {UNIT_FILTER_OPTIONS.map((opt) => (
+            <Button
+              key={opt.value}
+              variant={unit === opt.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setUnit(opt.value as typeof unit)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
@@ -98,6 +139,12 @@ export default function Students() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold truncate group-hover:text-primary transition-colors">{student.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{student.email}</div>
+                    {isMaster && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <MapPin size={10} className="text-muted-foreground/60" />
+                        <span className="text-xs text-muted-foreground/70">{UNIT_LABELS[student.unit] ?? student.unit}</span>
+                      </div>
+                    )}
                   </div>
                   <ChevronRight size={16} className="text-muted-foreground shrink-0" />
                 </div>

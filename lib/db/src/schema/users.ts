@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const roleEnum = pgEnum("role", ["student", "teacher", "admin"]);
+export const unitEnum = pgEnum("unit", ["matriz", "panobianco", "upfitness"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -21,6 +22,7 @@ export const usersTable = pgTable("users", {
   jiuGrade: text("jiu_grade"),
   jiuGradeColor: text("jiu_grade_color"),
   jiuDegree: integer("jiu_degree"),
+  unit: unitEnum("unit").notNull().default("matriz"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

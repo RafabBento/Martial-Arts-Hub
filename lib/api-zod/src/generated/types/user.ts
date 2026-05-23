@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UserRole } from "./userRole";
+import type { UserUnit } from "./userUnit";
 
 export interface User {
   id: number;
   name: string;
   email: string;
   role: UserRole;
+  unit: UserUnit;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

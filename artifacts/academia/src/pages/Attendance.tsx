@@ -23,7 +23,8 @@ type ScanStatus = "idle" | "scanning" | "upscaling" | "detecting" | "found" | "n
 // Rostos próximos ao limite de dois tiles são capturados por ambos — a deduplicação
 // posterior (por distância entre descritores) remove duplicatas.
 async function detectInTiles(
-  faceapi: Awaited<ReturnType<typeof import("../lib/faceApi").loadFaceApi>>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  faceapi: any,
   canvas: HTMLCanvasElement,
   onProgress: (tile: number, total: number) => void,
   opts: { cols?: number; rows?: number; overlap?: number; minConfidence?: number } = {}

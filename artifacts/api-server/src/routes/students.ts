@@ -12,6 +12,8 @@ import {
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
 
+type Unit = "matriz" | "panobianco" | "upfitness";
+
 const router: IRouter = Router();
 
 router.get("/students", async (req, res): Promise<void> => {
@@ -19,6 +21,16 @@ router.get("/students", async (req, res): Promise<void> => {
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
     return;
+  }
+
+  // Determine requester role — students only see their own unit
+  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
+  let requesterUnit: Unit | null = null;
+  let requesterRole: string | null = null;
+  if (requesterId) {
+    const [requester] = await db.select({ role: usersTable.role, unit: usersTable.unit }).from(usersTable).where(eq(usersTable.id, requesterId));
+    requesterRole = requester?.role ?? null;
+    requesterUnit = (requester?.unit ?? null) as Unit | null;
   }
 
   let conditions: ReturnType<typeof eq>[] = [eq(usersTable.role, "student")];
@@ -32,12 +44,20 @@ router.get("/students", async (req, res): Promise<void> => {
     conditions.push(eq(studentProfilesTable.modalityJiu, true));
   }
 
+  // Students auto-filtered to their unit; teachers/admins use optional query param
+  if (requesterRole === "student" && requesterUnit) {
+    conditions.push(eq(usersTable.unit, requesterUnit));
+  } else if (query.data.unit) {
+    conditions.push(eq(usersTable.unit, query.data.unit as Unit));
+  }
+
   let joinQuery = db
     .select({
       id: studentProfilesTable.id,
       userId: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
+      unit: usersTable.unit,
       profilePhotoUrl: usersTable.profilePhotoUrl,
       modalityThai: studentProfilesTable.modalityThai,
       modalityJiu: studentProfilesTable.modalityJiu,
@@ -91,6 +111,7 @@ router.get("/students", async (req, res): Promise<void> => {
     userId: s.userId,
     name: s.name,
     email: s.email,
+    unit: s.unit,
     profilePhotoUrl: s.profilePhotoUrl ?? null,
     modalityThai: s.modalityThai,
     modalityJiu: s.modalityJiu,
@@ -120,6 +141,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
       userId: usersTable.id,
       name: usersTable.name,
       email: usersTable.email,
+      unit: usersTable.unit,
       profilePhotoUrl: usersTable.profilePhotoUrl,
       modalityThai: studentProfilesTable.modalityThai,
       modalityJiu: studentProfilesTable.modalityJiu,
@@ -161,6 +183,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     userId: student.userId,
     name: student.name,
     email: student.email,
+    unit: student.unit,
     profilePhotoUrl: student.profilePhotoUrl ?? null,
     modalityThai: student.modalityThai,
     modalityJiu: student.modalityJiu,
@@ -219,6 +242,7 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     userId: user.id,
     name: user.name,
     email: user.email,
+    unit: user.unit,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     modalityThai: profile.modalityThai,
     modalityJiu: profile.modalityJiu,

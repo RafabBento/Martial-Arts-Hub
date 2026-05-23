@@ -28,6 +28,7 @@ export const RegisterBody = zod.object({
   email: zod.string().email(),
   password: zod.string().min(registerBodyPasswordMin),
   role: zod.enum(["student", "teacher"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]).nullish(),
   phone: zod.string().optional(),
   birthDate: zod.string().nullish(),
   paymentDay: zod.number().min(1).max(registerBodyPaymentDayMax).nullish(),
@@ -55,6 +56,7 @@ export const LoginResponse = zod.object({
     name: zod.string(),
     email: zod.string(),
     role: zod.enum(["student", "teacher", "admin"]),
+    unit: zod.enum(["matriz", "panobianco", "upfitness"]),
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
     birthDate: zod.string().nullish(),
@@ -86,6 +88,7 @@ export const GetMeResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -113,6 +116,7 @@ export const ListUsersResponseItem = zod.object({
   name: zod.string(),
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -140,6 +144,7 @@ export const GetUserResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -163,6 +168,7 @@ export const UpdateUserParams = zod.object({
 
 export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]).nullish(),
   phone: zod.string().optional(),
   profilePhotoUrl: zod.string().optional(),
   birthDate: zod.string().nullish(),
@@ -181,6 +187,7 @@ export const UpdateUserResponse = zod.object({
   name: zod.string(),
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -212,6 +219,7 @@ export const DeleteUserResponse = zod.object({
 export const ListStudentsQueryParams = zod.object({
   modality: zod.enum(["thai", "jiu", "both"]).optional(),
   search: zod.coerce.string().optional(),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]).optional(),
 });
 
 export const ListStudentsResponseItem = zod.object({
@@ -219,6 +227,7 @@ export const ListStudentsResponseItem = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
@@ -247,6 +256,7 @@ export const GetStudentResponse = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
@@ -285,6 +295,7 @@ export const UpdateStudentResponse = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RegisterInputRole } from "./registerInputRole";
+import type { RegisterInputUnit } from "./registerInputUnit";
 
 export interface RegisterInput {
   /** @minLength 2 */
@@ -14,6 +15,7 @@ export interface RegisterInput {
   /** @minLength 6 */
   password: string;
   role: RegisterInputRole;
+  unit?: RegisterInputUnit;
   phone?: string;
   birthDate?: string | null;
   /**

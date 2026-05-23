@@ -17,6 +17,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     name: user.name,
     email: user.email,
     role: user.role,
+    unit: user.unit,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -82,9 +83,17 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Drizzle .set() accepts undefined (omit) but not null for enum cols, so
+  // extract unit and only spread it when it has a real value.
+  const { unit: unitVal, ...restBody } = body.data;
+  const updateData = {
+    ...restBody,
+    ...(unitVal != null ? { unit: unitVal } : {}),
+  };
+
   const [user] = await db
     .update(usersTable)
-    .set(body.data)
+    .set(updateData)
     .where(eq(usersTable.id, params.data.id))
     .returning();
 

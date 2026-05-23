@@ -5,12 +5,14 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
+import type { StudentProfileUnit } from "./studentProfileUnit";
 
 export interface StudentProfile {
   id: number;
   userId: number;
   name: string;
   email: string;
+  unit: StudentProfileUnit;
   /** @nullable */
   profilePhotoUrl?: string | null;
   modalityThai: boolean;

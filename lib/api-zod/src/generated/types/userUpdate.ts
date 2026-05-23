@@ -5,9 +5,11 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserUpdateUnit } from "./userUpdateUnit";
 
 export interface UserUpdate {
   name?: string;
+  unit?: UserUpdateUnit;
   phone?: string;
   profilePhotoUrl?: string;
   birthDate?: string | null;

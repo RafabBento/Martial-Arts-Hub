@@ -202,6 +202,7 @@ export default function Profile() {
   const { user, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name ?? "");
+  const [unit, setUnit] = useState<"matriz" | "panobianco" | "upfitness">(user?.unit ?? "matriz");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [birthDate, setBirthDate] = useState(user?.birthDate ?? "");
   const [paymentDay, setPaymentDay] = useState<number | "">(user?.paymentDay ?? "");
@@ -260,6 +261,7 @@ export default function Profile() {
         id: user.id,
         data: {
           name: name || undefined,
+          unit: unit,
           phone: phone || undefined,
           birthDate: birthDate || undefined,
           paymentDay: paymentDay !== "" ? paymentDay : undefined,
@@ -404,6 +406,34 @@ export default function Profile() {
               />
             </div>
             <div>
+              <label className="text-sm text-muted-foreground block mb-1">Unidade</label>
+              <div className="grid grid-cols-1 gap-2">
+                {([ 
+                  { value: "matriz",     label: "Front Matriz",     address: "Endereço atual" },
+                  { value: "panobianco", label: "Front Panobianco", address: "R. Benjamin Pereira, 548" },
+                  { value: "upfitness",  label: "Front Up Fitness", address: "Av. Gustavo Adolfo, 588" },
+                ] as const).map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      unit === opt.value ? "border-primary/60 bg-primary/10" : "border-border"
+                    }`}
+                    onClick={() => setUnit(opt.value)}
+                  >
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      unit === opt.value ? "border-primary bg-primary" : "border-muted-foreground"
+                    }`}>
+                      {unit === opt.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.address}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
               <label className="text-sm text-muted-foreground block mb-1">Telefone</label>
               <Input
                 data-testid="input-profile-phone"
@@ -520,6 +550,14 @@ export default function Profile() {
               </span>
             </div>
             <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Unidade</span>
+              <span>{{
+                matriz:     "Front Matriz",
+                panobianco: "Front Panobianco",
+                upfitness:  "Front Up Fitness",
+              }[user.unit] ?? user.unit}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Função</span>
               <span>{rolePt}</span>
             </div>
@@ -534,6 +572,7 @@ export default function Profile() {
               className="mt-2"
               onClick={() => {
                 setName(user.name);
+                setUnit(user.unit ?? "matriz");
                 setPhone(user.phone ?? "");
                 setBirthDate(user.birthDate ?? "");
                 setPaymentDay(user.paymentDay ?? "");

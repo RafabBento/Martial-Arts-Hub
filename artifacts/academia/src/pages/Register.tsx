@@ -61,11 +61,18 @@ const JIU_COLORS = [
   { value: "black",  label: "Preta",   bg: "bg-gray-900"   },
 ];
 
+const UNIT_OPTIONS = [
+  { value: "matriz",     label: "Front Matriz",       address: "Endereço atual" },
+  { value: "panobianco", label: "Front Panobianco",   address: "R. Benjamin Pereira, 548" },
+  { value: "upfitness",  label: "Front Up Fitness",   address: "Av. Gustavo Adolfo, 588" },
+] as const;
+
 const registerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   email: z.string().email("E-mail inválido"),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   role: z.enum(["student", "teacher"]),
+  unit: z.enum(["matriz", "panobianco", "upfitness"]).default("matriz"),
   phone: z.string().optional(),
   birthDate: z.string().optional(),
   paymentDay: z.coerce.number().min(1).max(31).optional(),
@@ -94,6 +101,7 @@ export default function Register() {
       email: "",
       password: "",
       role: "student",
+      unit: "matriz",
       phone: "",
       birthDate: "",
       paymentDay: undefined,
@@ -118,6 +126,7 @@ export default function Register() {
       {
         data: {
           ...values,
+          unit: values.unit ?? "matriz",
           birthDate: values.birthDate || undefined,
           paymentDay: values.paymentDay || undefined,
           modalityThai: values.modalityThai ?? false,
@@ -271,6 +280,39 @@ export default function Register() {
                         <SelectItem value="teacher">Professor / Mestre</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="unit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Unidade</FormLabel>
+                    <div className="grid grid-cols-1 gap-2">
+                      {UNIT_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.value}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                            field.value === opt.value
+                              ? "border-primary/60 bg-primary/10"
+                              : "border-border hover:border-border/80"
+                          }`}
+                          onClick={() => field.onChange(opt.value)}
+                        >
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            field.value === opt.value ? "border-primary bg-primary" : "border-muted-foreground"
+                          }`}>
+                            {field.value === opt.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold">{opt.label}</p>
+                            <p className="text-xs text-muted-foreground">{opt.address}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

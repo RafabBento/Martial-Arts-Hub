@@ -21,6 +21,16 @@ export const RegisterInputRole = {
   teacher: "teacher",
 } as const;
 
+export type RegisterInputUnit =
+  | (typeof RegisterInputUnit)[keyof typeof RegisterInputUnit]
+  | null;
+
+export const RegisterInputUnit = {
+  matriz: "matriz",
+  panobianco: "panobianco",
+  upfitness: "upfitness",
+} as const;
+
 export interface RegisterInput {
   /** @minLength 2 */
   name: string;
@@ -28,6 +38,7 @@ export interface RegisterInput {
   /** @minLength 6 */
   password: string;
   role: RegisterInputRole;
+  unit?: RegisterInputUnit;
   phone?: string;
   birthDate?: string | null;
   /**
@@ -58,11 +69,20 @@ export const UserRole = {
   admin: "admin",
 } as const;
 
+export type UserUnit = (typeof UserUnit)[keyof typeof UserUnit];
+
+export const UserUnit = {
+  matriz: "matriz",
+  panobianco: "panobianco",
+  upfitness: "upfitness",
+} as const;
+
 export interface User {
   id: number;
   name: string;
   email: string;
   role: UserRole;
+  unit: UserUnit;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -93,8 +113,19 @@ export interface AuthResponse {
   token: string;
 }
 
+export type UserUpdateUnit =
+  | (typeof UserUpdateUnit)[keyof typeof UserUpdateUnit]
+  | null;
+
+export const UserUpdateUnit = {
+  matriz: "matriz",
+  panobianco: "panobianco",
+  upfitness: "upfitness",
+} as const;
+
 export interface UserUpdate {
   name?: string;
+  unit?: UserUpdateUnit;
   phone?: string;
   profilePhotoUrl?: string;
   birthDate?: string | null;
@@ -108,11 +139,21 @@ export interface UserUpdate {
   jiuDegree?: number | null;
 }
 
+export type StudentProfileUnit =
+  (typeof StudentProfileUnit)[keyof typeof StudentProfileUnit];
+
+export const StudentProfileUnit = {
+  matriz: "matriz",
+  panobianco: "panobianco",
+  upfitness: "upfitness",
+} as const;
+
 export interface StudentProfile {
   id: number;
   userId: number;
   name: string;
   email: string;
+  unit: StudentProfileUnit;
   /** @nullable */
   profilePhotoUrl?: string | null;
   modalityThai: boolean;
@@ -320,6 +361,7 @@ export const ListUsersRole = {
 export type ListStudentsParams = {
   modality?: ListStudentsModality;
   search?: string;
+  unit?: ListStudentsUnit;
 };
 
 export type ListStudentsModality =
@@ -329,6 +371,15 @@ export const ListStudentsModality = {
   thai: "thai",
   jiu: "jiu",
   both: "both",
+} as const;
+
+export type ListStudentsUnit =
+  (typeof ListStudentsUnit)[keyof typeof ListStudentsUnit];
+
+export const ListStudentsUnit = {
+  matriz: "matriz",
+  panobianco: "panobianco",
+  upfitness: "upfitness",
 } as const;
 
 export type ListSessionsParams = {

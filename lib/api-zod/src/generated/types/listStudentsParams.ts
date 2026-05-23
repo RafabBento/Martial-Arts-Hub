@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ListStudentsModality } from "./listStudentsModality";
+import type { ListStudentsUnit } from "./listStudentsUnit";
 
 export type ListStudentsParams = {
   modality?: ListStudentsModality;
   search?: string;
+  unit?: ListStudentsUnit;
 };
