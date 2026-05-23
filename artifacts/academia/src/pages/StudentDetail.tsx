@@ -224,7 +224,7 @@ export default function StudentDetail() {
             const showJiuLogo = student.modalityJiu && isBollacha && (activeModality === "jiu" || !showToggle);
             return (
               <div className="flex items-center justify-center gap-5">
-                {student.modalityThai && (
+                {(student.modalityThai || student.modalityJiu) && (
                   <img src={logoThai} alt="Front Artes Marciais" className="object-contain" style={{ width: 88, height: 88 }} />
                 )}
                 {showJiuLogo && (
