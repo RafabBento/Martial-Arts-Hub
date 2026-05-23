@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import {
   useListSessions, getListSessionsQueryKey,
   useListStudents, getListStudentsQueryKey,
@@ -7,7 +8,7 @@ import {
   useCreateAttendance, useListAttendance, getListAttendanceQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus, CalendarCheck, Clock } from "lucide-react";
+import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus, CalendarCheck, Clock, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -70,6 +71,10 @@ export default function Attendance() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
+
+  // Bloquear acesso de alunos
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,10 +87,13 @@ export default function Attendance() {
   const [cameraOn, setCameraOn] = useState(false);
   const [selectedSession, setSelectedSession] = useState("");
   const [matches, setMatches] = useState<IdentifyMatch[]>([]);
+  const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [confirmedIds, setConfirmedIds] = useState<Set<number>>(new Set());
-  const [mode, setMode] = useState<"face" | "gallery" | "manual">("face");
+  const [mode, setMode] = useState<"face" | "gallery" | "manual">("gallery");
   const [manualStudent, setManualStudent] = useState("");
   const [galleryScanning, setGalleryScanning] = useState(false);
+  const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null);
+  const [registeringAll, setRegisteringAll] = useState(false);
   const [autoCreating, setAutoCreating] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -328,7 +336,13 @@ export default function Attendance() {
     }
     setGalleryScanning(true);
     setMatches([]);
+    setUnmatchedCount(0);
     setScanStatus("scanning");
+
+    // Preview da foto
+    const previewUrl = URL.createObjectURL(file);
+    setGalleryPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
+
     try {
       if (!faceApiRef.current) {
         faceApiRef.current = await loadFaceApi();
@@ -340,7 +354,7 @@ export default function Attendance() {
       canvas.height = img.height;
       canvas.getContext("2d")!.drawImage(img, 0, 0);
       const detections = await faceapi
-        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
         .withFaceLandmarks()
         .withFaceDescriptors();
       if (detections.length === 0) {
@@ -358,7 +372,20 @@ export default function Attendance() {
       });
       if (!resp.ok) throw new Error("Identify failed");
       const result: IdentifyMatch[] = await resp.json();
-      const found = result.filter(r => r.matched);
+
+      // Deduplicar: para cada aluno, manter apenas o match com menor distância
+      const matchMap = new Map<number, IdentifyMatch>();
+      for (const r of result) {
+        if (!r.matched) continue;
+        const existing = matchMap.get(r.studentId);
+        if (!existing || r.distance < existing.distance) {
+          matchMap.set(r.studentId, r);
+        }
+      }
+      const found = Array.from(matchMap.values());
+      const unmatched = descriptors.length - result.filter(r => r.matched).length;
+      setUnmatchedCount(Math.max(0, unmatched));
+
       if (found.length > 0) {
         setMatches(found);
         setScanStatus("found");
@@ -376,13 +403,58 @@ export default function Attendance() {
     }
   };
 
+  const handleRegisterAll = async () => {
+    if (!selectedSession) return;
+    const toRegister = matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId));
+    if (toRegister.length === 0) {
+      toast({ title: "Todos já estão registrados!" });
+      return;
+    }
+    setRegisteringAll(true);
+    let count = 0;
+    for (const m of toRegister) {
+      await new Promise<void>((resolve) => {
+        createAttMutation.mutate(
+          { data: { sessionId: parseInt(selectedSession, 10), studentId: m.studentId, faceRecognized: true } },
+          {
+            onSuccess: () => {
+              setConfirmedIds(prev => new Set([...prev, m.studentId]));
+              count++;
+              resolve();
+            },
+            onError: () => resolve(),
+          }
+        );
+      });
+    }
+    await queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: parseInt(selectedSession, 10) }) });
+    toast({ title: `${count} presença${count !== 1 ? "s" : ""} registrada${count !== 1 ? "s" : ""} com sucesso!` });
+    setRegisteringAll(false);
+  };
+
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
+
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          O controle de presenças é exclusivo para professores e administradores.
+          Consulte seu professor para ver seu histórico.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-3xl font-black tracking-tight uppercase">Controle de Presenca</h1>
-        <p className="text-muted-foreground mt-1">Registre presenças por reconhecimento facial ou manualmente</p>
+        <h1 className="text-3xl font-black tracking-tight uppercase">Controle de Presença</h1>
+        <p className="text-muted-foreground mt-1">Envie a foto pós-treino para registrar presenças automaticamente por reconhecimento facial</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -593,14 +665,43 @@ export default function Attendance() {
 
           {mode === "gallery" && (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
+              {/* Preview da foto */}
+              {galleryPreviewUrl && (
+                <div className="relative">
+                  <img
+                    src={galleryPreviewUrl}
+                    alt="Foto pós-treino"
+                    className="w-full max-h-72 object-cover"
+                  />
+                  {galleryScanning && (
+                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
+                      <Loader2 size={36} className="animate-spin text-primary" />
+                      <span className="text-sm font-semibold text-white">Analisando rostos...</span>
+                    </div>
+                  )}
+                  {matches.length > 0 && !galleryScanning && (
+                    <div className="absolute top-3 left-3 bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                      <CheckCircle size={13} className="text-green-400" />
+                      {matches.length} identificado{matches.length !== 1 ? "s" : ""}
+                      {unmatchedCount > 0 && <span className="text-muted-foreground"> · {unmatchedCount} não reconhecido{unmatchedCount !== 1 ? "s" : ""}</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="p-5 space-y-4">
-                <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Identificar por Foto da Galeria</h3>
-                <p className="text-xs text-muted-foreground">Envie uma foto com o(s) rosto(s) do(s) aluno(s) para identificação automática.</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm uppercase tracking-wide">Foto Pós-Treino</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Envie a foto do grupo para registrar as presenças automaticamente</p>
+                  </div>
+                </div>
 
                 <input
                   ref={galleryInputRef}
                   type="file"
                   accept="image/*"
+                  capture="environment"
                   className="hidden"
                   onChange={handleGalleryScan}
                 />
@@ -608,53 +709,69 @@ export default function Attendance() {
                   onClick={() => galleryInputRef.current?.click()}
                   disabled={galleryScanning || !selectedSession}
                   className="w-full"
+                  size="lg"
                 >
                   {galleryScanning
                     ? <><Loader2 size={16} className="animate-spin mr-2" />Analisando foto...</>
-                    : <><ImagePlus size={16} className="mr-2" />Selecionar foto da galeria</>
+                    : <><ImagePlus size={16} className="mr-2" />{galleryPreviewUrl ? "Trocar foto" : "Enviar foto do grupo"}</>
                   }
                 </Button>
 
-                {scanStatus === "scanning" && (
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Identificando rostos...
-                  </div>
+                {!selectedSession && (
+                  <p className="text-xs text-primary text-center">⚠ Selecione uma sessão de treino antes de enviar a foto</p>
                 )}
+
                 {scanStatus === "notfound" && (
                   <div className="flex items-center gap-2 text-sm text-red-400">
-                    <XCircle size={14} /> Nenhum aluno identificado
+                    <XCircle size={14} /> Nenhum aluno identificado — certifique-se que os rostos estão cadastrados no sistema
                   </div>
                 )}
+
                 {matches.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-green-400 flex items-center gap-2">
-                      <CheckCircle size={14} /> {matches.length} aluno{matches.length > 1 ? "s" : ""} identificado{matches.length > 1 ? "s" : ""}
+                  <div className="space-y-3">
+                    {/* Botão registrar todos */}
+                    {matches.some(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)) && (
+                      <Button
+                        className="w-full"
+                        onClick={handleRegisterAll}
+                        disabled={registeringAll || !selectedSession}
+                      >
+                        {registeringAll
+                          ? <><Loader2 size={16} className="animate-spin mr-2" />Registrando...</>
+                          : <><UserCheck size={16} className="mr-2" />Registrar {matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}</>
+                        }
+                      </Button>
+                    )}
+
+                    <div className="space-y-2">
+                      {matches.map(m => {
+                        const alreadyIn = attendedIds.has(m.studentId) || confirmedIds.has(m.studentId);
+                        return (
+                          <div key={m.studentId} className={`flex items-center gap-3 p-3 rounded-lg border ${alreadyIn ? "bg-green-500/10 border-green-500/30" : "bg-muted/40 border-border"}`}>
+                            <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
+                              {m.profilePhotoUrl
+                                ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
+                                : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-sm">{m.name}</div>
+                              <div className="text-xs text-muted-foreground">Confiança: {((1 - m.distance) * 100).toFixed(0)}%</div>
+                            </div>
+                            {alreadyIn
+                              ? <CheckCircle size={18} className="text-green-400 shrink-0" />
+                              : <div className="w-2 h-2 rounded-full bg-muted-foreground/40 shrink-0" />
+                            }
+                          </div>
+                        );
+                      })}
                     </div>
-                    {matches.map(m => (
-                      <div key={m.studentId} className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                        <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
-                          {m.profilePhotoUrl
-                            ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
-                          }
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-semibold">{m.name}</div>
-                          <div className="text-xs text-muted-foreground">Dist: {m.distance.toFixed(3)}</div>
-                        </div>
-                        {attendedIds.has(m.studentId) || confirmedIds.has(m.studentId) ? (
-                          <span className="text-xs text-green-400 font-bold">Já registrado</span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => confirmAttendance(m.studentId, true)}
-                            disabled={createAttMutation.isPending}
-                          >
-                            <UserCheck size={14} className="mr-1" /> Confirmar
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+
+                    {unmatchedCount > 0 && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} não identificado{unmatchedCount !== 1 ? "s" : ""} — adicione a foto de perfil desses alunos no sistema
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

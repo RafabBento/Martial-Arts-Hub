@@ -43,7 +43,7 @@ export default function Payments() {
       );
     } else {
       markMutation.mutate(
-        { studentId, year, month },
+        { studentId, year, month, data: {} },
         {
           onSuccess: () => { invalidate(); toast({ title: `${name} marcado como pago ✓` }); },
           onError: () => toast({ title: "Erro ao marcar", variant: "destructive" }),
