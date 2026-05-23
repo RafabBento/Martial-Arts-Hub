@@ -451,6 +451,7 @@ export const ListRankingsResponseItem = zod.object({
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
   totalSessions: zod.number(),
   presentCount: zod.number(),
   percentage: zod.number(),

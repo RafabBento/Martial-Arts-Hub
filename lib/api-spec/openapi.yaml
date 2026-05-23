@@ -869,6 +869,8 @@ components:
           type: ["string", "null"]
         jiuGradeColor:
           type: ["string", "null"]
+        jiuDegree:
+          type: ["integer", "null"]
         totalSessions:
           type: integer
         presentCount:

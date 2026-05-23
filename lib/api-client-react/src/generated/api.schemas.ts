@@ -241,6 +241,8 @@ export interface StudentRanking {
   thaiGradeColor?: string | null;
   /** @nullable */
   jiuGradeColor?: string | null;
+  /** @nullable */
+  jiuDegree?: number | null;
   totalSessions: number;
   presentCount: number;
   percentage: number;
