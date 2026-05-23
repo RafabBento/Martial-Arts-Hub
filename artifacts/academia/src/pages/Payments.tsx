@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useListPayments, useMarkPayment, useUnmarkPayment, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Users, AlertCircle } from "lucide-react";
+import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Users, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,7 @@ export default function Payments() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [pendingId, setPendingId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -29,12 +30,15 @@ export default function Payments() {
     queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey({ month, year }) });
 
   const handleToggle = (studentId: number, paid: boolean, name: string) => {
+    if (pendingId !== null) return;
+    setPendingId(studentId);
     if (paid) {
       unmarkMutation.mutate(
         { studentId, year, month },
         {
           onSuccess: () => { invalidate(); toast({ title: `${name} desmarcado` }); },
           onError: () => toast({ title: "Erro ao desmarcar", variant: "destructive" }),
+          onSettled: () => setPendingId(null),
         }
       );
     } else {
@@ -43,6 +47,7 @@ export default function Payments() {
         {
           onSuccess: () => { invalidate(); toast({ title: `${name} marcado como pago ✓` }); },
           onError: () => toast({ title: "Erro ao marcar", variant: "destructive" }),
+          onSettled: () => setPendingId(null),
         }
       );
     }
@@ -115,7 +120,8 @@ export default function Payments() {
                   entry={p}
                   month={month}
                   onToggle={handleToggle}
-                  loading={markMutation.isPending || unmarkMutation.isPending}
+                  pending={pendingId === p.studentId}
+                  disabled={pendingId !== null}
                 />
               ))}
             </div>
@@ -133,7 +139,8 @@ export default function Payments() {
                   entry={p}
                   month={month}
                   onToggle={handleToggle}
-                  loading={markMutation.isPending || unmarkMutation.isPending}
+                  pending={pendingId === p.studentId}
+                  disabled={pendingId !== null}
                 />
               ))}
             </div>
@@ -163,11 +170,12 @@ type PaymentEntry = {
   year?: number;
 };
 
-function PaymentRow({ entry, month, onToggle, loading }: {
+function PaymentRow({ entry, month, onToggle, pending, disabled }: {
   entry: PaymentEntry;
   month: number;
   onToggle: (id: number, paid: boolean, name: string) => void;
-  loading: boolean;
+  pending: boolean;
+  disabled: boolean;
 }) {
   const vencimento = entry.paymentDay
     ? `Vence dia ${entry.paymentDay}`
@@ -200,13 +208,15 @@ function PaymentRow({ entry, month, onToggle, loading }: {
 
       <button
         onClick={() => onToggle(entry.studentId, entry.paid, entry.name)}
-        disabled={loading}
+        disabled={disabled}
         className="shrink-0 transition-colors"
         title={entry.paid ? "Clique para desmarcar" : "Clique para marcar como pago"}
       >
-        {entry.paid
-          ? <CheckCircle2 size={24} className="text-green-400 hover:text-green-300" />
-          : <Circle size={24} className="text-muted-foreground hover:text-foreground" />
+        {pending
+          ? <Loader2 size={24} className="animate-spin text-muted-foreground" />
+          : entry.paid
+            ? <CheckCircle2 size={24} className="text-green-400 hover:text-green-300" />
+            : <Circle size={24} className="text-muted-foreground hover:text-foreground" />
         }
       </button>
     </div>
