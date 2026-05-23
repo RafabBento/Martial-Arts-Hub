@@ -249,6 +249,25 @@ export interface StudentRanking {
   modality?: string;
 }
 
+export interface MarkPaymentInput {
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface PaymentStatus {
+  studentId: number;
+  name: string;
+  /** @nullable */
+  profilePhotoUrl?: string | null;
+  /** @nullable */
+  paymentDay?: number | null;
+  paid: boolean;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface DashboardStats {
   totalStudents: number;
   totalTeachers: number;
@@ -362,3 +381,8 @@ export const ListRankingsPeriod = {
   year: "year",
   all: "all",
 } as const;
+
+export type ListPaymentsParams = {
+  month: number;
+  year: number;
+};

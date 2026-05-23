@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useUpdateUser, useListAttendance, useGetStudent, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey } from "@workspace/api-client-react";
+import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save, Shield, Gift } from "lucide-react";
+import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -100,6 +100,101 @@ function isBirthdayToday(birthDate: string | null | undefined): boolean {
   return (
     parseInt(month, 10) === today.getMonth() + 1 &&
     parseInt(day, 10) === today.getDate()
+  );
+}
+
+const MONTHS = [
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+];
+
+function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay?: number | null }) {
+  const { toast } = useToast();
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const { data: payments } = useListPayments(
+    { month, year },
+    { query: { queryKey: getListPaymentsQueryKey({ month, year }) } }
+  );
+
+  const myPayment = payments?.find(p => p.studentId === userId);
+  const paid = myPayment?.paid ?? false;
+  const paidDate = myPayment?.paidAt
+    ? new Date(myPayment.paidAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
+    : null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText("frontartesmarciais@gmail.com");
+    toast({ title: "Chave PIX copiada!" });
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <CreditCard size={18} className="text-primary" />
+        <h2 className="font-bold text-lg uppercase tracking-wide">Mensalidade</h2>
+        <span className="ml-auto text-sm text-muted-foreground">{MONTHS[month - 1]} {year}</span>
+      </div>
+
+      {/* Status */}
+      <div className={`flex items-center gap-3 rounded-lg p-4 border ${paid ? "bg-green-500/10 border-green-500/30" : "bg-primary/10 border-primary/30"}`}>
+        {paid
+          ? <CheckCircle2 size={22} className="text-green-400 shrink-0" />
+          : <Clock size={22} className="text-primary shrink-0" />
+        }
+        <div>
+          <div className={`font-bold ${paid ? "text-green-400" : "text-primary"}`}>
+            {paid ? "Mensalidade paga!" : "Pagamento pendente"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {paid
+              ? `Confirmado em ${paidDate}`
+              : paymentDay
+                ? `Vence dia ${paymentDay} de cada mês`
+                : "Consulte o professor para informar sua data"
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Dados de pagamento */}
+      {!paid && (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground font-medium">Dados para pagamento via PIX:</p>
+
+          <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm border border-border">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Valor</span>
+              <span className="font-black text-foreground text-base">R$ 80,00</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Banco</span>
+              <span>Caixa Econômica Federal</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Recebedor</span>
+              <span>Ewerton Tadeu da Silva</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-4 py-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-muted-foreground mb-0.5">Chave PIX (e-mail)</div>
+              <div className="font-mono text-sm font-semibold truncate">frontartesmarciais@gmail.com</div>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleCopy} className="shrink-0 gap-2">
+              <Copy size={14} /> Copiar
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Após efetuar o pagamento, envie o comprovante no privado para o professor confirmar.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -538,6 +633,9 @@ export default function Profile() {
           </div>
         )
       )}
+
+      {/* Mensalidade — apenas alunos */}
+      {user.role === "student" && <StudentPaymentCard userId={user.id} paymentDay={user.paymentDay} />}
 
       {/* Histórico de presenças — apenas alunos */}
       {user.role === "student" && (

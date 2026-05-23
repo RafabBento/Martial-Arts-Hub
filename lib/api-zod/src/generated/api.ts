@@ -460,6 +460,61 @@ export const ListRankingsResponseItem = zod.object({
 export const ListRankingsResponse = zod.array(ListRankingsResponseItem);
 
 /**
+ * @summary List payment statuses for a given month/year
+ */
+export const ListPaymentsQueryParams = zod.object({
+  month: zod.coerce.number(),
+  year: zod.coerce.number(),
+});
+
+export const ListPaymentsResponseItem = zod.object({
+  studentId: zod.number(),
+  name: zod.string(),
+  profilePhotoUrl: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
+  paid: zod.boolean(),
+  paidAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem);
+
+/**
+ * @summary Mark a student as paid for a month
+ */
+export const MarkPaymentParams = zod.object({
+  studentId: zod.coerce.number(),
+  year: zod.coerce.number(),
+  month: zod.coerce.number(),
+});
+
+export const MarkPaymentBody = zod.object({
+  notes: zod.string().nullish(),
+});
+
+export const MarkPaymentResponse = zod.object({
+  studentId: zod.number(),
+  name: zod.string(),
+  profilePhotoUrl: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
+  paid: zod.boolean(),
+  paidAt: zod.coerce.date().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Unmark a student payment for a month
+ */
+export const UnmarkPaymentParams = zod.object({
+  studentId: zod.coerce.number(),
+  year: zod.coerce.number(),
+  month: zod.coerce.number(),
+});
+
+export const UnmarkPaymentResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary Get dashboard statistics
  */
 export const GetDashboardStatsResponse = zod.object({

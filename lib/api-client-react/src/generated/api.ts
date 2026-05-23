@@ -27,12 +27,15 @@ import type {
   FaceMatch,
   HealthStatus,
   ListAttendanceParams,
+  ListPaymentsParams,
   ListRankingsParams,
   ListSessionsParams,
   ListStudentsParams,
   ListUsersParams,
   LoginInput,
+  MarkPaymentInput,
   MessageResponse,
+  PaymentStatus,
   RegisterInput,
   StudentProfile,
   StudentProfileUpdate,
@@ -1934,6 +1937,311 @@ export function useListRankings<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List payment statuses for a given month/year
+ */
+export const getListPaymentsUrl = (params: ListPaymentsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/payments?${stringifiedParams}`
+    : `/api/payments`;
+};
+
+export const listPayments = async (
+  params: ListPaymentsParams,
+  options?: RequestInit,
+): Promise<PaymentStatus[]> => {
+  return customFetch<PaymentStatus[]>(getListPaymentsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListPaymentsQueryKey = (params?: ListPaymentsParams) => {
+  return [`/api/payments`, ...(params ? [params] : [])] as const;
+};
+
+export const getListPaymentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPayments>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListPaymentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPayments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListPaymentsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listPayments>>> = ({
+    signal,
+  }) => listPayments(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPayments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPaymentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPayments>>
+>;
+export type ListPaymentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List payment statuses for a given month/year
+ */
+
+export function useListPayments<
+  TData = Awaited<ReturnType<typeof listPayments>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListPaymentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPayments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPaymentsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark a student as paid for a month
+ */
+export const getMarkPaymentUrl = (
+  studentId: number,
+  year: number,
+  month: number,
+) => {
+  return `/api/payments/${studentId}/${year}/${month}`;
+};
+
+export const markPayment = async (
+  studentId: number,
+  year: number,
+  month: number,
+  markPaymentInput?: MarkPaymentInput,
+  options?: RequestInit,
+): Promise<PaymentStatus> => {
+  return customFetch<PaymentStatus>(getMarkPaymentUrl(studentId, year, month), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(markPaymentInput),
+  });
+};
+
+export const getMarkPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markPayment>>,
+    TError,
+    {
+      studentId: number;
+      year: number;
+      month: number;
+      data: BodyType<MarkPaymentInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markPayment>>,
+  TError,
+  {
+    studentId: number;
+    year: number;
+    month: number;
+    data: BodyType<MarkPaymentInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["markPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markPayment>>,
+    {
+      studentId: number;
+      year: number;
+      month: number;
+      data: BodyType<MarkPaymentInput>;
+    }
+  > = (props) => {
+    const { studentId, year, month, data } = props ?? {};
+
+    return markPayment(studentId, year, month, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markPayment>>
+>;
+export type MarkPaymentMutationBody = BodyType<MarkPaymentInput>;
+export type MarkPaymentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark a student as paid for a month
+ */
+export const useMarkPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markPayment>>,
+    TError,
+    {
+      studentId: number;
+      year: number;
+      month: number;
+      data: BodyType<MarkPaymentInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markPayment>>,
+  TError,
+  {
+    studentId: number;
+    year: number;
+    month: number;
+    data: BodyType<MarkPaymentInput>;
+  },
+  TContext
+> => {
+  return useMutation(getMarkPaymentMutationOptions(options));
+};
+
+/**
+ * @summary Unmark a student payment for a month
+ */
+export const getUnmarkPaymentUrl = (
+  studentId: number,
+  year: number,
+  month: number,
+) => {
+  return `/api/payments/${studentId}/${year}/${month}`;
+};
+
+export const unmarkPayment = async (
+  studentId: number,
+  year: number,
+  month: number,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(
+    getUnmarkPaymentUrl(studentId, year, month),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getUnmarkPaymentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unmarkPayment>>,
+    TError,
+    { studentId: number; year: number; month: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unmarkPayment>>,
+  TError,
+  { studentId: number; year: number; month: number },
+  TContext
+> => {
+  const mutationKey = ["unmarkPayment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unmarkPayment>>,
+    { studentId: number; year: number; month: number }
+  > = (props) => {
+    const { studentId, year, month } = props ?? {};
+
+    return unmarkPayment(studentId, year, month, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnmarkPaymentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unmarkPayment>>
+>;
+
+export type UnmarkPaymentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Unmark a student payment for a month
+ */
+export const useUnmarkPayment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unmarkPayment>>,
+    TError,
+    { studentId: number; year: number; month: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unmarkPayment>>,
+  TError,
+  { studentId: number; year: number; month: number },
+  TContext
+> => {
+  return useMutation(getUnmarkPaymentMutationOptions(options));
+};
 
 /**
  * @summary Get dashboard statistics

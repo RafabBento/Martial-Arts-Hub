@@ -7,6 +7,7 @@ import sessionsRouter from "./sessions";
 import attendanceRouter from "./attendance";
 import rankingsRouter from "./rankings";
 import statsRouter from "./stats";
+import paymentsRouter from "./payments";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(sessionsRouter);
 router.use(attendanceRouter);
 router.use(rankingsRouter);
 router.use(statsRouter);
+router.use(paymentsRouter);
 
 export default router;

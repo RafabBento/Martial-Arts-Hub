@@ -483,6 +483,94 @@ paths:
                 items:
                   $ref: "#/components/schemas/StudentRanking"
 
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payment statuses for a given month/year
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentStatus"
+
+  /payments/{studentId}/{year}/{month}:
+    put:
+      operationId: markPayment
+      tags: [payments]
+      summary: Mark a student as paid for a month
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkPaymentInput"
+      responses:
+        "200":
+          description: Marked as paid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatus"
+    delete:
+      operationId: unmarkPayment
+      tags: [payments]
+      summary: Unmark a student payment for a month
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unmarked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
   /stats/dashboard:
     get:
       operationId: getDashboardStats
@@ -879,6 +967,32 @@ components:
           type: number
         modality:
           type: string
+
+    MarkPaymentInput:
+      type: object
+      properties:
+        notes:
+          type: ["string", "null"]
+
+    PaymentStatus:
+      type: object
+      required: [studentId, name, month, year, paid]
+      properties:
+        studentId:
+          type: integer
+        name:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        paymentDay:
+          type: ["integer", "null"]
+        paid:
+          type: boolean
+        paidAt:
+          type: ["string", "null"]
+          format: date-time
+        notes:
+          type: ["string", "null"]
 
     DashboardStats:
       type: object

@@ -19,6 +19,7 @@ import SessionDetail from "./pages/SessionDetail";
 import Attendance from "./pages/Attendance";
 import Rankings from "./pages/Rankings";
 import Profile from "./pages/Profile";
+import Payments from "./pages/Payments";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +95,7 @@ function Router() {
       <Route path="/attendance" component={() => <ProtectedRoute component={Attendance} />} />
       <Route path="/rankings" component={() => <ProtectedRoute component={Rankings} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
+      <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
       
       <Route component={NotFound} />
     </Switch>

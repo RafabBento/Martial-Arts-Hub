@@ -13,6 +13,7 @@ import {
   Camera,
   Trophy,
   User as UserIcon,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -31,12 +32,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
+
   const navItems = [
     { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
     { name: "Alunos", href: "/students", icon: Users },
     { name: "Sessões", href: "/sessions", icon: CalendarDays },
     { name: "Presenças", href: "/attendance", icon: Camera },
     { name: "Rankings", href: "/rankings", icon: Trophy },
+    ...(isMaster ? [{ name: "Mensalidades", href: "/payments", icon: CreditCard }] : []),
   ];
 
   return (
