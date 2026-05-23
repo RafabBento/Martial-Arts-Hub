@@ -71,8 +71,9 @@ export default function Register() {
           ...values,
           birthDate: values.birthDate || undefined,
           paymentDay: values.paymentDay || undefined,
-          modalityThai: values.role === "teacher" ? (values.modalityThai ?? false) : undefined,
-          modalityJiu: values.role === "teacher" ? (values.modalityJiu ?? false) : undefined,
+          modalityThai: values.modalityThai ?? false,
+          modalityJiu: values.modalityJiu ?? false,
+          bollacha: values.bollacha ?? false,
         },
       },
       {
