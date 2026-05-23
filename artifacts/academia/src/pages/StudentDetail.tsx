@@ -80,9 +80,23 @@ function PrajiedStripe({ grade }: { grade: string }) {
   );
 }
 
-function BeltStripe({ color }: { color: string }) {
-  const cls = JIU_COLOR_MAP[color] ?? "bg-muted";
-  return <div className={`h-2.5 w-20 rounded-full border border-white/20 ${cls}`} />;
+/** BJJ belt: colored body + black tip with degree stripes */
+function BeltStripe({ color, degree }: { color: string; degree?: number | null }) {
+  const bg = JIU_COLOR_MAP[color] ?? "bg-muted";
+  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
+  const isWhite = color === "white";
+  return (
+    <div className={`flex h-5 w-28 rounded-sm overflow-hidden border ${isWhite ? "border-gray-400/50" : "border-white/15"}`}>
+      <div className={`flex-1 relative ${bg}`}>
+        <div className={`absolute inset-x-0 top-1/2 -translate-y-px h-px ${isWhite ? "bg-gray-300/40" : "bg-black/20"}`} />
+      </div>
+      <div className="w-7 bg-gray-900 flex items-center justify-center gap-0.5 shrink-0">
+        {Array.from({ length: stripes }).map((_, i) => (
+          <div key={i} className="w-0.5 h-3.5 bg-white/85 rounded-[1px]" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function StudentDetail() {
@@ -346,19 +360,7 @@ export default function StudentDetail() {
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Jiu-Jitsu</div>
                 {student.jiuGradeColor && (
-                  <div className="flex items-center gap-3">
-                    <BeltStripe color={student.jiuGradeColor} />
-                    {student.jiuDegree != null && student.jiuDegree > 0 && (
-                      <div className="flex gap-1">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-2.5 h-2.5 rounded-full border ${i < student.jiuDegree! ? "bg-white border-white/40" : "bg-transparent border-white/20"}`}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <BeltStripe color={student.jiuGradeColor} degree={student.jiuDegree} />
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
