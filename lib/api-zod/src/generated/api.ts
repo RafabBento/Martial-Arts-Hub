@@ -34,6 +34,11 @@ export const RegisterBody = zod.object({
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
   bollacha: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
 });
 
 /**

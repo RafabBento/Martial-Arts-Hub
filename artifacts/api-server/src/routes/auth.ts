@@ -40,7 +40,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role, phone, birthDate, paymentDay, modalityThai, modalityJiu, bollacha } = parsed.data;
+  const { name, email, password, role, phone, birthDate, paymentDay, modalityThai, modalityJiu, bollacha, thaiGrade, thaiGradeColor, jiuGrade, jiuGradeColor, jiuDegree } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing.length > 0) {
@@ -66,6 +66,11 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       modalityThai: modalityThai ?? false,
       modalityJiu: modalityJiu ?? false,
       bollacha: (modalityJiu && bollacha) ? true : false,
+      thaiGrade: (modalityThai && thaiGrade) ? thaiGrade : null,
+      thaiGradeColor: (modalityThai && thaiGradeColor) ? thaiGradeColor : null,
+      jiuGrade: (modalityJiu && jiuGrade) ? jiuGrade : null,
+      jiuGradeColor: (modalityJiu && jiuGradeColor) ? jiuGradeColor : null,
+      jiuDegree: (modalityJiu && jiuDegree != null) ? jiuDegree : null,
     });
   }
 

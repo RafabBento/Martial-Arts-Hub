@@ -25,6 +25,42 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+const PRAJIED_GRADES = [
+  { value: "branco",                  label: "Branco",                  primary: "white",  secondary: null    },
+  { value: "branco-ponta-vermelha",   label: "Branco ponta vermelha",   primary: "white",  secondary: "red"   },
+  { value: "vermelha",                label: "Vermelha",                primary: "red",    secondary: null    },
+  { value: "vermelha-ponta-amarela",  label: "Vermelha ponta amarela",  primary: "red",    secondary: "yellow"},
+  { value: "amarela",                 label: "Amarela",                 primary: "yellow", secondary: null    },
+  { value: "amarela-ponta-verde",     label: "Amarela ponta verde",     primary: "yellow", secondary: "green" },
+  { value: "verde",                   label: "Verde",                   primary: "green",  secondary: null    },
+  { value: "verde-ponta-azul",        label: "Verde ponta azul",        primary: "green",  secondary: "blue"  },
+  { value: "azul",                    label: "Azul",                    primary: "blue",   secondary: null    },
+  { value: "azul-ponta-preta",        label: "Azul ponta preta",        primary: "blue",   secondary: "black" },
+  { value: "preta",                   label: "Preta",                   primary: "black",  secondary: null    },
+];
+
+const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
+  "branco":                 { primary: "bg-white" },
+  "branco-ponta-vermelha":  { primary: "bg-white",     secondary: "bg-red-600"    },
+  "vermelha":               { primary: "bg-red-600"    },
+  "vermelha-ponta-amarela": { primary: "bg-red-600",   secondary: "bg-yellow-400" },
+  "amarela":                { primary: "bg-yellow-400" },
+  "amarela-ponta-verde":    { primary: "bg-yellow-400",secondary: "bg-green-600"  },
+  "verde":                  { primary: "bg-green-600"  },
+  "verde-ponta-azul":       { primary: "bg-green-600", secondary: "bg-blue-600"   },
+  "azul":                   { primary: "bg-blue-600"   },
+  "azul-ponta-preta":       { primary: "bg-blue-600",  secondary: "bg-gray-900"   },
+  "preta":                  { primary: "bg-gray-900"   },
+};
+
+const JIU_COLORS = [
+  { value: "white",  label: "Branca",  bg: "bg-white"      },
+  { value: "blue",   label: "Azul",    bg: "bg-blue-600"   },
+  { value: "purple", label: "Roxa",    bg: "bg-purple-600" },
+  { value: "brown",  label: "Marrom",  bg: "bg-amber-800"  },
+  { value: "black",  label: "Preta",   bg: "bg-gray-900"   },
+];
+
 const registerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   email: z.string().email("E-mail inválido"),
@@ -36,6 +72,11 @@ const registerSchema = z.object({
   modalityThai: z.boolean().optional(),
   modalityJiu: z.boolean().optional(),
   bollacha: z.boolean().optional(),
+  thaiGrade: z.string().optional(),
+  thaiGradeColor: z.string().optional(),
+  jiuGrade: z.string().optional(),
+  jiuGradeColor: z.string().optional(),
+  jiuDegree: z.number().min(1).max(4).optional(),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -59,10 +100,18 @@ export default function Register() {
       modalityThai: false,
       modalityJiu: false,
       bollacha: false,
+      thaiGrade: undefined,
+      thaiGradeColor: undefined,
+      jiuGrade: undefined,
+      jiuGradeColor: undefined,
+      jiuDegree: undefined,
     },
   });
 
   const watchedRole = form.watch("role");
+  const watchedThai = form.watch("modalityThai");
+  const watchedJiu = form.watch("modalityJiu");
+  const watchedJiuDegree = form.watch("jiuDegree");
 
   const onSubmit = (values: RegisterFormValues) => {
     registerMutation.mutate(
@@ -74,6 +123,11 @@ export default function Register() {
           modalityThai: values.modalityThai ?? false,
           modalityJiu: values.modalityJiu ?? false,
           bollacha: values.bollacha ?? false,
+          thaiGrade: values.thaiGrade || undefined,
+          thaiGradeColor: values.thaiGradeColor || undefined,
+          jiuGrade: values.jiuGrade || undefined,
+          jiuGradeColor: values.jiuGradeColor || undefined,
+          jiuDegree: values.jiuDegree || undefined,
         },
       },
       {
@@ -94,12 +148,10 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background dark text-foreground flex relative overflow-hidden">
-      {/* Marca d'água em tela cheia */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
         <img src="/logo-thai.png" alt="" aria-hidden className="w-[70vmin] h-[70vmin] object-contain opacity-[0.06]" />
       </div>
 
-      {/* Botão voltar */}
       <div className="absolute top-4 left-4 z-20">
         <Link href="/">
           <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10">
@@ -108,7 +160,6 @@ export default function Register() {
         </Link>
       </div>
 
-      {/* Lado esquerdo — formulário */}
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 overflow-y-auto py-12 relative z-10">
         <div className="w-full max-w-sm mx-auto space-y-8">
           <h1 className="text-3xl font-black uppercase tracking-tighter">Junte-se ao Clube</h1>
@@ -258,10 +309,12 @@ export default function Register() {
                 </div>
               )}
 
-              {/* Modalidades + clube Jiu para alunos */}
+              {/* Modalidades + graduação para alunos */}
               {watchedRole === "student" && (
-                <div className="space-y-3 rounded-lg border border-border bg-card/30 p-4">
+                <div className="space-y-4 rounded-lg border border-border bg-card/30 p-4">
                   <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Modalidades</p>
+
+                  {/* Muay Thai */}
                   <FormField
                     control={form.control}
                     name="modalityThai"
@@ -275,6 +328,56 @@ export default function Register() {
                       </FormItem>
                     )}
                   />
+
+                  {/* Prajied — aparece quando Muay Thai está marcado */}
+                  {watchedThai && (
+                    <div className="pl-6 border-l-2 border-red-500/30 space-y-2">
+                      <p className="text-xs font-bold text-red-400 uppercase tracking-wider">Prajied (opcional)</p>
+                      <FormField
+                        control={form.control}
+                        name="thaiGrade"
+                        render={({ field }) => (
+                          <FormItem>
+                            <Select
+                              value={field.value ?? ""}
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                const entry = PRAJIED_GRADES.find(p => p.value === v);
+                                form.setValue("thaiGradeColor", entry?.primary ?? "");
+                              }}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="h-10 bg-card/50 border-border focus-visible:ring-primary text-sm">
+                                  <SelectValue placeholder="Selecionar prajied..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {PRAJIED_GRADES.map((p, i) => (
+                                  <SelectItem key={p.value} value={p.value}>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                                      {p.secondary ? (
+                                        <span className="inline-flex h-2.5 w-10 rounded-full overflow-hidden border border-white/20 shrink-0">
+                                          <span className={`flex-1 ${PRAJIED_MAP[p.value]?.primary}`} />
+                                          <span className={`w-3 ${PRAJIED_MAP[p.value]?.secondary}`} />
+                                        </span>
+                                      ) : (
+                                        <span className={`inline-block h-2.5 w-10 rounded-full border border-white/20 shrink-0 ${PRAJIED_MAP[p.value]?.primary}`} />
+                                      )}
+                                      <span>{p.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* Jiu-Jitsu */}
                   <FormField
                     control={form.control}
                     name="modalityJiu"
@@ -289,46 +392,115 @@ export default function Register() {
                     )}
                   />
 
-                  {/* Clube de Jiu — só aparece quando Jiu está marcado */}
-                  {form.watch("modalityJiu") && (
-                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-blue-500/30">
-                      <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">Clube de Jiu-Jitsu</p>
+                  {/* Faixa + Grau + Clube — aparece quando Jiu está marcado */}
+                  {watchedJiu && (
+                    <div className="pl-6 border-l-2 border-blue-500/30 space-y-3">
+                      <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">Graduação Jiu-Jitsu (opcional)</p>
+
+                      {/* Faixa */}
                       <FormField
                         control={form.control}
-                        name="bollacha"
+                        name="jiuGradeColor"
                         render={({ field }) => (
-                          <div className="space-y-2">
-                            <label
-                              className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
-                                !field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
-                              }`}
-                              onClick={() => field.onChange(false)}
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">Faixa</FormLabel>
+                            <Select
+                              value={field.value ?? ""}
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                const entry = JIU_COLORS.find(c => c.value === v);
+                                form.setValue("jiuGrade", entry?.label ?? "");
+                              }}
                             >
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${!field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
-                                {!field.value && <div className="w-2 h-2 rounded-full bg-white" />}
-                              </div>
-                              <div>
-                                <p className="text-sm font-semibold">Apenas Front Artes Marciais</p>
-                                <p className="text-xs text-muted-foreground">Treina só na Front</p>
-                              </div>
-                            </label>
-                            <label
-                              className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
-                                field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
-                              }`}
-                              onClick={() => field.onChange(true)}
-                            >
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
-                                {field.value && <div className="w-2 h-2 rounded-full bg-white" />}
-                              </div>
-                              <div>
-                                <p className="text-sm font-semibold">Front + Bollacha Wrestling BJJ</p>
-                                <p className="text-xs text-muted-foreground">Membro dos dois times</p>
-                              </div>
-                            </label>
-                          </div>
+                              <FormControl>
+                                <SelectTrigger className="h-10 bg-card/50 border-border focus-visible:ring-primary text-sm">
+                                  <SelectValue placeholder="Selecionar faixa..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {JIU_COLORS.map(c => (
+                                  <SelectItem key={c.value} value={c.value}>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`inline-block h-2.5 w-10 rounded-full border border-white/20 shrink-0 ${c.bg}`} />
+                                      <span>{c.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
                         )}
                       />
+
+                      {/* Grau 1-4 */}
+                      <FormField
+                        control={form.control}
+                        name="jiuDegree"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs text-muted-foreground">Grau</FormLabel>
+                            <div className="flex gap-2">
+                              {[1, 2, 3, 4].map((grau) => (
+                                <button
+                                  key={grau}
+                                  type="button"
+                                  onClick={() => field.onChange(field.value === grau ? undefined : grau)}
+                                  className={`w-10 h-10 rounded-lg border text-sm font-bold transition-colors
+                                    ${field.value === grau
+                                      ? "bg-blue-600 border-blue-500 text-white"
+                                      : "bg-card border-border text-muted-foreground hover:border-blue-500/50 hover:text-foreground"
+                                    }`}
+                                >
+                                  {grau}
+                                </button>
+                              ))}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Clube de Jiu */}
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Clube</p>
+                        <FormField
+                          control={form.control}
+                          name="bollacha"
+                          render={({ field }) => (
+                            <div className="space-y-2">
+                              <label
+                                className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
+                                  !field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
+                                }`}
+                                onClick={() => field.onChange(false)}
+                              >
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${!field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
+                                  {!field.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold">Apenas Front Artes Marciais</p>
+                                  <p className="text-xs text-muted-foreground">Treina só na Front</p>
+                                </div>
+                              </label>
+                              <label
+                                className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
+                                  field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
+                                }`}
+                                onClick={() => field.onChange(true)}
+                              >
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
+                                  {field.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold">Front + Bollacha Wrestling BJJ</p>
+                                  <p className="text-xs text-muted-foreground">Membro dos dois times</p>
+                                </div>
+                              </label>
+                            </div>
+                          )}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -349,7 +521,6 @@ export default function Register() {
         </div>
       </div>
 
-      {/* Lado direito — imagem */}
       <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
         <div className="absolute inset-0 bg-[url('/bg-register.jpg')] bg-cover bg-center opacity-80"></div>
         <div className="absolute inset-0 bg-gradient-to-l from-background to-transparent"></div>

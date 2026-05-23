@@ -564,6 +564,21 @@ components:
         bollacha:
           type: boolean
           nullable: true
+        thaiGrade:
+          type: string
+          nullable: true
+        thaiGradeColor:
+          type: string
+          nullable: true
+        jiuGrade:
+          type: string
+          nullable: true
+        jiuGradeColor:
+          type: string
+          nullable: true
+        jiuDegree:
+          type: integer
+          nullable: true
 
     LoginInput:
       type: object

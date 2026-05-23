@@ -24,4 +24,9 @@ export interface RegisterInput {
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
   bollacha?: boolean | null;
+  thaiGrade?: string | null;
+  thaiGradeColor?: string | null;
+  jiuGrade?: string | null;
+  jiuGradeColor?: string | null;
+  jiuDegree?: number | null;
 }
