@@ -17,6 +17,77 @@ import { useAuth } from "../contexts/AuthContext";
 type ModelStatus = "idle" | "loading" | "ready" | "error";
 type ScanStatus = "idle" | "scanning" | "upscaling" | "detecting" | "found" | "notfound";
 
+// ---- Utilitário: varredura por tiles ----
+// Divide o canvas em tiles COLS×ROWS com sobreposição relativa OVERLAP (0–1).
+// Detecta rostos em cada tile independentemente e combina todos os descritores.
+// Rostos próximos ao limite de dois tiles são capturados por ambos — a deduplicação
+// posterior (por distância entre descritores) remove duplicatas.
+async function detectInTiles(
+  faceapi: Awaited<ReturnType<typeof import("../lib/faceApi").loadFaceApi>>,
+  canvas: HTMLCanvasElement,
+  onProgress: (tile: number, total: number) => void,
+  opts: { cols?: number; rows?: number; overlap?: number; minConfidence?: number } = {}
+): Promise<Array<{ descriptor: Float32Array }>> {
+  const { cols = 2, rows = 2, overlap = 0.15, minConfidence = 0.3 } = opts;
+  const W = canvas.width;
+  const H = canvas.height;
+
+  const tileW = Math.ceil(W / cols);
+  const tileH = Math.ceil(H / rows);
+  const overlapPx_x = Math.ceil(tileW * overlap);
+  const overlapPx_y = Math.ceil(tileH * overlap);
+
+  const allDescriptors: Array<{ descriptor: Float32Array }> = [];
+  const total = cols * rows;
+  let idx = 0;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const sx = Math.max(0, col * tileW - overlapPx_x);
+      const sy = Math.max(0, row * tileH - overlapPx_y);
+      const sw = Math.min(W - sx, tileW + overlapPx_x * 2);
+      const sh = Math.min(H - sy, tileH + overlapPx_y * 2);
+
+      const tileCanvas = document.createElement("canvas");
+      tileCanvas.width = sw;
+      tileCanvas.height = sh;
+      tileCanvas.getContext("2d")!.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      const detections = await (faceapi as any)
+        .detectAllFaces(tileCanvas, new (faceapi as any).SsdMobilenetv1Options({ minConfidence }))
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+
+      allDescriptors.push(...detections);
+      idx++;
+      onProgress(idx, total);
+      // cede o event loop entre tiles para manter a UI responsiva
+      await new Promise(r => setTimeout(r, 10));
+    }
+  }
+
+  return allDescriptors;
+}
+
+// Deduplica descritores muito próximos entre si (duplicatas de rostos no limite
+// entre tiles). Usa distância euclidiana; DEDUP_THRESHOLD abaixo de 0.35 indica
+// que dois descritores provavelmente representam o mesmo rosto.
+function deduplicateDescriptors(
+  descriptors: Array<{ descriptor: Float32Array }>,
+  threshold = 0.35
+): Float32Array[] {
+  const kept: Float32Array[] = [];
+  for (const { descriptor } of descriptors) {
+    const isDup = kept.some(k => {
+      let sum = 0;
+      for (let i = 0; i < k.length; i++) sum += (k[i] - descriptor[i]) ** 2;
+      return Math.sqrt(sum) < threshold;
+    });
+    if (!isDup) kept.push(descriptor);
+  }
+  return kept;
+}
+
 // ---------- Cronograma semanal ----------
 // days: 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
 const WEEKLY_SCHEDULE = [
@@ -93,6 +164,7 @@ export default function Attendance() {
   const [manualStudent, setManualStudent] = useState("");
   const [galleryScanning, setGalleryScanning] = useState(false);
   const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null);
+  const [tileProgress, setTileProgress] = useState<{ current: number; total: number } | null>(null);
   const [registeringAll, setRegisteringAll] = useState(false);
   const [autoCreating, setAutoCreating] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -372,18 +444,26 @@ export default function Attendance() {
       // Aguarda o próximo frame para o browser renderizar o status
       await new Promise(r => setTimeout(r, 50));
       setScanStatus("detecting");
+      setTileProgress({ current: 0, total: 4 });
 
-      const detections = await faceapi
-        .detectAllFaces(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      if (detections.length === 0) {
+      // Varredura por tiles 2×2 com 15% de sobreposição:
+      // cada tile é analisado independentemente para melhorar a detecção
+      // de rostos pequenos nas bordas e no fundo da foto.
+      const rawDetections = await detectInTiles(faceapi, canvas, (current, total) => {
+        setTileProgress({ current, total });
+      }, { cols: 2, rows: 2, overlap: 0.15, minConfidence: 0.3 });
+
+      // Remove duplicatas de rostos detectados em dois tiles adjacentes
+      const uniqueDescriptors = deduplicateDescriptors(rawDetections, 0.35);
+      setTileProgress(null);
+
+      if (uniqueDescriptors.length === 0) {
         setScanStatus("notfound");
         toast({ title: "Nenhum rosto detectado na foto", variant: "destructive" });
         setTimeout(() => setScanStatus("idle"), 2000);
         return;
       }
-      const descriptors = detections.map(d => Array.from(d.descriptor));
+      const descriptors = uniqueDescriptors.map(d => Array.from(d));
       const resp = await fetch("/api/face/identify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -694,17 +774,41 @@ export default function Attendance() {
                     className="w-full max-h-72 object-cover"
                   />
                   {galleryScanning && (
-                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3">
+                    <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 px-6">
                       <Loader2 size={36} className="animate-spin text-primary" />
-                      <span className="text-sm font-semibold text-white">
-                        {scanStatus === "upscaling" ? "Ampliando imagem para alta resolução…" :
-                         scanStatus === "detecting" ? "Detectando rostos…" :
-                         "Analisando…"}
+                      <span className="text-sm font-semibold text-white text-center">
+                        {scanStatus === "upscaling"
+                          ? "Ampliando imagem…"
+                          : scanStatus === "detecting" && tileProgress
+                          ? `Varrendo região ${tileProgress.current} de ${tileProgress.total}…`
+                          : "Analisando…"}
                       </span>
-                      <span className="text-xs text-white/60">
-                        {scanStatus === "upscaling" ? "2× upscale · preservando detalhes" :
-                         scanStatus === "detecting" ? "Comparando com base de alunos…" : ""}
-                      </span>
+                      {/* Barra de progresso dos tiles */}
+                      {scanStatus === "detecting" && tileProgress && (
+                        <div className="w-full max-w-[180px]">
+                          {/* Grid visual 2×2 dos tiles */}
+                          <div className="grid grid-cols-2 gap-1 mb-2">
+                            {Array.from({ length: tileProgress.total }).map((_, i) => (
+                              <div
+                                key={i}
+                                className={`h-2 rounded-sm transition-colors duration-300 ${
+                                  i < tileProgress.current
+                                    ? "bg-primary"
+                                    : "bg-white/20"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <p className="text-xs text-white/60 text-center">
+                            Varredura por regiões · 2× upscale
+                          </p>
+                        </div>
+                      )}
+                      {scanStatus === "upscaling" && (
+                        <p className="text-xs text-white/60 text-center">
+                          2× upscale · preservando detalhes
+                        </p>
+                      )}
                     </div>
                   )}
                   {matches.length > 0 && !galleryScanning && (
