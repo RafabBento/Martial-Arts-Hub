@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -7,16 +7,16 @@ const SESSION_KEY = "payment_reminder_shown";
 export function PaymentReminder() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const shown = useRef(false);
+  const [isTest] = useState(
+    () => new URLSearchParams(window.location.search).get("testReminder") === "true"
+  );
+  const fired = useRef(false);
 
   useEffect(() => {
-    if (!user || shown.current) return;
-
-    const params = new URLSearchParams(window.location.search);
-    const isTest = params.get("testReminder") === "true";
+    if (!user || fired.current) return;
 
     if (isTest) {
-      shown.current = true;
+      fired.current = true;
       const day = user.paymentDay ?? new Date().getDate();
       setTimeout(() => {
         toast({
@@ -50,13 +50,13 @@ export function PaymentReminder() {
     }
 
     if (title) {
-      shown.current = true;
+      fired.current = true;
       sessionStorage.setItem(SESSION_KEY, "1");
       setTimeout(() => {
         toast({ title, description, duration: 8000 });
       }, 1500);
     }
-  }, [user, toast]);
+  }, [user, isTest, toast]);
 
   return null;
 }
