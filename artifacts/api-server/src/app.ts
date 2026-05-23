@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import session from "express-session";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { bearerAuth } from "./middlewares/bearerAuth";
 
 const app: Express = express();
 
@@ -46,6 +47,7 @@ app.use(session({
   },
 }));
 
+app.use(bearerAuth);
 app.use("/api", router);
 
 export default app;
