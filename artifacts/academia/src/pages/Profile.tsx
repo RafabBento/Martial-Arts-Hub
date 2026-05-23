@@ -191,7 +191,7 @@ export default function Profile() {
           src={logoThai}
           alt="Front Artes Marciais"
           className="object-contain shrink-0"
-          style={{ width: 140, height: 140 }}
+          style={{ width: 140, height: 140, mixBlendMode: "multiply", filter: "contrast(1.4) brightness(0.9)" }}
         />
 
         <div className="flex-1 text-center space-y-3">
@@ -227,6 +227,7 @@ export default function Profile() {
               src={logoJiu}
               alt="Bollacha Wrestling BJJ"
               className="object-contain w-full h-full"
+              style={{ mixBlendMode: "multiply", filter: "contrast(1.4) brightness(0.9)" }}
             />
           )}
         </div>
