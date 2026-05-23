@@ -37,6 +37,7 @@ export interface RegisterInput {
   paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
+  bollacha?: boolean | null;
 }
 
 export interface LoginInput {
@@ -108,6 +109,7 @@ export interface StudentProfile {
   profilePhotoUrl?: string | null;
   modalityThai: boolean;
   modalityJiu: boolean;
+  bollacha: boolean;
   /** @nullable */
   thaiGrade?: string | null;
   /** @nullable */
@@ -125,6 +127,7 @@ export interface StudentProfile {
 export interface StudentProfileUpdate {
   modalityThai?: boolean;
   modalityJiu?: boolean;
+  bollacha?: boolean;
   thaiGrade?: string;
   jiuGrade?: string;
   thaiGradeColor?: string;

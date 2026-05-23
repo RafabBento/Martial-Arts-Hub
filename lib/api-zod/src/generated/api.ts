@@ -33,6 +33,7 @@ export const RegisterBody = zod.object({
   paymentDay: zod.number().min(1).max(registerBodyPaymentDayMax).nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
+  bollacha: zod.boolean().nullish(),
 });
 
 /**
@@ -210,6 +211,7 @@ export const ListStudentsResponseItem = zod.object({
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
+  bollacha: zod.boolean(),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
@@ -236,6 +238,7 @@ export const GetStudentResponse = zod.object({
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
+  bollacha: zod.boolean(),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
@@ -256,6 +259,7 @@ export const UpdateStudentParams = zod.object({
 export const UpdateStudentBody = zod.object({
   modalityThai: zod.boolean().optional(),
   modalityJiu: zod.boolean().optional(),
+  bollacha: zod.boolean().optional(),
   thaiGrade: zod.string().optional(),
   jiuGrade: zod.string().optional(),
   thaiGradeColor: zod.string().optional(),
@@ -270,6 +274,7 @@ export const UpdateStudentResponse = zod.object({
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
+  bollacha: zod.boolean(),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),

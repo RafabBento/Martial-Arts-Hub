@@ -114,7 +114,9 @@ export default function Profile() {
     : (studentData?.modalityJiu ?? false);
 
   const showToggle  = hasThai && hasJiu;
-  const showJiuLogo = hasJiu && (modality === "jiu" || !showToggle);
+  // Bollacha logo only for students who explicitly chose Front + Bollacha
+  const isBollacha  = !isTeacherOrAdmin && (studentData?.bollacha === true);
+  const showJiuLogo = hasJiu && isBollacha && (modality === "jiu" || !showToggle);
 
   useEffect(() => {
     if (!isTeacherOrAdmin && studentData && !studentData.modalityThai && studentData.modalityJiu) {

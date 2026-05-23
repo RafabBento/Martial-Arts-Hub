@@ -9,6 +9,7 @@
 export interface StudentProfileUpdate {
   modalityThai?: boolean;
   modalityJiu?: boolean;
+  bollacha?: boolean;
   thaiGrade?: string;
   jiuGrade?: string;
   thaiGradeColor?: string;

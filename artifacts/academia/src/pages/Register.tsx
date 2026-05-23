@@ -35,6 +35,7 @@ const registerSchema = z.object({
   paymentDay: z.coerce.number().min(1).max(31).optional(),
   modalityThai: z.boolean().optional(),
   modalityJiu: z.boolean().optional(),
+  bollacha: z.boolean().optional(),
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -57,6 +58,7 @@ export default function Register() {
       paymentDay: undefined,
       modalityThai: false,
       modalityJiu: false,
+      bollacha: false,
     },
   });
 
@@ -222,7 +224,7 @@ export default function Register() {
                 )}
               />
 
-              {/* Modalidades — exibido apenas para professores */}
+              {/* Modalidades para professores */}
               {watchedRole === "teacher" && (
                 <div className="space-y-3 rounded-lg border border-border bg-card/30 p-4">
                   <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Modalidades que leciona</p>
@@ -232,11 +234,8 @@ export default function Register() {
                     render={({ field }) => (
                       <FormItem className="flex items-center gap-3 space-y-0">
                         <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className="border-red-400 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                          />
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange}
+                            className="border-red-400 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600" />
                         </FormControl>
                         <FormLabel className="font-semibold cursor-pointer">Muay Thai</FormLabel>
                       </FormItem>
@@ -248,16 +247,89 @@ export default function Register() {
                     render={({ field }) => (
                       <FormItem className="flex items-center gap-3 space-y-0">
                         <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className="border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                          />
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange}
+                            className="border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
                         </FormControl>
                         <FormLabel className="font-semibold cursor-pointer">Jiu-Jitsu</FormLabel>
                       </FormItem>
                     )}
                   />
+                </div>
+              )}
+
+              {/* Modalidades + clube Jiu para alunos */}
+              {watchedRole === "student" && (
+                <div className="space-y-3 rounded-lg border border-border bg-card/30 p-4">
+                  <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Modalidades</p>
+                  <FormField
+                    control={form.control}
+                    name="modalityThai"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-3 space-y-0">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange}
+                            className="border-red-400 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600" />
+                        </FormControl>
+                        <FormLabel className="font-semibold cursor-pointer">Muay Thai</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="modalityJiu"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-3 space-y-0">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange}
+                            className="border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
+                        </FormControl>
+                        <FormLabel className="font-semibold cursor-pointer">Jiu-Jitsu</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Clube de Jiu — só aparece quando Jiu está marcado */}
+                  {form.watch("modalityJiu") && (
+                    <div className="mt-3 pl-6 space-y-2 border-l-2 border-blue-500/30">
+                      <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">Clube de Jiu-Jitsu</p>
+                      <FormField
+                        control={form.control}
+                        name="bollacha"
+                        render={({ field }) => (
+                          <div className="space-y-2">
+                            <label
+                              className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
+                                !field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
+                              }`}
+                              onClick={() => field.onChange(false)}
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${!field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
+                                {!field.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">Apenas Front Artes Marciais</p>
+                                <p className="text-xs text-muted-foreground">Treina só na Front</p>
+                              </div>
+                            </label>
+                            <label
+                              className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
+                                field.value ? "border-blue-500/50 bg-blue-500/10" : "border-border"
+                              }`}
+                              onClick={() => field.onChange(true)}
+                            >
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${field.value ? "border-blue-500 bg-blue-500" : "border-muted-foreground"}`}>
+                                {field.value && <div className="w-2 h-2 rounded-full bg-white" />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">Front + Bollacha Wrestling BJJ</p>
+                                <p className="text-xs text-muted-foreground">Membro dos dois times</p>
+                              </div>
+                            </label>
+                          </div>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

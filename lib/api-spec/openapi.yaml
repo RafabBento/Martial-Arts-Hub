@@ -561,6 +561,9 @@ components:
         modalityJiu:
           type: boolean
           nullable: true
+        bollacha:
+          type: boolean
+          nullable: true
 
     LoginInput:
       type: object
@@ -654,7 +657,7 @@ components:
 
     StudentProfile:
       type: object
-      required: [id, userId, name, email, modalityThai, modalityJiu, createdAt]
+      required: [id, userId, name, email, modalityThai, modalityJiu, bollacha, createdAt]
       properties:
         id:
           type: integer
@@ -669,6 +672,8 @@ components:
         modalityThai:
           type: boolean
         modalityJiu:
+          type: boolean
+        bollacha:
           type: boolean
         thaiGrade:
           type: ["string", "null"]
@@ -694,6 +699,8 @@ components:
         modalityThai:
           type: boolean
         modalityJiu:
+          type: boolean
+        bollacha:
           type: boolean
         thaiGrade:
           type: string

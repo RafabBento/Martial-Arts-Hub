@@ -15,6 +15,7 @@ export interface StudentProfile {
   profilePhotoUrl?: string | null;
   modalityThai: boolean;
   modalityJiu: boolean;
+  bollacha: boolean;
   /** @nullable */
   thaiGrade?: string | null;
   /** @nullable */

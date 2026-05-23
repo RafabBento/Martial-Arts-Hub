@@ -40,7 +40,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role, phone, birthDate, paymentDay, modalityThai, modalityJiu } = parsed.data;
+  const { name, email, password, role, phone, birthDate, paymentDay, modalityThai, modalityJiu, bollacha } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing.length > 0) {
@@ -63,8 +63,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   if (role === "student") {
     await db.insert(studentProfilesTable).values({
       userId: user.id,
-      modalityThai: false,
-      modalityJiu: false,
+      modalityThai: modalityThai ?? false,
+      modalityJiu: modalityJiu ?? false,
+      bollacha: (modalityJiu && bollacha) ? true : false,
     });
   }
 

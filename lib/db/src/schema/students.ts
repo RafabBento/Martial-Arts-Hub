@@ -8,6 +8,7 @@ export const studentProfilesTable = pgTable("student_profiles", {
   userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }).unique(),
   modalityThai: boolean("modality_thai").notNull().default(false),
   modalityJiu: boolean("modality_jiu").notNull().default(false),
+  bollacha: boolean("bollacha").notNull().default(false),
   thaiGrade: text("thai_grade"),
   jiuGrade: text("jiu_grade"),
   thaiGradeColor: text("thai_grade_color"),

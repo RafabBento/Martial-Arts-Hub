@@ -220,7 +220,8 @@ export default function StudentDetail() {
 
           {/* Logos da equipe conforme modalidade ativa */}
           {(() => {
-            const showJiuLogo = student.modalityJiu && (activeModality === "jiu" || !showToggle);
+            const isBollacha = student.bollacha === true;
+            const showJiuLogo = student.modalityJiu && isBollacha && (activeModality === "jiu" || !showToggle);
             return (
               <div className="flex items-center justify-center gap-5">
                 {student.modalityThai && (

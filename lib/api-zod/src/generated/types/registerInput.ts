@@ -23,4 +23,5 @@ export interface RegisterInput {
   paymentDay?: number | null;
   modalityThai?: boolean | null;
   modalityJiu?: boolean | null;
+  bollacha?: boolean | null;
 }
