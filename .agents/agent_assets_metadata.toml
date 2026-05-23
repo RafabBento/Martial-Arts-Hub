@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "5KB23LsB2UZ2R9LAKLOTV"
+uri = "file://artifacts/academia-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
