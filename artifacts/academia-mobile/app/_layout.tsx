@@ -6,7 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -21,20 +21,24 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (isLoading) return;
+    if (!user) {
+      router.replace("/login");
+    }
+  }, [user, isLoading]);
 
   if (isLoading) return null;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {user ? (
-        <>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="student/[id]" />
-          <Stack.Screen name="session/[id]" />
-        </>
-      ) : (
-        <Stack.Screen name="login" />
-      )}
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="student/[id]" />
+      <Stack.Screen name="session/[id]" />
     </Stack>
   );
 }

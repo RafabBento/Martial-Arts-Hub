@@ -129,6 +129,13 @@ export default function LoginScreen() {
                 <Text style={[styles.btnText, { fontFamily: "Inter_700Bold" }]}>ENTRAR</Text>
               )}
             </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push("/register")} style={styles.registerLink}>
+              <Text style={[styles.registerLinkText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                Não tem uma conta?{" "}
+                <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>Cadastre-se</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -145,6 +152,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, textAlign: "center", letterSpacing: 2 },
   subtitle: { fontSize: 14, letterSpacing: 1 },
   form: { gap: 14 },
+  registerLink: { alignItems: "center", paddingVertical: 4 },
+  registerLinkText: { fontSize: 14 },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
