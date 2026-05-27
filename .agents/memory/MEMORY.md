@@ -1,0 +1,4 @@
+- [Mobile auth context shape](mobile-auth-context.md) — AuthContext exposes setUser; if you need to update the logged-in user after a mutation, call setUser(updated) directly.
+- [expo-clipboard version](expo-clipboard-version.md) — Install expo-clipboard@~8.0.8 (not the default ~56.x that pnpm resolves); run `pnpm add expo-clipboard@~8.0.8` inside the mobile artifact.
+- [ActivityItem type fields](activity-item-fields.md) — Use `studentPhotoUrl` (not `profilePhotoUrl`) and `studentName` for RecentActivity items from the API.
+- [RN StyleSheet invalid props](rn-stylesheet-quirks.md) — `shrink` is not a valid RN ViewStyle property; use `flexShrink` if needed. TypeScript catches this at typecheck time.

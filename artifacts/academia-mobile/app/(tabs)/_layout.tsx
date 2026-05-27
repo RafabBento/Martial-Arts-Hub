@@ -4,11 +4,14 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 
 export default function TabLayout() {
   const colors = useColors();
+  const { user } = useAuth();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   return (
     <Tabs
@@ -55,6 +58,14 @@ export default function TabLayout() {
         options={{
           title: "Sessões",
           tabBarIcon: ({ color }) => <Feather name="activity" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="attendance"
+        options={{
+          title: "Presença",
+          tabBarIcon: ({ color }) => <Ionicons name="camera-outline" size={22} color={color} />,
+          tabBarItemStyle: isMaster ? {} : { display: "none" },
         }}
       />
       <Tabs.Screen

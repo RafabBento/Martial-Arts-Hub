@@ -3,6 +3,7 @@ import { Redirect, useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -21,13 +22,14 @@ export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, logout, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetDashboardStats();
   const { data: activity, isLoading: actLoading, refetch: refetchAct } = useGetRecentActivity();
 
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
   const dataLoading = statsLoading || actLoading;
   const onRefresh = () => { refetchStats(); refetchAct(); };
 
@@ -45,9 +47,6 @@ export default function DashboardScreen() {
             Dashboard
           </Text>
         </View>
-        <TouchableOpacity onPress={logout} style={[styles.logoutBtn, { borderColor: colors.border }]}>
-          <Ionicons name="log-out-outline" size={20} color={colors.mutedForeground} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -74,8 +73,54 @@ export default function DashboardScreen() {
               <StatCard label="Presenças Hoje Thai" value={stats.attendanceTodayThai} accent="thai" />
               <StatCard label="Presenças Hoje Jiu" value={stats.attendanceTodayJiu} accent="jiu" />
             </View>
+            {"attendanceThisMonthThai" in stats && (
+              <View style={styles.statsGrid}>
+                <StatCard label="Presenças Mês Thai" value={(stats as any).attendanceThisMonthThai ?? 0} accent="thai" />
+                <StatCard label="Presenças Mês Jiu" value={(stats as any).attendanceThisMonthJiu ?? 0} accent="jiu" />
+              </View>
+            )}
           </>
         ) : null}
+
+        <Text style={[styles.section, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 24 }]}>
+          AÇÕES RÁPIDAS
+        </Text>
+        <View style={styles.actionsGrid}>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)/students")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="people-outline" size={26} color={colors.primary} />
+            <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Alunos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)/sessions")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="barbell-outline" size={26} color={colors.thai} />
+            <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Sessões</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)/rankings")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="trophy-outline" size={26} color="#facc15" />
+            <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Rankings</Text>
+          </TouchableOpacity>
+          {isMaster && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "50" }]}
+              onPress={() => router.push("/(tabs)/attendance")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="camera-outline" size={26} color={colors.primary} />
+              <Text style={[styles.actionLabel, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Presença</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         <Text style={[styles.section, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 24 }]}>
           ATIVIDADE RECENTE
@@ -92,13 +137,26 @@ export default function DashboardScreen() {
                 key={i}
                 style={[styles.activityItem, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: accentColor }]}
               >
-                <View style={[styles.activityDot, { backgroundColor: accentColor }]} />
+                {item.studentPhotoUrl ? (
+                  <Image source={{ uri: item.studentPhotoUrl }} style={styles.activityAvatar} />
+                ) : (
+                  <View style={[styles.activityAvatar, { backgroundColor: accentColor + "30", alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={[styles.activityAvatarText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
+                      {item.studentName?.charAt(0) ?? "?"}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.activityInfo}>
-                  <Text style={[styles.activityTitle, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                  <Text style={[styles.activityTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                     {item.studentName}
                   </Text>
                   <Text style={[styles.activitySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                     {isThai ? "Muay Thai" : "Jiu-Jitsu"} · {new Date(item.createdAt).toLocaleDateString("pt-BR")}
+                  </Text>
+                </View>
+                <View style={[styles.activityBadge, { backgroundColor: accentColor + "20" }]}>
+                  <Text style={[styles.activityBadgeText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
+                    {isThai ? "MT" : "JJ"}
                   </Text>
                 </View>
               </View>
@@ -112,38 +170,6 @@ export default function DashboardScreen() {
             </Text>
           </View>
         )}
-
-        <View style={styles.quickActions}>
-          <Text style={[styles.section, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            AÇÕES RÁPIDAS
-          </Text>
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => router.push("/(tabs)/students")}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="people-outline" size={24} color={colors.primary} />
-              <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Alunos</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => router.push("/(tabs)/sessions")}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="barbell-outline" size={24} color={colors.thai} />
-              <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Sessões</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => router.push("/(tabs)/rankings")}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trophy-outline" size={24} color={colors.warning} />
-              <Text style={[styles.actionLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Rankings</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
@@ -162,10 +188,14 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 13, marginBottom: 2 },
   headerTitle: { fontSize: 26, letterSpacing: 0.5 },
-  logoutBtn: { borderWidth: 1, borderRadius: 10, padding: 8 },
   content: { padding: 20, gap: 10 },
   section: { fontSize: 11, letterSpacing: 1, marginBottom: 4 },
   statsGrid: { flexDirection: "row", gap: 10 },
+
+  actionsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  actionBtn: { width: "47%", alignItems: "center", borderRadius: 14, borderWidth: 1, padding: 18, gap: 10 },
+  actionLabel: { fontSize: 13 },
+
   activityItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -176,14 +206,13 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  activityDot: { width: 8, height: 8, borderRadius: 4 },
+  activityAvatar: { width: 38, height: 38, borderRadius: 19 },
+  activityAvatarText: { fontSize: 16 },
   activityInfo: { flex: 1 },
   activityTitle: { fontSize: 14 },
   activitySub: { fontSize: 12, marginTop: 2 },
+  activityBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  activityBadgeText: { fontSize: 11 },
   empty: { alignItems: "center", gap: 12, paddingVertical: 32 },
   emptyText: { fontSize: 14 },
-  quickActions: { marginTop: 16, gap: 12 },
-  actionsRow: { flexDirection: "row", gap: 10 },
-  actionBtn: { flex: 1, alignItems: "center", borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
-  actionLabel: { fontSize: 12 },
 });
