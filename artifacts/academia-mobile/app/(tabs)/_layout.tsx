@@ -29,11 +29,7 @@ export default function TabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView
-              intensity={80}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
@@ -66,6 +62,13 @@ export default function TabLayout() {
           title: "Presença",
           tabBarIcon: ({ color }) => <Ionicons name="camera-outline" size={22} color={color} />,
           tabBarItemStyle: isMaster ? {} : { display: "none" },
+        }}
+      />
+      <Tabs.Screen
+        name="payments"
+        options={{
+          title: "Mensalidade",
+          tabBarIcon: ({ color }) => <Ionicons name="card-outline" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
