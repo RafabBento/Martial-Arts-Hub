@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -78,7 +79,12 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <ImageBackground
+      source={require("../assets/images/bg-register.jpg")}
+      style={styles.root}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <ScrollView
           contentContainerStyle={[styles.container, { paddingTop: topPad + 16, paddingBottom: insets.bottom + 32 }]}
@@ -87,9 +93,9 @@ export default function RegisterScreen() {
           {/* Header */}
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+              <Ionicons name="arrow-back" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={[styles.screenTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.screenTitle, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
               Cadastro
             </Text>
             <View style={{ width: 36 }} />
@@ -97,21 +103,21 @@ export default function RegisterScreen() {
 
           {/* Error */}
           {error ? (
-            <View style={[styles.errorBox, { backgroundColor: colors.primary + "22", borderColor: colors.primary }]}>
-              <Ionicons name="alert-circle" size={16} color={colors.primary} />
-              <Text style={[styles.errorText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+            <View style={[styles.errorBox, { backgroundColor: "rgba(239,68,68,0.15)", borderColor: "rgba(239,68,68,0.4)" }]}>
+              <Ionicons name="alert-circle" size={16} color="#ef4444" />
+              <Text style={[styles.errorText, { color: "#ef4444", fontFamily: "Inter_500Medium" }]}>{error}</Text>
             </View>
           ) : null}
 
           {/* Nome */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>NOME COMPLETO</Text>
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>NOME COMPLETO</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.5)" />
               <TextInput
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
                 placeholder="Seu nome"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -121,13 +127,13 @@ export default function RegisterScreen() {
 
           {/* Email */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>E-MAIL</Text>
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>E-MAIL</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.5)" />
               <TextInput
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
                 placeholder="seu@email.com"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -138,60 +144,60 @@ export default function RegisterScreen() {
 
           {/* Senha */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>SENHA</Text>
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>SENHA</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.5)" />
               <TextInput
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
                 placeholder="Mínimo 6 caracteres"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(v => !v)}>
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color="rgba(255,255,255,0.5)" />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Perfil */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>PERFIL</Text>
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>PERFIL</Text>
             <View style={styles.toggleRow}>
               <TouchableOpacity
-                style={[styles.toggleBtn, { backgroundColor: role === "student" ? colors.primary : colors.card, borderColor: role === "student" ? colors.primary : colors.border }]}
+                style={[styles.toggleBtn, { backgroundColor: role === "student" ? colors.primary : "rgba(255,255,255,0.08)", borderColor: role === "student" ? colors.primary : "rgba(255,255,255,0.15)" }]}
                 onPress={() => setRole("student")}
               >
-                <Ionicons name="person-outline" size={16} color={role === "student" ? "#fff" : colors.mutedForeground} />
-                <Text style={[styles.toggleText, { color: role === "student" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Aluno</Text>
+                <Ionicons name="person-outline" size={16} color={role === "student" ? "#fff" : "rgba(255,255,255,0.5)"} />
+                <Text style={[styles.toggleText, { color: role === "student" ? "#fff" : "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold" }]}>Aluno</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.toggleBtn, { backgroundColor: role === "teacher" ? colors.primary : colors.card, borderColor: role === "teacher" ? colors.primary : colors.border }]}
+                style={[styles.toggleBtn, { backgroundColor: role === "teacher" ? colors.primary : "rgba(255,255,255,0.08)", borderColor: role === "teacher" ? colors.primary : "rgba(255,255,255,0.15)" }]}
                 onPress={() => setRole("teacher")}
               >
-                <Ionicons name="ribbon-outline" size={16} color={role === "teacher" ? "#fff" : colors.mutedForeground} />
-                <Text style={[styles.toggleText, { color: role === "teacher" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Professor</Text>
+                <Ionicons name="ribbon-outline" size={16} color={role === "teacher" ? "#fff" : "rgba(255,255,255,0.5)"} />
+                <Text style={[styles.toggleText, { color: role === "teacher" ? "#fff" : "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold" }]}>Professor</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Unidade */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>UNIDADE</Text>
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>UNIDADE</Text>
             {UNITS.map(u => (
               <TouchableOpacity
                 key={u.value}
-                style={[styles.unitRow, { backgroundColor: unit === u.value ? colors.primary + "18" : colors.card, borderColor: unit === u.value ? colors.primary + "80" : colors.border }]}
+                style={[styles.unitRow, { backgroundColor: unit === u.value ? colors.primary + "28" : "rgba(255,255,255,0.06)", borderColor: unit === u.value ? colors.primary + "90" : "rgba(255,255,255,0.13)" }]}
                 onPress={() => setUnit(u.value)}
                 activeOpacity={0.7}
               >
-                <View style={[styles.radio, { borderColor: unit === u.value ? colors.primary : colors.mutedForeground, backgroundColor: unit === u.value ? colors.primary : "transparent" }]}>
+                <View style={[styles.radio, { borderColor: unit === u.value ? colors.primary : "rgba(255,255,255,0.4)", backgroundColor: unit === u.value ? colors.primary : "transparent" }]}>
                   {unit === u.value && <View style={styles.radioDot} />}
                 </View>
                 <View style={styles.unitInfo}>
-                  <Text style={[styles.unitLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{u.label}</Text>
-                  <Text style={[styles.unitAddress, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{u.address}</Text>
+                  <Text style={[styles.unitLabel, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>{u.label}</Text>
+                  <Text style={[styles.unitAddress, { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" }]}>{u.address}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -200,19 +206,19 @@ export default function RegisterScreen() {
           {/* Modalidades — apenas alunos */}
           {role === "student" && (
             <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>MODALIDADES</Text>
+              <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>MODALIDADES</Text>
               <View style={styles.toggleRow}>
                 <TouchableOpacity
-                  style={[styles.toggleBtn, { backgroundColor: modalityThai ? "#7f1d1d" : colors.card, borderColor: modalityThai ? colors.thai : colors.border }]}
+                  style={[styles.toggleBtn, { backgroundColor: modalityThai ? "rgba(127,29,29,0.7)" : "rgba(255,255,255,0.08)", borderColor: modalityThai ? colors.thai : "rgba(255,255,255,0.15)" }]}
                   onPress={() => setModalityThai(v => !v)}
                 >
-                  <Text style={[styles.toggleText, { color: modalityThai ? colors.thai : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>🥊 Muay Thai</Text>
+                  <Text style={[styles.toggleText, { color: modalityThai ? colors.thai : "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold" }]}>🥊 Muay Thai</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.toggleBtn, { backgroundColor: modalityJiu ? "#1a2744" : colors.card, borderColor: modalityJiu ? colors.jiu : colors.border }]}
+                  style={[styles.toggleBtn, { backgroundColor: modalityJiu ? "rgba(26,39,68,0.9)" : "rgba(255,255,255,0.08)", borderColor: modalityJiu ? colors.jiu : "rgba(255,255,255,0.15)" }]}
                   onPress={() => setModalityJiu(v => !v)}
                 >
-                  <Text style={[styles.toggleText, { color: modalityJiu ? colors.jiu : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>🥋 Jiu-Jitsu</Text>
+                  <Text style={[styles.toggleText, { color: modalityJiu ? colors.jiu : "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold" }]}>🥋 Jiu-Jitsu</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -233,19 +239,20 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} style={styles.loginLink}>
-            <Text style={[styles.loginLinkText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.loginLinkText, { fontFamily: "Inter_400Regular" }]}>
               Já tem conta?{" "}
               <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>Entrar</Text>
             </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#000" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.65)" },
   flex: { flex: 1 },
   container: { paddingHorizontal: 24, gap: 20 },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
@@ -254,9 +261,9 @@ const styles = StyleSheet.create({
   errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
   errorText: { fontSize: 13, flex: 1 },
   fieldGroup: { gap: 8 },
-  label: { fontSize: 11, letterSpacing: 1 },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
-  input: { flex: 1, fontSize: 15 },
+  label: { fontSize: 11, letterSpacing: 1, color: "rgba(255,255,255,0.5)" },
+  inputWrap: { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  input: { flex: 1, fontSize: 15, color: "#fff" },
   toggleRow: { flexDirection: "row", gap: 10 },
   toggleBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 12, borderWidth: 1, paddingVertical: 12 },
   toggleText: { fontSize: 14 },
@@ -269,5 +276,5 @@ const styles = StyleSheet.create({
   btn: { borderRadius: 12, paddingVertical: 16, alignItems: "center", marginTop: 4 },
   btnText: { color: "#fff", fontSize: 15, letterSpacing: 1 },
   loginLink: { alignItems: "center", paddingVertical: 4 },
-  loginLinkText: { fontSize: 14 },
+  loginLinkText: { fontSize: 14, color: "rgba(255,255,255,0.5)" },
 });

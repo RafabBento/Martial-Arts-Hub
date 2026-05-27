@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -48,49 +48,52 @@ export default function LoginScreen() {
     }
   };
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const botPad = Platform.OS === "web" ? 32 : insets.bottom + 16;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <ImageBackground
+      source={require("../assets/images/bg-login.jpg")}
+      style={styles.bg}
+      resizeMode="cover"
+    >
+      {/* Gradiente escuro sobre a imagem */}
+      <View style={styles.overlay} />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.container,
-            { paddingTop: topPad + 40, paddingBottom: insets.bottom + 24 },
-          ]}
+          contentContainerStyle={[styles.container, { paddingBottom: botPad }]}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.logoBlock}>
-            <Image
-              source={require("../assets/images/icon.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              FRONT ARTES{"\n"}MARCIAIS
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Disciplina é tudo
-            </Text>
-          </View>
+          {/* Espaçador para empurrar o card para baixo */}
+          <View style={styles.spacer} />
 
-          <View style={styles.form}>
+          {/* Card de login */}
+          <View style={styles.card}>
+            <View style={styles.headingBlock}>
+              <Text style={[styles.title, { fontFamily: "Inter_700Bold" }]}>
+                ENTRE{"\n"}NA ARENA
+              </Text>
+              <Text style={[styles.subtitle, { fontFamily: "Inter_400Regular" }]}>
+                Acesse sua conta para acompanhar{"\n"}seu progresso e treinos
+              </Text>
+            </View>
+
             {error ? (
-              <View style={[styles.errorBox, { backgroundColor: colors.primary + "22", borderColor: colors.primary }]}>
-                <Ionicons name="alert-circle" size={16} color={colors.primary} />
-                <Text style={[styles.errorText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>{error}</Text>
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={15} color="#ef4444" />
+                <Text style={[styles.errorText, { fontFamily: "Inter_500Medium" }]}>{error}</Text>
               </View>
             ) : null}
 
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail-outline" size={18} color="rgba(255,255,255,0.5)" />
               <TextInput
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
                 placeholder="E-mail"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -98,12 +101,12 @@ export default function LoginScreen() {
               />
             </View>
 
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed-outline" size={18} color="rgba(255,255,255,0.5)" />
               <TextInput
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
                 placeholder="Senha"
-                placeholderTextColor={colors.mutedForeground}
+                placeholderTextColor="rgba(255,255,255,0.4)"
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -112,7 +115,7 @@ export default function LoginScreen() {
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={18}
-                  color={colors.mutedForeground}
+                  color="rgba(255,255,255,0.5)"
                 />
               </TouchableOpacity>
             </View>
@@ -120,7 +123,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[styles.btn, { backgroundColor: colors.primary }]}
               onPress={handleLogin}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               disabled={loginMutation.isPending}
             >
               {loginMutation.isPending ? (
@@ -131,53 +134,82 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => router.push("/register")} style={styles.registerLink}>
-              <Text style={[styles.registerLinkText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.registerLinkText, { fontFamily: "Inter_400Regular" }]}>
                 Não tem uma conta?{" "}
-                <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>Cadastre-se</Text>
+                <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}>
+                  Cadastre-se
+                </Text>
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  bg: { flex: 1, backgroundColor: "#000" },
   flex: { flex: 1 },
-  container: { flexGrow: 1, paddingHorizontal: 24 },
-  logoBlock: { alignItems: "center", marginBottom: 48, gap: 12 },
-  logo: { width: 100, height: 100, borderRadius: 24 },
-  title: { fontSize: 28, textAlign: "center", letterSpacing: 2 },
-  subtitle: { fontSize: 14, letterSpacing: 1 },
-  form: { gap: 14 },
-  registerLink: { alignItems: "center", paddingVertical: 4 },
-  registerLinkText: { fontSize: 14 },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+  },
+  spacer: { flex: 1, minHeight: 80 },
+  card: {
+    gap: 16,
+    paddingBottom: 8,
+  },
+  headingBlock: { marginBottom: 8, gap: 8 },
+  title: {
+    fontSize: 38,
+    color: "#fff",
+    letterSpacing: 1.5,
+    lineHeight: 44,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 20,
+  },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
     borderRadius: 10,
+    backgroundColor: "rgba(239,68,68,0.15)",
     borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.4)",
   },
-  errorText: { fontSize: 13, flex: 1 },
+  errorText: { fontSize: 13, color: "#ef4444", flex: 1 },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 12,
     borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 14,
     paddingVertical: 14,
     gap: 10,
   },
-  input: { flex: 1, fontSize: 15 },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: "#fff",
+  },
   btn: {
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 4,
   },
   btnText: { color: "#fff", fontSize: 15, letterSpacing: 1 },
+  registerLink: { alignItems: "center", paddingVertical: 4 },
+  registerLinkText: { fontSize: 14, color: "rgba(255,255,255,0.5)" },
 });
