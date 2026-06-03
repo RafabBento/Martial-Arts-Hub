@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -115,6 +115,8 @@ export default function StudentDetailScreen() {
   const [jiuGradePickerOpen, setJiuGradePickerOpen] = useState(false);
   const [jiuColorPickerOpen, setJiuColorPickerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [faceUploading, setFaceUploading] = useState(false);
+  const faceInputRef = useRef<any>(null);
 
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) },
@@ -130,6 +132,52 @@ export default function StudentDetailScreen() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
+  };
+
+  const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
+
+  const handleGalleryFace = async (file: File) => {
+    if (Platform.OS !== "web") return;
+    setFaceUploading(true);
+    try {
+      const faceapi = await import("face-api.js");
+      if (!faceapi.nets.ssdMobilenetv1.isLoaded) {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
+      }
+      const img = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0);
+      const detection = await (faceapi as any)
+        .detectSingleFace(canvas, new (faceapi as any).SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      if (!detection) {
+        showToast("Nenhum rosto detectado na foto");
+        return;
+      }
+      const descriptor = Array.from(detection.descriptor);
+      const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
+        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+        : "";
+      const resp = await fetch(`${baseUrl}/api/students/${studentId}/face-descriptor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descriptor, photoUrl: null }),
+      });
+      if (!resp.ok) throw new Error("Falha ao salvar");
+      queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast("Rosto cadastrado com sucesso!");
+    } catch (err: any) {
+      showToast(err?.message === "Falha ao salvar" ? "Erro ao salvar o descritor" : "Erro ao processar a foto");
+    } finally {
+      setFaceUploading(false);
+      if (faceInputRef.current) faceInputRef.current.value = "";
+    }
   };
 
   const handleGradeUpdate = (field: string, value: string | number | null) => {
@@ -445,6 +493,13 @@ export default function StudentDetailScreen() {
 
         {/* ─── ROSTO ────────────────────────────────────────── */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.cardTitleRow}>
+            <Ionicons name="scan-outline" size={18} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              Reconhecimento Facial
+            </Text>
+          </View>
+
           <View style={styles.faceRow}>
             <Ionicons
               name={student.hasFaceDescriptor ? "checkmark-circle" : "close-circle"}
@@ -455,6 +510,57 @@ export default function StudentDetailScreen() {
               {student.hasFaceDescriptor ? "Rosto cadastrado" : "Rosto não cadastrado"}
             </Text>
           </View>
+
+          {isMaster && Platform.OS === "web" && (
+            <>
+              {/* Hidden file input — web only */}
+              <input
+                ref={faceInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e: any) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleGalleryFace(file);
+                }}
+              />
+              <TouchableOpacity
+                style={[styles.faceBtn, {
+                  backgroundColor: colors.primary + "15",
+                  borderColor: colors.primary + "40",
+                  opacity: faceUploading ? 0.6 : 1,
+                }]}
+                onPress={() => faceInputRef.current?.click()}
+                disabled={faceUploading}
+              >
+                {faceUploading ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                      Processando...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="images-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                      {student.hasFaceDescriptor ? "Atualizar foto da galeria" : "Cadastrar pela galeria"}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+
+          {isMaster && Platform.OS !== "web" && (
+            <View style={[styles.faceNativeHint, { backgroundColor: colors.background, borderColor: colors.border }]}>
+              <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.faceHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1 }]}>
+                Para cadastrar o rosto, acesse a versão web no computador.
+              </Text>
+            </View>
+          )}
+
           {!isMaster && !student.hasFaceDescriptor && (
             <Text style={[styles.faceHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               Solicite ao professor o cadastro do seu rosto para usar o reconhecimento facial na presença.
@@ -624,6 +730,15 @@ const styles = StyleSheet.create({
   faceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   faceText: { fontSize: 14 },
   faceHint: { fontSize: 12, lineHeight: 17 },
+  faceBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, borderRadius: 10, borderWidth: 1, padding: 12,
+  },
+  faceBtnText: { fontSize: 14 },
+  faceNativeHint: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    borderRadius: 10, borderWidth: 1, padding: 10,
+  },
 
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 4 },

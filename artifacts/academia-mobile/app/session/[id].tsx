@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Platform,
@@ -12,23 +14,104 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetSession, useListAttendance } from "@workspace/api-client-react";
+import {
+  useGetSession,
+  useListAttendance,
+  useDeleteAttendance,
+  useDeleteSession,
+  getGetSessionQueryKey,
+  getListAttendanceQueryKey,
+  getListSessionsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/context/AuthContext";
 
 export default function SessionDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: session, isLoading: sessionLoading } = useGetSession(Number(id));
-  const { data: attendance, isLoading: attLoading } = useListAttendance({ sessionId: Number(id) });
+  const sessionId = Number(id);
+  const queryClient = useQueryClient();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
+
+  const [toast, setToast] = useState<string | null>(null);
+
+  const { data: session, isLoading: sessionLoading } = useGetSession(sessionId);
+  const { data: attendance, isLoading: attLoading } = useListAttendance({ sessionId });
+
+  const deleteAttMutation = useDeleteAttendance();
+  const deleteSessionMutation = useDeleteSession();
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const isThai = session?.modality === "thai";
-  const accentColor = isThai ? colors.thai : colors.jiu;
+  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleDeleteAttendance = (attId: number, studentName: string) => {
+    Alert.alert(
+      "Remover presença",
+      `Remover a presença de ${studentName}?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: () => {
+            deleteAttMutation.mutate({ id: attId }, {
+              onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId }) });
+                queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                showToast("Presença removida");
+              },
+              onError: () => showToast("Erro ao remover presença"),
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteSession = () => {
+    Alert.alert(
+      "Excluir sessão",
+      "Tem certeza? Esta ação não pode ser desfeita.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: () => {
+            deleteSessionMutation.mutate({ id: sessionId }, {
+              onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.back();
+              },
+              onError: () => showToast("Erro ao excluir sessão"),
+            });
+          },
+        },
+      ]
+    );
+  };
 
   if (sessionLoading) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background, paddingTop: topPad }]}>
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Sessão</Text>
+          <View style={{ width: 24 }} />
+        </View>
         <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} />
       </View>
     );
@@ -36,40 +119,73 @@ export default function SessionDetailScreen() {
 
   if (!session) return null;
 
+  const isThai = session.modality === "thai";
+  const accentColor = isThai ? colors.thai : colors.jiu;
   const date = new Date(session.sessionDate);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {toast && (
+        <View style={[styles.toast, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.toastText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{toast}</Text>
+        </View>
+      )}
+
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-          Sessão
-        </Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Sessão</Text>
+        {isMaster ? (
+          <TouchableOpacity
+            onPress={handleDeleteSession}
+            disabled={deleteSessionMutation.isPending}
+            style={styles.deleteSessionBtn}
+          >
+            {deleteSessionMutation.isPending
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Ionicons name="trash-outline" size={20} color={colors.primary} />
+            }
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 24 }} />
+        )}
       </View>
 
       <FlatList
         data={attendance ?? []}
         keyExtractor={item => String(item.id)}
-        contentContainerStyle={[styles.content, { paddingBottom: (Platform.OS === "web" ? 34 : insets.bottom) + 24 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
         refreshing={attLoading}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <View style={[styles.sessionInfo, { backgroundColor: colors.card, borderColor: accentColor, borderLeftColor: accentColor }]}>
-              <Text style={[styles.modality, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
-                {isThai ? "MUAY THAI" : "JIU-JITSU"}
-              </Text>
-              <Text style={[styles.dateText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                {date.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
-              </Text>
-              <Text style={[styles.timeText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-              </Text>
-              <Text style={[styles.teacher, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Prof. {session.teacherName}
-              </Text>
+            {/* Info card */}
+            <View style={[styles.sessionInfo, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: accentColor }]}>
+              <View style={styles.sessionInfoTop}>
+                <View style={[styles.modalityBadge, { backgroundColor: accentColor + "20", borderColor: accentColor + "50" }]}>
+                  <Text style={[styles.modalityText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
+                    {isThai ? "MUAY THAI" : "JIU-JITSU"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.sessionInfoRow}>
+                <Ionicons name="calendar-outline" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.sessionInfoText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                  {date.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
+                </Text>
+              </View>
+              <View style={styles.sessionInfoRow}>
+                <Ionicons name="time-outline" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.sessionInfoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+              <View style={styles.sessionInfoRow}>
+                <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.sessionInfoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Prof. {session.teacherName}
+                </Text>
+              </View>
               {session.description ? (
                 <Text style={[styles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                   {session.description}
@@ -77,9 +193,18 @@ export default function SessionDetailScreen() {
               ) : null}
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-              PRESENTES ({attendance?.length ?? 0})
-            </Text>
+            {/* Presentes header */}
+            <View style={styles.presentesHeader}>
+              <Ionicons name="people-outline" size={16} color={colors.primary} />
+              <Text style={[styles.sectionLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                Presenças
+              </Text>
+              <View style={[styles.countBadge, { backgroundColor: colors.primary + "20" }]}>
+                <Text style={[styles.countText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                  {attendance?.length ?? 0}
+                </Text>
+              </View>
+            </View>
           </View>
         }
         renderItem={({ item }) => {
@@ -97,16 +222,27 @@ export default function SessionDetailScreen() {
                 <Text style={[styles.attendeeName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
                   {item.studentName}
                 </Text>
-                {item.faceRecognized && (
-                  <View style={styles.faceRow}>
-                    <Ionicons name="scan-outline" size={12} color={colors.success} />
-                    <Text style={[styles.faceText, { color: colors.success, fontFamily: "Inter_400Regular" }]}>Reconhecido</Text>
-                  </View>
-                )}
+                <View style={styles.attendeeSubRow}>
+                  {item.faceRecognized && (
+                    <View style={styles.faceTagRow}>
+                      <Ionicons name="scan-outline" size={11} color={colors.success} />
+                      <Text style={[styles.faceText, { color: colors.success, fontFamily: "Inter_400Regular" }]}>Reconhecido</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </View>
               </View>
-              <Text style={[styles.time, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {new Date(item.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-              </Text>
+              {isMaster && (
+                <TouchableOpacity
+                  style={[styles.removeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
+                  onPress={() => handleDeleteAttendance(item.id, item.studentName)}
+                  disabled={deleteAttMutation.isPending}
+                >
+                  <Ionicons name="trash-outline" size={15} color={colors.primary} />
+                </TouchableOpacity>
+              )}
             </View>
           );
         }}
@@ -125,32 +261,49 @@ export default function SessionDetailScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  toast: {
+    position: "absolute", top: 60, left: 16, right: 16, zIndex: 99,
+    padding: 12, borderRadius: 10, borderWidth: 1,
+  },
+  toastText: { fontSize: 13, textAlign: "center" },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1,
   },
   headerTitle: { fontSize: 17 },
+  deleteSessionBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   content: { padding: 20, gap: 0 },
   listHeader: { gap: 16, marginBottom: 8 },
-  sessionInfo: { borderRadius: 14, borderWidth: 1, borderLeftWidth: 4, padding: 16, gap: 6 },
-  modality: { fontSize: 11, letterSpacing: 1 },
-  dateText: { fontSize: 17 },
-  timeText: { fontSize: 14 },
-  teacher: { fontSize: 13 },
+  sessionInfo: {
+    borderRadius: 14, borderWidth: 1, borderLeftWidth: 4,
+    padding: 16, gap: 8,
+  },
+  sessionInfoTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  modalityBadge: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3 },
+  modalityText: { fontSize: 11, letterSpacing: 1 },
+  sessionInfoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sessionInfoText: { fontSize: 14 },
   desc: { fontSize: 13, marginTop: 4 },
-  sectionLabel: { fontSize: 11, letterSpacing: 1 },
-  attendeeRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
+  presentesHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sectionLabel: { fontSize: 15, flex: 1 },
+  countBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  countText: { fontSize: 13 },
+  attendeeRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: 12, borderBottomWidth: 1, gap: 12,
+  },
+  avatar: { width: 42, height: 42, borderRadius: 21 },
   initials: { fontSize: 14 },
-  attendeeInfo: { flex: 1, gap: 2 },
+  attendeeInfo: { flex: 1, gap: 3 },
   attendeeName: { fontSize: 14 },
-  faceRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  attendeeSubRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  faceTagRow: { flexDirection: "row", alignItems: "center", gap: 3 },
   faceText: { fontSize: 11 },
   time: { fontSize: 12 },
+  removeBtn: {
+    width: 34, height: 34, borderRadius: 10, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
+  },
   empty: { alignItems: "center", gap: 12, paddingVertical: 40 },
   emptyText: { fontSize: 14 },
 });
