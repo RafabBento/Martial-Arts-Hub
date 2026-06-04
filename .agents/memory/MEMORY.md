@@ -1,1 +1,2 @@
 - [User serialization parity](user-serialization-parity.md) — serializeUser helpers hand-build the User object; keep them in sync with the OpenAPI User schema (jiuDegree was dropped).
+- [react-native-web DOM intrinsics](rn-web-dom-intrinsics.md) — web-only camera/file features in Expo render raw DOM tags gated by isWeb; no @ts-expect-error needed (TS2578).
