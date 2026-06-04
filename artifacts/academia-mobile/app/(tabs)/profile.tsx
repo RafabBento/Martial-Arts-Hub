@@ -6,7 +6,9 @@ import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,42 +54,67 @@ function isBirthdayToday(birthDate: string | null | undefined): boolean {
   );
 }
 
-const JIU_COLOR_MAP: Record<string, string> = {
-  white: "#f5f5f5",
-  blue: "#2563eb",
-  purple: "#7c3aed",
-  brown: "#92400e",
-  black: "#111827",
-};
+const PRAJIED_GRADES = [
+  { value: "branco",                 label: "Branco",                 primary: "#f5f5f5", secondary: null },
+  { value: "branco-ponta-vermelha",  label: "Branco ponta vermelha",  primary: "#f5f5f5", secondary: "#dc2626" },
+  { value: "vermelha",               label: "Vermelha",               primary: "#dc2626", secondary: null },
+  { value: "vermelha-ponta-amarela", label: "Vermelha ponta amarela", primary: "#dc2626", secondary: "#facc15" },
+  { value: "amarela",                label: "Amarela",                primary: "#facc15", secondary: null },
+  { value: "amarela-ponta-verde",    label: "Amarela ponta verde",    primary: "#facc15", secondary: "#16a34a" },
+  { value: "verde",                  label: "Verde",                  primary: "#16a34a", secondary: null },
+  { value: "verde-ponta-azul",       label: "Verde ponta azul",       primary: "#16a34a", secondary: "#2563eb" },
+  { value: "azul",                   label: "Azul",                   primary: "#2563eb", secondary: null },
+  { value: "azul-ponta-preta",       label: "Azul ponta preta",       primary: "#2563eb", secondary: "#111827" },
+  { value: "preta",                  label: "Preta",                  primary: "#111827", secondary: null },
+];
 
-function JiuBeltStripe({ color }: { color: string }) {
-  const bg = JIU_COLOR_MAP[color] ?? "#555";
+const JIU_COLORS = [
+  { value: "white",  label: "Branca",  hex: "#f5f5f5" },
+  { value: "blue",   label: "Azul",    hex: "#2563eb" },
+  { value: "purple", label: "Roxa",    hex: "#7c3aed" },
+  { value: "brown",  label: "Marrom",  hex: "#92400e" },
+  { value: "black",  label: "Preta",   hex: "#111827" },
+];
+
+const JIU_GRADES = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
+
+function PrajiedStripe({ grade }: { grade: string }) {
+  const entry = PRAJIED_GRADES.find(p => p.label === grade || p.value === grade);
+  if (!entry) return null;
   return (
-    <View style={[beltStyles.belt, { backgroundColor: bg, borderColor: color === "white" ? "#ccc" : "rgba(255,255,255,0.2)" }]}>
-      <View style={beltStyles.tip} />
+    <View style={prajStyles.body0}>
+      <View style={[prajStyles.body, { backgroundColor: entry.primary, borderColor: entry.primary === "#f5f5f5" ? "#ccc" : "rgba(255,255,255,0.2)" }]}>
+        {entry.secondary && (
+          <View style={[prajStyles.tip, { backgroundColor: entry.secondary }]} />
+        )}
+      </View>
+    </View>
+  );
+}
+const prajStyles = StyleSheet.create({
+  body0: { flexDirection: "row" },
+  body: { height: 14, width: 80, borderRadius: 7, borderWidth: 1, overflow: "hidden", flexDirection: "row" },
+  tip: { width: 22, position: "absolute", right: 0, top: 0, bottom: 0 },
+});
+
+function JiuBeltStripe({ color, degree }: { color: string; degree?: number | null }) {
+  const hex = JIU_COLORS.find(c => c.value === color)?.hex ?? "#555";
+  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
+  const isWhite = color === "white";
+  return (
+    <View style={[beltStyles.belt, { backgroundColor: hex, borderColor: isWhite ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.15)" }]}>
+      <View style={beltStyles.tip}>
+        {Array.from({ length: stripes }).map((_, i) => (
+          <View key={i} style={beltStyles.stripe} />
+        ))}
+      </View>
     </View>
   );
 }
 const beltStyles = StyleSheet.create({
-  belt: { height: 12, width: 64, borderRadius: 3, borderWidth: 1, overflow: "hidden", flexDirection: "row" },
-  tip: { width: 16, backgroundColor: "rgba(0,0,0,0.8)" },
-});
-
-function PrajiedStripe({ grade }: { grade: string }) {
-  const colorMap: Record<string, string> = {
-    branco: "#f5f5f5",
-    vermelha: "#dc2626",
-    amarela: "#facc15",
-    verde: "#16a34a",
-    azul: "#2563eb",
-    preta: "#1f2937",
-  };
-  const primary = grade.split(" ")[0]?.toLowerCase() ?? "branco";
-  const bg = colorMap[primary] ?? "#555";
-  return <View style={[prajStyles.stripe, { backgroundColor: bg, borderColor: primary === "branco" ? "#ccc" : "rgba(255,255,255,0.2)" }]} />;
-}
-const prajStyles = StyleSheet.create({
-  stripe: { height: 10, width: 56, borderRadius: 5, borderWidth: 1 },
+  belt: { height: 20, width: 112, borderRadius: 4, borderWidth: 1, overflow: "hidden", flexDirection: "row" },
+  tip: { width: 30, backgroundColor: "#111827", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, position: "absolute", right: 0, top: 0, bottom: 0 },
+  stripe: { width: 2, height: 14, backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 1 },
 });
 
 export default function ProfileScreen() {
@@ -106,6 +133,10 @@ export default function ProfileScreen() {
   const [editPhone, setEditPhone] = useState("");
   const [editBirth, setEditBirth] = useState("");
   const [editPayDay, setEditPayDay] = useState("");
+
+  // Master own-graduation pickers
+  const [thaiPickerOpen, setThaiPickerOpen] = useState(false);
+  const [jiuGradePickerOpen, setJiuGradePickerOpen] = useState(false);
 
   const updateUserMutation = useUpdateUser();
   const updateStudentMutation = useUpdateStudent();
@@ -185,6 +216,22 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleMasterGrade = (data: { thaiGrade?: string; thaiGradeColor?: string; jiuGrade?: string; jiuGradeColor?: string }) => {
+    if (!user) return;
+    updateUserMutation.mutate(
+      { id: user.id, data },
+      {
+        onSuccess: (updated) => {
+          setUser(updated);
+          queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast("Graduação atualizada!");
+        },
+        onError: () => showToast("Erro ao atualizar graduação"),
+      }
+    );
+  };
+
   const copyPix = async () => {
     await Clipboard.setStringAsync("frontartesmarciais@gmail.com");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -203,9 +250,12 @@ export default function ProfileScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const initials = user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   const isToday = isBirthdayToday(user.birthDate);
-  const thaiGrade = studentData?.thaiGrade ?? (user as any).thaiGrade;
-  const jiuGrade = studentData?.jiuGrade ?? (user as any).jiuGrade;
-  const jiuGradeColor = studentData?.jiuGradeColor ?? (user as any).jiuGradeColor;
+  const thaiGrade = isTeacherOrAdmin ? (user as any).thaiGrade : studentData?.thaiGrade;
+  const jiuGrade = isTeacherOrAdmin ? (user as any).jiuGrade : studentData?.jiuGrade;
+  const jiuGradeColor = isTeacherOrAdmin ? (user as any).jiuGradeColor : studentData?.jiuGradeColor;
+  const jiuDegree = isTeacherOrAdmin ? (user as any).jiuDegree : studentData?.jiuDegree;
+  const currentThaiEntry = PRAJIED_GRADES.find(p => p.label === thaiGrade || p.value === thaiGrade);
+  const showGraduation = hasThai || hasJiu;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -523,26 +573,76 @@ export default function ProfileScreen() {
               />
             )}
 
-            {modality === "thai" && thaiGrade && (
-              <View style={styles.gradeRow}>
-                <Ionicons name="ribbon-outline" size={16} color={colors.thai} />
-                <Text style={[styles.infoLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Grau Thai</Text>
-                <View style={styles.gradeRight}>
-                  <Text style={[styles.infoValue, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{thaiGrade}</Text>
-                  <PrajiedStripe grade={thaiGrade} />
+          </View>
+        )}
+
+        {/* Minha Graduação — visível para todos (alunos e mestres) */}
+        {showGraduation && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.gradHeader}>
+              <Ionicons name="shield-outline" size={18} color={colors.primary} />
+              <Text style={[styles.gradTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Minha Graduação</Text>
+            </View>
+
+            <View style={styles.gradGrid}>
+              {hasThai && (
+                <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.thai + "40" }]}>
+                  <Text style={[styles.gradModality, { color: colors.thai, fontFamily: "Inter_700Bold" }]}>MUAY THAI</Text>
+                  {thaiGrade ? (
+                    <>
+                      <PrajiedStripe grade={thaiGrade} />
+                      <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        {currentThaiEntry?.label ?? thaiGrade}
+                      </Text>
+                      <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Prajied</Text>
+                    </>
+                  ) : (
+                    <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuído</Text>
+                  )}
+                  {isTeacherOrAdmin && (
+                    <TouchableOpacity
+                      style={[styles.gradEditBtn, { borderColor: colors.thai + "60" }]}
+                      onPress={() => setThaiPickerOpen(true)}
+                      disabled={updateUserMutation.isPending}
+                    >
+                      <Ionicons name="pencil-outline" size={12} color={colors.thai} />
+                      <Text style={[styles.gradEditText, { color: colors.thai, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </View>
-            )}
-            {modality === "jiu" && jiuGrade && (
-              <View style={styles.gradeRow}>
-                <Ionicons name="ribbon-outline" size={16} color={colors.jiu} />
-                <Text style={[styles.infoLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Faixa Jiu</Text>
-                <View style={styles.gradeRight}>
-                  <Text style={[styles.infoValue, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{jiuGrade}</Text>
-                  {jiuGradeColor && <JiuBeltStripe color={jiuGradeColor} />}
+              )}
+
+              {hasJiu && (
+                <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.jiu + "40" }]}>
+                  <Text style={[styles.gradModality, { color: colors.jiu, fontFamily: "Inter_700Bold" }]}>JIU-JITSU</Text>
+                  {jiuGrade ? (
+                    <>
+                      {jiuGradeColor && <JiuBeltStripe color={jiuGradeColor} degree={jiuDegree} />}
+                      <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        Faixa {jiuGrade}
+                      </Text>
+                      {(jiuDegree ?? 0) > 0 ? (
+                        <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{jiuDegree}º grau</Text>
+                      ) : (
+                        <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Faixa</Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuída</Text>
+                  )}
+                  {isTeacherOrAdmin && (
+                    <TouchableOpacity
+                      style={[styles.gradEditBtn, { borderColor: colors.jiu + "60" }]}
+                      onPress={() => setJiuGradePickerOpen(true)}
+                      disabled={updateUserMutation.isPending}
+                    >
+                      <Ionicons name="pencil-outline" size={12} color={colors.jiu} />
+                      <Text style={[styles.gradEditText, { color: colors.jiu, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </View>
-            )}
+              )}
+            </View>
           </View>
         )}
 
@@ -555,6 +655,61 @@ export default function ProfileScreen() {
           <Text style={[styles.logoutText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Sair</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Picker prajied (Muay Thai) — mestre */}
+      <Modal visible={thaiPickerOpen} transparent animationType="slide" onRequestClose={() => setThaiPickerOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setThaiPickerOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Prajied — Muay Thai</Text>
+            <ScrollView style={{ maxHeight: 380 }}>
+              {PRAJIED_GRADES.map((g) => {
+                const selected = g.label === thaiGrade || g.value === thaiGrade;
+                return (
+                  <TouchableOpacity
+                    key={g.value}
+                    style={[styles.sheetRow, { borderColor: selected ? colors.thai : colors.border, backgroundColor: selected ? colors.thai + "15" : "transparent" }]}
+                    onPress={() => {
+                      handleMasterGrade({ thaiGrade: g.label, thaiGradeColor: g.primary });
+                      setThaiPickerOpen(false);
+                    }}
+                  >
+                    <PrajiedStripe grade={g.value} />
+                    <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: selected ? "Inter_700Bold" : "Inter_400Regular" }]}>{g.label}</Text>
+                    {selected && <Ionicons name="checkmark-circle" size={18} color={colors.thai} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Picker faixa (Jiu-Jitsu) — mestre */}
+      <Modal visible={jiuGradePickerOpen} transparent animationType="slide" onRequestClose={() => setJiuGradePickerOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setJiuGradePickerOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Faixa — Jiu-Jitsu</Text>
+            {JIU_GRADES.map((label) => {
+              const colorEntry = JIU_COLORS.find(c => c.label === label);
+              const selected = label === jiuGrade;
+              return (
+                <TouchableOpacity
+                  key={label}
+                  style={[styles.sheetRow, { borderColor: selected ? colors.jiu : colors.border, backgroundColor: selected ? colors.jiu + "15" : "transparent" }]}
+                  onPress={() => {
+                    handleMasterGrade({ jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "" });
+                    setJiuGradePickerOpen(false);
+                  }}
+                >
+                  {colorEntry && <JiuBeltStripe color={colorEntry.value} />}
+                  <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: selected ? "Inter_700Bold" : "Inter_400Regular" }]}>{label}</Text>
+                  {selected && <Ionicons name="checkmark-circle" size={18} color={colors.jiu} />}
+                </TouchableOpacity>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -621,8 +776,21 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoLabel: { fontSize: 13, flex: 1 },
   infoValue: { fontSize: 13, maxWidth: 180 },
-  gradeRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  gradeRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  gradHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  gradTitle: { fontSize: 16, letterSpacing: 0.3 },
+  gradGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  gradBox: { flex: 1, minWidth: 140, borderRadius: 12, borderWidth: 1, padding: 14, gap: 8, alignItems: "flex-start" },
+  gradModality: { fontSize: 11, letterSpacing: 1 },
+  gradValue: { fontSize: 14 },
+  gradSub: { fontSize: 11 },
+  gradEditBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginTop: 2 },
+  gradEditText: { fontSize: 12 },
+
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: 18, gap: 8 },
+  sheetTitle: { fontSize: 16, marginBottom: 6 },
+  sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 6 },
+  sheetRowText: { fontSize: 14, flex: 1 },
 
   field: { gap: 6 },
   fieldLabel: { fontSize: 13 },

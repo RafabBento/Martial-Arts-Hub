@@ -30,6 +30,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     thaiGradeColor: user.thaiGradeColor ?? null,
     jiuGrade: user.jiuGrade ?? null,
     jiuGradeColor: user.jiuGradeColor ?? null,
+    jiuDegree: user.jiuDegree ?? null,
     createdAt: user.createdAt.toISOString(),
   };
 }
