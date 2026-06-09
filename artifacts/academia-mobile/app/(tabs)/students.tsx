@@ -151,7 +151,10 @@ export default function StudentsScreen() {
               modalityThai={item.modalityThai}
               modalityJiu={item.modalityJiu}
               thaiGrade={item.thaiGrade}
+              thaiGradeColor={item.thaiGradeColor}
               jiuGrade={item.jiuGrade}
+              jiuGradeColor={item.jiuGradeColor}
+              jiuDegree={item.jiuDegree}
               totalAttendanceThai={item.totalAttendanceThai ?? 0}
               totalAttendanceJiu={item.totalAttendanceJiu ?? 0}
               onPress={() => router.push(`/student/${item.userId}`)}
