@@ -210,6 +210,7 @@ export default function Profile() {
   const [editThaiGradeColor, setEditThaiGradeColor] = useState(user?.thaiGradeColor ?? "");
   const [editJiuGrade, setEditJiuGrade] = useState(user?.jiuGrade ?? "");
   const [editJiuGradeColor, setEditJiuGradeColor] = useState(user?.jiuGradeColor ?? "");
+  const [editJiuDegree, setEditJiuDegree] = useState<number>(user?.jiuDegree ?? 0);
   const [modality, setModality] = useState<Modality>("thai");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -270,6 +271,7 @@ export default function Profile() {
             thaiGradeColor: editThaiGradeColor || undefined,
             jiuGrade: editJiuGrade || undefined,
             jiuGradeColor: editJiuGradeColor || undefined,
+            jiuDegree: editJiuGrade ? editJiuDegree : undefined,
           }),
         },
       },
@@ -504,6 +506,27 @@ export default function Profile() {
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
+                {editJiuGrade && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-xs font-medium text-muted-foreground">Graus</span>
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3, 4].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setEditJiuDegree(n)}
+                          className={`h-8 w-8 rounded-md border text-sm font-semibold transition-colors ${
+                            editJiuDegree === n
+                              ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                              : "border-border bg-background text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -580,6 +603,7 @@ export default function Profile() {
                 setEditThaiGradeColor(user.thaiGradeColor ?? "");
                 setEditJiuGrade(user.jiuGrade ?? "");
                 setEditJiuGradeColor(user.jiuGradeColor ?? "");
+                setEditJiuDegree(user.jiuDegree ?? 0);
                 setEditing(true);
               }}
             >
@@ -656,9 +680,11 @@ export default function Profile() {
                 <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
                 {user.jiuGrade ? (
                   <>
-                    {user.jiuGradeColor && <JiuStripe color={user.jiuGradeColor} />}
+                    <JiuBeltWithDegree color={user.jiuGradeColor} degree={user.jiuDegree} />
                     <p className="font-semibold text-sm">Faixa {user.jiuGrade}</p>
-                    <p className="text-xs text-muted-foreground">Faixa</p>
+                    {(user.jiuDegree ?? 0) > 0 && (
+                      <p className="text-xs text-muted-foreground">{user.jiuDegree}º grau</p>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground">Não atribuída</p>

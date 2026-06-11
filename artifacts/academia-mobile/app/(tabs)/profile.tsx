@@ -137,6 +137,7 @@ export default function ProfileScreen() {
   // Master own-graduation pickers
   const [thaiPickerOpen, setThaiPickerOpen] = useState(false);
   const [jiuGradePickerOpen, setJiuGradePickerOpen] = useState(false);
+  const [jiuDegreeDraft, setJiuDegreeDraft] = useState(0);
 
   const updateUserMutation = useUpdateUser();
   const updateStudentMutation = useUpdateStudent();
@@ -216,7 +217,7 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleMasterGrade = (data: { thaiGrade?: string; thaiGradeColor?: string; jiuGrade?: string; jiuGradeColor?: string }) => {
+  const handleMasterGrade = (data: { thaiGrade?: string; thaiGradeColor?: string; jiuGrade?: string; jiuGradeColor?: string; jiuDegree?: number }) => {
     if (!user) return;
     updateUserMutation.mutate(
       { id: user.id, data },
@@ -633,7 +634,7 @@ export default function ProfileScreen() {
                   {isTeacherOrAdmin && (
                     <TouchableOpacity
                       style={[styles.gradEditBtn, { borderColor: colors.jiu + "60" }]}
-                      onPress={() => setJiuGradePickerOpen(true)}
+                      onPress={() => { setJiuDegreeDraft(jiuDegree ?? 0); setJiuGradePickerOpen(true); }}
                       disabled={updateUserMutation.isPending}
                     >
                       <Ionicons name="pencil-outline" size={12} color={colors.jiu} />
@@ -689,6 +690,21 @@ export default function ProfileScreen() {
         <Pressable style={styles.sheetBackdrop} onPress={() => setJiuGradePickerOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Faixa — Jiu-Jitsu</Text>
+            <View style={styles.degreeRow}>
+              <Text style={[styles.degreeLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Graus</Text>
+              {[0, 1, 2, 3, 4].map((n) => {
+                const sel = jiuDegreeDraft === n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.degreeBtn, { borderColor: sel ? colors.jiu : colors.border, backgroundColor: sel ? colors.jiu + "20" : "transparent" }]}
+                    onPress={() => setJiuDegreeDraft(n)}
+                  >
+                    <Text style={[styles.degreeBtnText, { color: sel ? colors.jiu : colors.mutedForeground, fontFamily: sel ? "Inter_700Bold" : "Inter_500Medium" }]}>{n}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             {JIU_GRADES.map((label) => {
               const colorEntry = JIU_COLORS.find(c => c.label === label);
               const selected = label === jiuGrade;
@@ -697,11 +713,11 @@ export default function ProfileScreen() {
                   key={label}
                   style={[styles.sheetRow, { borderColor: selected ? colors.jiu : colors.border, backgroundColor: selected ? colors.jiu + "15" : "transparent" }]}
                   onPress={() => {
-                    handleMasterGrade({ jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "" });
+                    handleMasterGrade({ jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "", jiuDegree: jiuDegreeDraft });
                     setJiuGradePickerOpen(false);
                   }}
                 >
-                  {colorEntry && <JiuBeltStripe color={colorEntry.value} />}
+                  {colorEntry && <JiuBeltStripe color={colorEntry.value} degree={jiuDegreeDraft} />}
                   <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: selected ? "Inter_700Bold" : "Inter_400Regular" }]}>{label}</Text>
                   {selected && <Ionicons name="checkmark-circle" size={18} color={colors.jiu} />}
                 </TouchableOpacity>
@@ -791,6 +807,10 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 16, marginBottom: 6 },
   sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 6 },
   sheetRowText: { fontSize: 14, flex: 1 },
+  degreeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 2 },
+  degreeLabel: { fontSize: 12 },
+  degreeBtn: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  degreeBtnText: { fontSize: 14 },
 
   field: { gap: 6 },
   fieldLabel: { fontSize: 13 },
