@@ -255,7 +255,7 @@ export default function ProfileScreen() {
   const jiuGradeColor = isTeacherOrAdmin ? (user as any).jiuGradeColor : studentData?.jiuGradeColor;
   const jiuDegree = isTeacherOrAdmin ? (user as any).jiuDegree : studentData?.jiuDegree;
   const currentThaiEntry = PRAJIED_GRADES.find(p => p.label === thaiGrade || p.value === thaiGrade);
-  const showGraduation = hasThai || hasJiu;
+  const showGraduation = isTeacherOrAdmin || hasThai || hasJiu;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -585,7 +585,7 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.gradGrid}>
-              {hasThai && (
+              {(isTeacherOrAdmin || hasThai) && (
                 <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.thai + "40" }]}>
                   <Text style={[styles.gradModality, { color: colors.thai, fontFamily: "Inter_700Bold" }]}>MUAY THAI</Text>
                   {thaiGrade ? (
@@ -612,7 +612,7 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {hasJiu && (
+              {(isTeacherOrAdmin || hasJiu) && (
                 <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.jiu + "40" }]}>
                   <Text style={[styles.gradModality, { color: colors.jiu, fontFamily: "Inter_700Bold" }]}>JIU-JITSU</Text>
                   {jiuGrade ? (

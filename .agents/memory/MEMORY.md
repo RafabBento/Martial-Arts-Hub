@@ -1,3 +1,4 @@
 - [User serialization parity](user-serialization-parity.md) — serializeUser helpers hand-build the User object; keep them in sync with the OpenAPI User schema (jiuDegree was dropped).
 - [react-native-web DOM intrinsics](rn-web-dom-intrinsics.md) — web-only camera/file features in Expo render raw DOM tags gated by isWeb; no @ts-expect-error needed (TS2578).
 - [Grade color storage parity](grade-color-storage-parity.md) — thai/jiuGradeColor stored as color NAME (web) or HEX (mobile); resolvers must handle both. Card belt badges gate on grade presence, not modality.
+- [Teacher graduação gating](teacher-graduacao-gating.md) — profile prajied/faixa card+editors are ungated from modality for teacher/admin (they never have modality flags).

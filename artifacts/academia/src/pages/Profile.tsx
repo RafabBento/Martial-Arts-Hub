@@ -463,7 +463,7 @@ export default function Profile() {
             </div>
 
             {/* Campos de graduação para professores */}
-            {isTeacherOrAdmin && user.modalityThai && (
+            {isTeacherOrAdmin && (
               <div className="space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
                 <p className="text-xs font-bold uppercase tracking-widest text-red-400">Graduação — Muay Thai</p>
                 <select
@@ -487,7 +487,7 @@ export default function Profile() {
                 </select>
               </div>
             )}
-            {isTeacherOrAdmin && user.modalityJiu && (
+            {isTeacherOrAdmin && (
               <div className="space-y-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
                 <p className="text-xs font-bold uppercase tracking-widest text-blue-400">Graduação — Jiu-Jitsu</p>
                 <select
@@ -633,41 +633,37 @@ export default function Profile() {
         )
       ) : (
         /* Professores / Admins: graduação real + opção de editar via Editar Perfil */
-        (user.modalityThai || user.modalityJiu) && (
+        (
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-primary" />
               <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {user.modalityThai && (
-                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
-                  <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
-                  {user.thaiGrade ? (
-                    <>
-                      <PrajiedStripe grade={user.thaiGrade} />
-                      <p className="font-semibold text-sm">{user.thaiGrade}</p>
-                      <p className="text-xs text-muted-foreground">Prajied</p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Não atribuído</p>
-                  )}
-                </div>
-              )}
-              {user.modalityJiu && (
-                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
-                  <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
-                  {user.jiuGrade ? (
-                    <>
-                      {user.jiuGradeColor && <JiuStripe color={user.jiuGradeColor} />}
-                      <p className="font-semibold text-sm">Faixa {user.jiuGrade}</p>
-                      <p className="text-xs text-muted-foreground">Faixa</p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Não atribuída</p>
-                  )}
-                </div>
-              )}
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
+                <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
+                {user.thaiGrade ? (
+                  <>
+                    <PrajiedStripe grade={user.thaiGrade} />
+                    <p className="font-semibold text-sm">{user.thaiGrade}</p>
+                    <p className="text-xs text-muted-foreground">Prajied</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Não atribuído</p>
+                )}
+              </div>
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
+                <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
+                {user.jiuGrade ? (
+                  <>
+                    {user.jiuGradeColor && <JiuStripe color={user.jiuGradeColor} />}
+                    <p className="font-semibold text-sm">Faixa {user.jiuGrade}</p>
+                    <p className="text-xs text-muted-foreground">Faixa</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Não atribuída</p>
+                )}
+              </div>
             </div>
           </div>
         )
