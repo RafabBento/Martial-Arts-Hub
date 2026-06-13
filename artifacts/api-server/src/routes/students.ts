@@ -6,9 +6,6 @@ import {
   GetStudentParams,
   UpdateStudentParams,
   UpdateStudentBody,
-  SaveFaceDescriptorParams,
-  SaveFaceDescriptorBody,
-  IdentifyFaceBody,
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
 
@@ -259,88 +256,5 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
   });
 });
 
-router.post("/students/:id/face-descriptor", async (req, res): Promise<void> => {
-  const params = SaveFaceDescriptorParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const body = SaveFaceDescriptorBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  await db
-    .update(studentProfilesTable)
-    .set({
-      faceDescriptor: body.data.descriptor,
-      facePhotoUrl: body.data.photoUrl,
-    })
-    .where(eq(studentProfilesTable.userId, params.data.id));
-
-  res.json({ message: "Face descriptor saved successfully" });
-});
-
-router.post("/face/identify", async (req, res): Promise<void> => {
-  const body = IdentifyFaceBody.safeParse(req.body);
-  if (!body.success) {
-    res.status(400).json({ error: body.error.message });
-    return;
-  }
-
-  const studentsWithFaces = await db
-    .select({
-      userId: usersTable.id,
-      name: usersTable.name,
-      profilePhotoUrl: usersTable.profilePhotoUrl,
-      faceDescriptor: studentProfilesTable.faceDescriptor,
-    })
-    .from(usersTable)
-    .innerJoin(studentProfilesTable, eq(usersTable.id, studentProfilesTable.userId))
-    .where(sql`${studentProfilesTable.faceDescriptor} IS NOT NULL`);
-
-  const THRESHOLD = 0.5;
-  const matches: {
-    studentId: number;
-    name: string;
-    profilePhotoUrl: string | null;
-    distance: number;
-    matched: boolean;
-  }[] = [];
-
-  for (const queryDescriptor of body.data.descriptors) {
-    let bestMatch = { studentId: -1, name: "", profilePhotoUrl: null as string | null, distance: Infinity, matched: false };
-
-    for (const student of studentsWithFaces) {
-      const stored = student.faceDescriptor as number[];
-      if (!Array.isArray(stored) || stored.length !== queryDescriptor.length) continue;
-
-      let sum = 0;
-      for (let i = 0; i < stored.length; i++) {
-        const diff = stored[i] - queryDescriptor[i];
-        sum += diff * diff;
-      }
-      const distance = Math.sqrt(sum);
-
-      if (distance < bestMatch.distance) {
-        bestMatch = {
-          studentId: student.userId,
-          name: student.name,
-          profilePhotoUrl: student.profilePhotoUrl ?? null,
-          distance,
-          matched: distance <= THRESHOLD,
-        };
-      }
-    }
-
-    if (bestMatch.studentId !== -1) {
-      matches.push(bestMatch);
-    }
-  }
-
-  res.json(matches);
-});
 
 export default router;

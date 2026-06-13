@@ -21,7 +21,10 @@ import type {
   AttendanceInput,
   AttendanceRecord,
   AuthResponse,
+  BulkAttendanceInput,
+  BulkAttendanceResult,
   DashboardStats,
+  ErrorEnvelope,
   FaceDescriptorInput,
   FaceIdentifyInput,
   FaceMatch,
@@ -36,12 +39,18 @@ import type {
   MarkPaymentInput,
   MessageResponse,
   PaymentStatus,
+  ProfilePhotoResult,
+  RecognizeTeamInput,
   RegisterInput,
+  RegisterProfilePhotoInput,
   StudentProfile,
   StudentProfileUpdate,
   StudentRanking,
+  TeamRecognitionResult,
   TrainingSession,
   TrainingSessionInput,
+  UploadUrlRequest,
+  UploadUrlResponse,
   User,
   UserUpdate,
 } from "./api.schemas";
@@ -2392,3 +2401,540 @@ export function useGetRecentActivity<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+export const getRequestUploadUrlUrl = () => {
+  return `/api/storage/uploads/request-url`;
+};
+
+export const requestUploadUrl = async (
+  uploadUrlRequest: UploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getRequestUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uploadUrlRequest),
+  });
+};
+
+export const getRequestUploadUrlMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["requestUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    { data: BodyType<UploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return requestUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RequestUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestUploadUrl>>
+>;
+export type RequestUploadUrlMutationBody = BodyType<UploadUrlRequest>;
+export type RequestUploadUrlMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const useRequestUploadUrl = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestUploadUrl>>,
+    TError,
+    { data: BodyType<UploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof requestUploadUrl>>,
+  TError,
+  { data: BodyType<UploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getRequestUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const getGetPublicObjectUrl = (filePath: string) => {
+  return `/api/storage/public-objects/${filePath}`;
+};
+
+export const getPublicObject = async (
+  filePath: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetPublicObjectUrl(filePath), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicObjectQueryKey = (filePath: string) => {
+  return [`/api/storage/public-objects/${filePath}`] as const;
+};
+
+export const getGetPublicObjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPublicObjectQueryKey(filePath);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicObject>>> = ({
+    signal,
+  }) => getPublicObject(filePath, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!filePath,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicObject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicObjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicObject>>
+>;
+export type GetPublicObjectQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+
+export function useGetPublicObject<
+  TData = Awaited<ReturnType<typeof getPublicObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicObjectQueryOptions(filePath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const getGetStorageObjectUrl = (objectPath: string) => {
+  return `/api/storage/objects/${objectPath}`;
+};
+
+export const getStorageObject = async (
+  objectPath: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetStorageObjectUrl(objectPath), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStorageObjectQueryKey = (objectPath: string) => {
+  return [`/api/storage/objects/${objectPath}`] as const;
+};
+
+export const getGetStorageObjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  objectPath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStorageObjectQueryKey(objectPath);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStorageObject>>
+  > = ({ signal }) =>
+    getStorageObject(objectPath, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!objectPath,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStorageObject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStorageObjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStorageObject>>
+>;
+export type GetStorageObjectQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+
+export function useGetStorageObject<
+  TData = Awaited<ReturnType<typeof getStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  objectPath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStorageObjectQueryOptions(objectPath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Server downloads the uploaded photo, sets it as the user's profile photo,
+and (for students) detects the face and stores the 128-float descriptor used
+as the recognition reference. Returns faceDetected=false if no face is found.
+
+ * @summary Set a user's profile photo and compute their reference face descriptor
+ */
+export const getRegisterProfilePhotoUrl = () => {
+  return `/api/face/profile-photo`;
+};
+
+export const registerProfilePhoto = async (
+  registerProfilePhotoInput: RegisterProfilePhotoInput,
+  options?: RequestInit,
+): Promise<ProfilePhotoResult> => {
+  return customFetch<ProfilePhotoResult>(getRegisterProfilePhotoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(registerProfilePhotoInput),
+  });
+};
+
+export const getRegisterProfilePhotoMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerProfilePhoto>>,
+    TError,
+    { data: BodyType<RegisterProfilePhotoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerProfilePhoto>>,
+  TError,
+  { data: BodyType<RegisterProfilePhotoInput> },
+  TContext
+> => {
+  const mutationKey = ["registerProfilePhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerProfilePhoto>>,
+    { data: BodyType<RegisterProfilePhotoInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerProfilePhoto(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterProfilePhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerProfilePhoto>>
+>;
+export type RegisterProfilePhotoMutationBody =
+  BodyType<RegisterProfilePhotoInput>;
+export type RegisterProfilePhotoMutationError = ErrorType<void>;
+
+/**
+ * @summary Set a user's profile photo and compute their reference face descriptor
+ */
+export const useRegisterProfilePhoto = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerProfilePhoto>>,
+    TError,
+    { data: BodyType<RegisterProfilePhotoInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerProfilePhoto>>,
+  TError,
+  { data: BodyType<RegisterProfilePhotoInput> },
+  TContext
+> => {
+  return useMutation(getRegisterProfilePhotoMutationOptions(options));
+};
+
+/**
+ * Server downloads the team photo, detects every face, and matches each one
+against stored student reference descriptors. Returns each matched student
+with the modalities they train (so attendance can be marked in both).
+
+ * @summary Detect and identify all students in a whole-team post-training photo
+ */
+export const getRecognizeTeamUrl = () => {
+  return `/api/face/recognize-team`;
+};
+
+export const recognizeTeam = async (
+  recognizeTeamInput: RecognizeTeamInput,
+  options?: RequestInit,
+): Promise<TeamRecognitionResult> => {
+  return customFetch<TeamRecognitionResult>(getRecognizeTeamUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(recognizeTeamInput),
+  });
+};
+
+export const getRecognizeTeamMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recognizeTeam>>,
+    TError,
+    { data: BodyType<RecognizeTeamInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recognizeTeam>>,
+  TError,
+  { data: BodyType<RecognizeTeamInput> },
+  TContext
+> => {
+  const mutationKey = ["recognizeTeam"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recognizeTeam>>,
+    { data: BodyType<RecognizeTeamInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recognizeTeam(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecognizeTeamMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recognizeTeam>>
+>;
+export type RecognizeTeamMutationBody = BodyType<RecognizeTeamInput>;
+export type RecognizeTeamMutationError = ErrorType<void>;
+
+/**
+ * @summary Detect and identify all students in a whole-team post-training photo
+ */
+export const useRecognizeTeam = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recognizeTeam>>,
+    TError,
+    { data: BodyType<RecognizeTeamInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recognizeTeam>>,
+  TError,
+  { data: BodyType<RecognizeTeamInput> },
+  TContext
+> => {
+  return useMutation(getRecognizeTeamMutationOptions(options));
+};
+
+/**
+ * For each student, for each modality they train, finds (or creates) today's
+session for that modality and inserts an attendance record if one does not
+already exist. Server-side dedupe prevents duplicate presence.
+
+ * @summary Mark attendance for many students across the modalities they train
+ */
+export const getBulkAttendanceUrl = () => {
+  return `/api/attendance/bulk`;
+};
+
+export const bulkAttendance = async (
+  bulkAttendanceInput: BulkAttendanceInput,
+  options?: RequestInit,
+): Promise<BulkAttendanceResult> => {
+  return customFetch<BulkAttendanceResult>(getBulkAttendanceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkAttendanceInput),
+  });
+};
+
+export const getBulkAttendanceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkAttendance>>,
+    TError,
+    { data: BodyType<BulkAttendanceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkAttendance>>,
+  TError,
+  { data: BodyType<BulkAttendanceInput> },
+  TContext
+> => {
+  const mutationKey = ["bulkAttendance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkAttendance>>,
+    { data: BodyType<BulkAttendanceInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkAttendance(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkAttendanceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkAttendance>>
+>;
+export type BulkAttendanceMutationBody = BodyType<BulkAttendanceInput>;
+export type BulkAttendanceMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark attendance for many students across the modalities they train
+ */
+export const useBulkAttendance = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkAttendance>>,
+    TError,
+    { data: BodyType<BulkAttendanceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkAttendance>>,
+  TError,
+  { data: BodyType<BulkAttendanceInput> },
+  TContext
+> => {
+  return useMutation(getBulkAttendanceMutationOptions(options));
+};

@@ -5,6 +5,7 @@ import {
   useListAttendance, getListAttendanceQueryKey,
   useUpdateStudent,
   getListStudentsQueryKey,
+  registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2 } from "lucide-react";
@@ -12,18 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
+import { uploadImageToStorage } from "@/lib/uploadImage";
 import logoThai from "/logo-thai.png";
 import logoJiu from "/logo-jiu.png";
-
-const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
-
-async function loadFaceApi() {
-  const faceapi = await import("face-api.js");
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
-  return faceapi;
-}
 
 const PRAJIED_GRADES = [
   { value: "branco",                  label: "Branco",                  primary: "white",  secondary: null    },
@@ -116,36 +108,21 @@ export default function StudentDetail() {
     if (!file) return;
     setFaceUploading(true);
     try {
-      const faceapi = await loadFaceApi();
-      const img = await createImageBitmap(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      canvas.getContext("2d")!.drawImage(img, 0, 0);
-      const detection = await faceapi
-        .detectSingleFace(canvas as unknown as HTMLCanvasElement, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      if (!detection) {
-        toast({ title: "Nenhum rosto detectado na foto", variant: "destructive" });
-        return;
-      }
-      const descriptor = Array.from(detection.descriptor);
-      const resp = await fetch(`/api/students/${studentId}/face-descriptor`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ descriptor, photoUrl: null }),
-      });
-      if (!resp.ok) throw new Error("Falha ao salvar");
+      const objectPath = await uploadImageToStorage(file);
+      const result = await registerProfilePhoto({ userId: studentId, objectPath });
       queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
-      toast({ title: "Rosto cadastrado com sucesso!" });
-    } catch (err: any) {
-      if (err?.message !== "Falha ao salvar") {
-        toast({ title: "Erro ao processar a foto", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+      if (result.faceDetected) {
+        toast({ title: "Foto e rosto cadastrados com sucesso!" });
       } else {
-        toast({ title: "Erro ao salvar o descritor", variant: "destructive" });
+        toast({
+          title: "Foto salva, mas nenhum rosto foi detectado",
+          description: "Use uma foto nítida e de frente para o reconhecimento.",
+          variant: "destructive",
+        });
       }
+    } catch {
+      toast({ title: "Erro ao enviar a foto", variant: "destructive" });
     } finally {
       setFaceUploading(false);
       if (faceInputRef.current) faceInputRef.current.value = "";

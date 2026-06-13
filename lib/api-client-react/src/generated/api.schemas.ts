@@ -345,6 +345,85 @@ export interface ActivityItem {
   createdAt: string;
 }
 
+export interface UploadUrlRequest {
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  size: number;
+  /** @minLength 1 */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
+export interface ErrorEnvelope {
+  error: string;
+}
+
+export interface RegisterProfilePhotoInput {
+  userId: number;
+  /** Object path returned by the upload endpoint (e.g. /objects/uploads/uuid). */
+  objectPath: string;
+}
+
+export interface ProfilePhotoResult {
+  faceDetected: boolean;
+  profilePhotoUrl: string;
+  message: string;
+}
+
+export interface RecognizeTeamInput {
+  /** Object path of the uploaded whole-team photo. */
+  objectPath: string;
+}
+
+export interface TeamMatch {
+  studentId: number;
+  name: string;
+  /** @nullable */
+  profilePhotoUrl?: string | null;
+  distance: number;
+  modalityThai: boolean;
+  modalityJiu: boolean;
+}
+
+export interface TeamRecognitionResult {
+  detectedFaces: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  photoUrl: string;
+  matches: TeamMatch[];
+}
+
+export type BulkAttendanceStudentModalitiesItem =
+  (typeof BulkAttendanceStudentModalitiesItem)[keyof typeof BulkAttendanceStudentModalitiesItem];
+
+export const BulkAttendanceStudentModalitiesItem = {
+  thai: "thai",
+  jiu: "jiu",
+} as const;
+
+export interface BulkAttendanceStudent {
+  /** The student profile id. */
+  studentId: number;
+  modalities: BulkAttendanceStudentModalitiesItem[];
+}
+
+export interface BulkAttendanceInput {
+  teacherId: number;
+  photoUrl?: string;
+  students: BulkAttendanceStudent[];
+}
+
+export interface BulkAttendanceResult {
+  created: number;
+  skipped: number;
+}
+
 export type ListUsersParams = {
   role?: ListUsersRole;
   search?: string;

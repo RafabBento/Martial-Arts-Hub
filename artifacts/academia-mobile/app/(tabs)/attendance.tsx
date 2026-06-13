@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import * as ImagePicker from "expo-image-picker";
+import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -26,98 +27,19 @@ import {
   useListUsers,
   getListAttendanceQueryKey,
   getListSessionsQueryKey,
+  recognizeTeam,
+  bulkAttendance,
+  type TeamMatch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { uploadImageToStorage } from "@/lib/uploadImage";
+import { imageUrl } from "@/lib/imageUrl";
 import * as Haptics from "expo-haptics";
 
-type ModelStatus = "idle" | "loading" | "ready" | "error";
-type ScanStatus = "idle" | "scanning" | "upscaling" | "detecting" | "found" | "notfound";
-type AttendMode = "face" | "gallery" | "manual";
-
-interface IdentifyMatch {
-  studentId: number;
-  name: string;
-  profilePhotoUrl: string | null;
-  distance: number;
-  matched: boolean;
-}
-
-const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
-
-function apiBaseUrl() {
-  return process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
-}
-
-async function loadFaceApi() {
-  const faceapi = await import("face-api.js");
-  if (!faceapi.nets.ssdMobilenetv1.isLoaded) {
-    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
-    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
-    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
-  }
-  return faceapi;
-}
-
-// Divide o canvas em tiles cols×rows com sobreposição e detecta rostos em cada
-// tile independentemente, melhorando a detecção de rostos pequenos no fundo.
-async function detectInTiles(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  faceapi: any,
-  canvas: HTMLCanvasElement,
-  onProgress: (tile: number, total: number) => void,
-  opts: { cols?: number; rows?: number; overlap?: number; minConfidence?: number } = {}
-): Promise<Array<{ descriptor: Float32Array }>> {
-  const { cols = 2, rows = 2, overlap = 0.15, minConfidence = 0.3 } = opts;
-  const W = canvas.width;
-  const H = canvas.height;
-  const tileW = Math.ceil(W / cols);
-  const tileH = Math.ceil(H / rows);
-  const overlapPx_x = Math.ceil(tileW * overlap);
-  const overlapPx_y = Math.ceil(tileH * overlap);
-  const allDescriptors: Array<{ descriptor: Float32Array }> = [];
-  const total = cols * rows;
-  let idx = 0;
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const sx = Math.max(0, col * tileW - overlapPx_x);
-      const sy = Math.max(0, row * tileH - overlapPx_y);
-      const sw = Math.min(W - sx, tileW + overlapPx_x * 2);
-      const sh = Math.min(H - sy, tileH + overlapPx_y * 2);
-      const tileCanvas = document.createElement("canvas");
-      tileCanvas.width = sw;
-      tileCanvas.height = sh;
-      tileCanvas.getContext("2d")!.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-      const detections = await faceapi
-        .detectAllFaces(tileCanvas, new faceapi.SsdMobilenetv1Options({ minConfidence }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      allDescriptors.push(...detections);
-      idx++;
-      onProgress(idx, total);
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  }
-  return allDescriptors;
-}
-
-// Remove descritores muito próximos entre si (mesmo rosto detectado em dois tiles).
-function deduplicateDescriptors(
-  descriptors: Array<{ descriptor: Float32Array }>,
-  threshold = 0.35
-): Float32Array[] {
-  const kept: Float32Array[] = [];
-  for (const { descriptor } of descriptors) {
-    const isDup = kept.some((k) => {
-      let sum = 0;
-      for (let i = 0; i < k.length; i++) sum += (k[i] - descriptor[i]) ** 2;
-      return Math.sqrt(sum) < threshold;
-    });
-    if (!isDup) kept.push(descriptor);
-  }
-  return kept;
-}
+type ScanStatus = "idle" | "uploading" | "recognizing" | "found" | "notfound";
+type AttendMode = "team" | "manual";
 
 const WEEKLY_SCHEDULE = [
   { days: [1, 2, 3, 4, 5], hour: 19, minute: 0, modality: "jiu" as const, instructorKey: "Ewerton" },
@@ -151,6 +73,13 @@ function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
+  const list: ("thai" | "jiu")[] = [];
+  if (m.modalityThai) list.push("thai");
+  if (m.modalityJiu) list.push("jiu");
+  return list;
+}
+
 export default function AttendanceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -158,6 +87,7 @@ export default function AttendanceScreen() {
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
+  const [mode, setMode] = useState<AttendMode>("team");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
@@ -166,28 +96,13 @@ export default function AttendanceScreen() {
   const [confirmedIds, setConfirmedIds] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
-  const isWeb = Platform.OS === "web";
-  const [mode, setMode] = useState<AttendMode>(isWeb ? "gallery" : "manual");
-  const [modelStatus, setModelStatus] = useState<ModelStatus>("idle");
+  // Estado do fluxo de reconhecimento (100% servidor)
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
-  const [cameraOn, setCameraOn] = useState(false);
-  const [matches, setMatches] = useState<IdentifyMatch[]>([]);
+  const [matches, setMatches] = useState<TeamMatch[]>([]);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
-  const [galleryScanning, setGalleryScanning] = useState(false);
-  const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null);
-  const [tileProgress, setTileProgress] = useState<{ current: number; total: number } | null>(null);
+  const [teamPhotoUri, setTeamPhotoUri] = useState<string | null>(null);
+  const [teamPhotoUrl, setTeamPhotoUrl] = useState<string | null>(null);
   const [registeringAll, setRegisteringAll] = useState(false);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const videoRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const canvasRef = useRef<any>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const faceApiRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const galleryInputRef = useRef<any>(null);
 
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
@@ -262,217 +177,99 @@ export default function AttendanceScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast("Presença confirmada!");
           setStudentPickerOpen(false);
-          if (faceRecognized && mode === "face" && cameraOn) {
-            setMatches([]);
-            setScanStatus("idle");
-            startContinuousScan();
-          }
         },
         onError: () => showToast("Erro ao registrar presença", "err"),
       }
     );
   };
 
-  // ---------------- Reconhecimento facial (somente web) ----------------
-  const loadModels = useCallback(async () => {
-    if (modelStatus === "ready" || modelStatus === "loading") return;
-    setModelStatus("loading");
+  // ---------------- Reconhecimento 100% no servidor ----------------
+  const pickAndRecognize = async (source: "camera" | "gallery") => {
     try {
-      faceApiRef.current = await loadFaceApi();
-      setModelStatus("ready");
-    } catch {
-      setModelStatus("error");
-      showToast("Erro ao carregar modelos de rosto", "err");
-    }
-  }, [modelStatus]);
-
-  const stopCamera = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraOn(false);
-    setScanStatus("idle");
-    setMatches([]);
-  }, []);
-
-  const startCamera = useCallback(async () => {
-    await loadModels();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      setCameraOn(true);
-    } catch {
-      showToast("Não foi possível acessar a câmera", "err");
-    }
-  }, [loadModels]);
-
-  const scanFaces = useCallback(async () => {
-    const faceapi = faceApiRef.current;
-    if (!faceapi || !videoRef.current) return;
-    if (scanStatus === "scanning") return;
-    setScanStatus("scanning");
-    try {
-      const detections = await faceapi
-        .detectAllFaces(videoRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      if (detections.length === 0) { setScanStatus("idle"); return; }
-      const descriptors = detections.map((d: { descriptor: Float32Array }) => Array.from(d.descriptor));
-      const resp = await fetch(`${apiBaseUrl()}/api/face/identify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ descriptors }),
-      });
-      if (!resp.ok) throw new Error("Identify failed");
-      const result: IdentifyMatch[] = await resp.json();
-      const found = result.filter((r) => r.matched);
-      if (found.length > 0) {
-        setMatches(found);
-        setScanStatus("found");
-        if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+      let perm;
+      if (source === "camera") {
+        perm = await ImagePicker.requestCameraPermissionsAsync();
       } else {
-        setScanStatus("notfound");
-        setTimeout(() => setScanStatus("idle"), 2000);
+        perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       }
-    } catch {
-      setScanStatus("idle");
-    }
-  }, [scanStatus]);
-
-  const startContinuousScan = useCallback(() => {
-    if (intervalRef.current) return;
-    intervalRef.current = setInterval(scanFaces, 3000);
-  }, [scanFaces]);
-
-  const stopContinuousScan = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    setScanStatus("idle");
-    setMatches([]);
-  }, []);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleGalleryScan = async (e: any) => {
-    const file: File | undefined = e.target.files?.[0];
-    if (!file) return;
-    if (!selectedSessionId) { showToast("Selecione uma sessão primeiro", "err"); return; }
-    setGalleryScanning(true);
-    setMatches([]);
-    setUnmatchedCount(0);
-    setScanStatus("scanning");
-    const previewUrl = URL.createObjectURL(file);
-    setGalleryPreviewUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
-    try {
-      if (!faceApiRef.current) faceApiRef.current = await loadFaceApi();
-      const faceapi = faceApiRef.current;
-      const img = await createImageBitmap(file);
-      setScanStatus("upscaling");
-      const MAX_SIDE = 6400;
-      const SCALE = 2;
-      const scaledW = Math.min(img.width * SCALE, MAX_SIDE);
-      const scaledH = Math.round(img.height * (scaledW / img.width));
-      const canvas = document.createElement("canvas");
-      canvas.width = scaledW;
-      canvas.height = scaledH;
-      const ctx = canvas.getContext("2d")!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, scaledW, scaledH);
-      await new Promise((r) => setTimeout(r, 50));
-      setScanStatus("detecting");
-      setTileProgress({ current: 0, total: 4 });
-      const rawDetections = await detectInTiles(faceapi, canvas, (current, total) => {
-        setTileProgress({ current, total });
-      }, { cols: 2, rows: 2, overlap: 0.15, minConfidence: 0.3 });
-      const uniqueDescriptors = deduplicateDescriptors(rawDetections, 0.35);
-      setTileProgress(null);
-      if (uniqueDescriptors.length === 0) {
-        setScanStatus("notfound");
-        showToast("Nenhum rosto detectado na foto", "err");
-        setTimeout(() => setScanStatus("idle"), 2000);
+      if (!perm.granted) {
+        showToast("Permissão negada para câmera/galeria", "err");
         return;
       }
-      const descriptors = uniqueDescriptors.map((d) => Array.from(d));
-      const resp = await fetch(`${apiBaseUrl()}/api/face/identify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ descriptors }),
+      const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ["images"], quality: 0.8 };
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+
+      setMatches([]);
+      setUnmatchedCount(0);
+      setTeamPhotoUri(asset.uri);
+      setScanStatus("uploading");
+
+      const objectPath = await uploadImageToStorage(asset.uri, {
+        name: asset.fileName ?? "equipe.jpg",
+        contentType: asset.mimeType ?? "image/jpeg",
+        size: asset.fileSize,
       });
-      if (!resp.ok) throw new Error("Identify failed");
-      const result: IdentifyMatch[] = await resp.json();
-      const matchMap = new Map<number, IdentifyMatch>();
-      for (const r of result) {
-        if (!r.matched) continue;
-        const existing = matchMap.get(r.studentId);
-        if (!existing || r.distance < existing.distance) matchMap.set(r.studentId, r);
-      }
-      const found = Array.from(matchMap.values());
-      const unmatched = descriptors.length - result.filter((r) => r.matched).length;
-      setUnmatchedCount(Math.max(0, unmatched));
-      if (found.length > 0) {
-        setMatches(found);
+      setScanStatus("recognizing");
+      const res = await recognizeTeam({ objectPath });
+      setUnmatchedCount(res.unmatchedCount);
+      setTeamPhotoUrl(res.photoUrl);
+      if (res.matches.length > 0) {
+        setMatches(res.matches);
         setScanStatus("found");
       } else {
         setScanStatus("notfound");
-        showToast("Nenhum aluno identificado na foto", "err");
-        setTimeout(() => setScanStatus("idle"), 2000);
+        showToast(
+          res.detectedFaces > 0
+            ? `${res.detectedFaces} rosto(s) detectado(s), nenhum cadastrado`
+            : "Nenhum rosto detectado na foto",
+          "err",
+        );
       }
     } catch {
-      setScanStatus("idle");
+      setScanStatus("notfound");
       showToast("Erro ao processar a foto", "err");
-    } finally {
-      setGalleryScanning(false);
-      if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
   };
 
   const handleRegisterAll = async () => {
-    if (!selectedSessionId) return;
-    const toRegister = matches.filter((m) => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId));
+    if (!user) return;
+    const toRegister = matches.filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) { showToast("Todos já estão registrados!"); return; }
     setRegisteringAll(true);
-    let count = 0;
-    for (const m of toRegister) {
-      await new Promise<void>((resolve) => {
-        createAttMutation.mutate(
-          { data: { sessionId: selectedSessionId, studentId: m.studentId, faceRecognized: true } },
-          {
-            onSuccess: () => { setConfirmedIds((prev) => new Set([...prev, m.studentId])); count++; resolve(); },
-            onError: () => resolve(),
-          }
-        );
+    try {
+      const res = await bulkAttendance({
+        teacherId: user.id,
+        photoUrl: teamPhotoUrl ?? undefined,
+        students: toRegister.map(m => ({ studentId: m.studentId, modalities: modalitiesOf(m) })),
       });
+      setConfirmedIds(prev => {
+        const next = new Set(prev);
+        toRegister.forEach(m => next.add(m.studentId));
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+      refetchSessions();
+      refetchAttendance();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(
+        `${res.created} presença${res.created !== 1 ? "s" : ""} registrada${res.created !== 1 ? "s" : ""}!${res.skipped > 0 ? ` (${res.skipped} já existiam)` : ""}`,
+      );
+    } catch {
+      showToast("Erro ao registrar presenças", "err");
+    } finally {
+      setRegisteringAll(false);
     }
-    await queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: selectedSessionId }) });
-    refetchAttendance();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showToast(`${count} presença${count !== 1 ? "s" : ""} registrada${count !== 1 ? "s" : ""}!`);
-    setRegisteringAll(false);
   };
 
   const switchMode = (next: AttendMode) => {
     if (next === mode) return;
-    stopCamera();
-    setMatches([]);
-    setScanStatus("idle");
     setMode(next);
   };
-
-  const galleryPreviewRef = useRef<string | null>(null);
-  useEffect(() => { galleryPreviewRef.current = galleryPreviewUrl; }, [galleryPreviewUrl]);
-
-  useEffect(() => {
-    return () => {
-      stopCamera();
-      if (galleryPreviewRef.current) URL.revokeObjectURL(galleryPreviewRef.current);
-    };
-  }, [stopCamera]);
 
   const filteredStudents = useMemo(() => {
     if (!students) return [];
@@ -516,6 +313,8 @@ export default function AttendanceScreen() {
     );
   }
 
+  const busy = scanStatus === "uploading" || scanStatus === "recognizing";
+
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Toast */}
@@ -530,7 +329,7 @@ export default function AttendanceScreen() {
         <View>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Presença</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Controle de presenças
+            Foto da equipe — reconhecimento no servidor
           </Text>
         </View>
       </View>
@@ -586,49 +385,15 @@ export default function AttendanceScreen() {
           </View>
         )}
 
-        {/* Seletor de sessão */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            SESSÃO DE TREINO
-          </Text>
-          <TouchableOpacity
-            style={[styles.sessionPicker, { borderColor: colors.border, backgroundColor: colors.background }]}
-            onPress={() => setSessionPickerOpen(true)}
-          >
-            <Ionicons name="barbell-outline" size={18} color={colors.mutedForeground} />
-            <Text
-              style={[styles.sessionPickerText, { color: selectedSession ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
-              numberOfLines={1}
-            >
-              {selectedSession
-                ? `${selectedSession.modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"} — ${new Date(selectedSession.sessionDate).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} · Prof. ${selectedSession.teacherName}`
-                : "Selecionar sessão de treino..."
-              }
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
-          </TouchableOpacity>
-        </View>
-
         {/* Seletor de modo */}
         <View style={styles.modeRow}>
-          {isWeb && (
-            <TouchableOpacity
-              style={[styles.modeBtn, { borderColor: mode === "face" ? colors.primary : colors.border, backgroundColor: mode === "face" ? colors.primary : "transparent" }]}
-              onPress={() => switchMode("face")}
-            >
-              <Ionicons name="scan-outline" size={16} color={mode === "face" ? "#fff" : colors.mutedForeground} />
-              <Text style={[styles.modeBtnText, { color: mode === "face" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Câmera</Text>
-            </TouchableOpacity>
-          )}
-          {isWeb && (
-            <TouchableOpacity
-              style={[styles.modeBtn, { borderColor: mode === "gallery" ? colors.primary : colors.border, backgroundColor: mode === "gallery" ? colors.primary : "transparent" }]}
-              onPress={() => switchMode("gallery")}
-            >
-              <Ionicons name="images-outline" size={16} color={mode === "gallery" ? "#fff" : colors.mutedForeground} />
-              <Text style={[styles.modeBtnText, { color: mode === "gallery" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Galeria</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.modeBtn, { borderColor: mode === "team" ? colors.primary : colors.border, backgroundColor: mode === "team" ? colors.primary : "transparent" }]}
+            onPress={() => switchMode("team")}
+          >
+            <Ionicons name="images-outline" size={16} color={mode === "team" ? "#fff" : colors.mutedForeground} />
+            <Text style={[styles.modeBtnText, { color: mode === "team" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Foto da equipe</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.modeBtn, { borderColor: mode === "manual" ? colors.primary : colors.border, backgroundColor: mode === "manual" ? colors.primary : "transparent" }]}
             onPress={() => switchMode("manual")}
@@ -638,135 +403,21 @@ export default function AttendanceScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Aviso nativo: reconhecimento só na web */}
-        {!isWeb && (
-          <View style={[styles.noBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.noBannerText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1 }]}>
-              O reconhecimento facial (câmera e foto) está disponível na versão web. Aqui use o registro manual.
-            </Text>
-          </View>
-        )}
-
-        {/* Modo CÂMERA (web) */}
-        {isWeb && mode === "face" && (
+        {/* Modo FOTO DA EQUIPE (servidor) */}
+        {mode === "team" && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-            <View style={styles.cameraBox}>
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraOn ? "block" : "none" }}
-              />
-              <canvas ref={canvasRef} style={{ display: "none" }} />
-              {!cameraOn && (
-                <View style={styles.cameraOff}>
-                  <Ionicons name="camera-outline" size={44} color={colors.mutedForeground} />
-                  <Text style={[styles.cameraOffText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Câmera desligada</Text>
-                </View>
-              )}
-              {cameraOn && (
-                <View
-                  pointerEvents="none"
-                  style={[styles.cameraBorder, {
-                    borderColor: scanStatus === "found" ? "#4ade80"
-                      : scanStatus === "notfound" ? "rgba(239,68,68,0.6)"
-                      : scanStatus === "scanning" ? colors.primary + "99"
-                      : "transparent",
-                  }]}
-                />
-              )}
-            </View>
-            <View style={{ padding: 16, gap: 12 }}>
-              {modelStatus === "loading" && (
-                <View style={styles.inlineRow}>
-                  <ActivityIndicator size="small" color={colors.mutedForeground} />
-                  <Text style={[styles.inlineText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Carregando modelos de reconhecimento...</Text>
-                </View>
-              )}
-              {modelStatus === "error" && (
-                <View style={styles.inlineRow}>
-                  <Ionicons name="close-circle" size={14} color={colors.primary} />
-                  <Text style={[styles.inlineText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>Falha ao carregar modelos</Text>
-                </View>
-              )}
-              <View style={styles.cameraBtns}>
-                {!cameraOn ? (
-                  <TouchableOpacity
-                    style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                    onPress={startCamera}
-                    disabled={modelStatus === "loading"}
-                  >
-                    {modelStatus === "loading"
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <><Ionicons name="camera-outline" size={18} color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Ligar Câmera</Text></>}
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.outlineBtn, { borderColor: colors.border }]}
-                      onPress={stopCamera}
-                    >
-                      <Text style={[styles.outlineBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Desligar</Text>
-                    </TouchableOpacity>
-                    {!intervalRef.current ? (
-                      <TouchableOpacity
-                        style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1 }]}
-                        onPress={() => { startContinuousScan(); scanFaces(); }}
-                        disabled={!selectedSessionId}
-                      >
-                        <Ionicons name="flash-outline" size={18} color="#fff" />
-                        <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Iniciar Varredura</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        style={[styles.outlineBtn, { borderColor: colors.border, flex: 1 }]}
-                        onPress={stopContinuousScan}
-                      >
-                        <Text style={[styles.outlineBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Parar Varredura</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
-              </View>
-              {scanStatus === "scanning" && (
-                <View style={styles.inlineRow}>
-                  <ActivityIndicator size="small" color={colors.mutedForeground} />
-                  <Text style={[styles.inlineText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Analisando rosto...</Text>
-                </View>
-              )}
-              {scanStatus === "notfound" && (
-                <View style={styles.inlineRow}>
-                  <Ionicons name="close-circle" size={14} color="#f87171" />
-                  <Text style={[styles.inlineText, { color: "#f87171", fontFamily: "Inter_400Regular" }]}>Rosto não identificado na base</Text>
-                </View>
-              )}
-              {!selectedSessionId && (
-                <Text style={[styles.warnText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>⚠ Selecione uma sessão antes de escanear</Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Modo GALERIA (web) */}
-        {isWeb && mode === "gallery" && (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-            {galleryPreviewUrl && (
+            {teamPhotoUri && (
               <View style={styles.galleryPreviewWrap}>
-                <Image source={{ uri: galleryPreviewUrl }} style={styles.galleryPreview} resizeMode="cover" />
-                {galleryScanning && (
+                <Image source={{ uri: teamPhotoUri }} style={styles.galleryPreview} resizeMode="cover" />
+                {busy && (
                   <View style={styles.galleryOverlay}>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={[styles.galleryOverlayText, { fontFamily: "Inter_600SemiBold" }]}>
-                      {scanStatus === "upscaling"
-                        ? "Ampliando imagem…"
-                        : scanStatus === "detecting" && tileProgress
-                        ? `Varrendo região ${tileProgress.current} de ${tileProgress.total}…`
-                        : "Analisando…"}
+                      {scanStatus === "uploading" ? "Enviando foto…" : "Reconhecendo rostos no servidor…"}
                     </Text>
                   </View>
                 )}
-                {matches.length > 0 && !galleryScanning && (
+                {matches.length > 0 && !busy && (
                   <View style={styles.galleryBadge}>
                     <Ionicons name="checkmark-circle" size={13} color="#4ade80" />
                     <Text style={[styles.galleryBadgeText, { fontFamily: "Inter_600SemiBold" }]}>
@@ -779,48 +430,46 @@ export default function AttendanceScreen() {
             <View style={{ padding: 16, gap: 12 }}>
               <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>FOTO PÓS-TREINO</Text>
               <Text style={[styles.galleryHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Envie a foto do grupo para registrar as presenças automaticamente.
+                Envie a foto do grupo — o servidor identifica cada aluno e marca a presença em todas as modalidades que ele treina.
               </Text>
-              <input
-                ref={galleryInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                style={{ display: "none" }}
-                onChange={handleGalleryScan}
-              />
-              <TouchableOpacity
-                style={[styles.addStudentBtn, { backgroundColor: colors.primary, opacity: galleryScanning || !selectedSessionId ? 0.6 : 1 }]}
-                onPress={() => galleryInputRef.current?.click()}
-                disabled={galleryScanning || !selectedSessionId}
-              >
-                {galleryScanning
-                  ? <><ActivityIndicator size="small" color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Analisando foto...</Text></>
-                  : <><Ionicons name="image-outline" size={18} color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>{galleryPreviewUrl ? "Trocar foto" : "Enviar foto do grupo"}</Text></>}
-              </TouchableOpacity>
-              {!selectedSessionId && (
-                <Text style={[styles.warnText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>⚠ Selecione uma sessão antes de enviar a foto</Text>
-              )}
-              {scanStatus === "notfound" && !galleryScanning && (
+              <View style={styles.cameraBtns}>
+                <TouchableOpacity
+                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: busy ? 0.6 : 1 }]}
+                  onPress={() => pickAndRecognize("camera")}
+                  disabled={busy}
+                >
+                  <Ionicons name="camera-outline" size={18} color="#fff" />
+                  <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Câmera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: busy ? 0.6 : 1 }]}
+                  onPress={() => pickAndRecognize("gallery")}
+                  disabled={busy}
+                >
+                  <Ionicons name="image-outline" size={18} color="#fff" />
+                  <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Galeria</Text>
+                </TouchableOpacity>
+              </View>
+              {scanStatus === "notfound" && !busy && (
                 <View style={styles.inlineRow}>
                   <Ionicons name="close-circle" size={14} color="#f87171" />
-                  <Text style={[styles.inlineText, { color: "#f87171", fontFamily: "Inter_400Regular", flex: 1 }]}>Nenhum aluno identificado — verifique se os rostos estão cadastrados.</Text>
+                  <Text style={[styles.inlineText, { color: "#f87171", fontFamily: "Inter_400Regular", flex: 1 }]}>Nenhum aluno identificado — verifique se os rostos têm foto de perfil cadastrada.</Text>
                 </View>
               )}
             </View>
           </View>
         )}
 
-        {/* Rostos identificados (câmera/galeria) */}
-        {isWeb && mode !== "manual" && matches.length > 0 && (
+        {/* Alunos identificados (team) */}
+        {mode === "team" && matches.length > 0 && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.inlineRow}>
               <Ionicons name="checkmark-circle" size={16} color="#4ade80" />
               <Text style={[styles.cardLabel, { color: "#4ade80", fontFamily: "Inter_700Bold" }]}>
-                {matches.length} ROSTO{matches.length !== 1 ? "S" : ""} IDENTIFICADO{matches.length !== 1 ? "S" : ""}
+                {matches.length} ALUNO{matches.length !== 1 ? "S" : ""} IDENTIFICADO{matches.length !== 1 ? "S" : ""}
               </Text>
             </View>
-            {matches.some(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)) && (
+            {matches.some(m => !confirmedIds.has(m.studentId)) && (
               <TouchableOpacity
                 style={[styles.addStudentBtn, { backgroundColor: colors.primary, opacity: registeringAll ? 0.6 : 1 }]}
                 onPress={handleRegisterAll}
@@ -829,65 +478,90 @@ export default function AttendanceScreen() {
                 {registeringAll
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <><Ionicons name="checkmark-done-outline" size={18} color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>
-                      Registrar {matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}
+                      Registrar {matches.filter(m => !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}
                     </Text></>}
               </TouchableOpacity>
             )}
             {matches.map((m) => {
-              const alreadyIn = attendedIds.has(m.studentId) || confirmedIds.has(m.studentId);
+              const alreadyIn = confirmedIds.has(m.studentId);
               const initials = m.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+              const mods = modalitiesOf(m);
               return (
                 <View key={m.studentId} style={[styles.attendRow, { borderBottomColor: colors.border }]}>
                   {m.profilePhotoUrl
-                    ? <Image source={{ uri: m.profilePhotoUrl }} style={styles.attendAvatar} />
+                    ? <Image source={{ uri: imageUrl(m.profilePhotoUrl) }} style={styles.attendAvatar} />
                     : <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
                         <Text style={[styles.attendInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
                       </View>}
                   <View style={styles.attendInfo}>
                     <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{m.name}</Text>
-                    <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Confiança: {((1 - m.distance) * 100).toFixed(0)}%
-                    </Text>
+                    <View style={styles.modBadgeRow}>
+                      {mods.map(mod => (
+                        <View key={mod} style={[styles.modBadge, { backgroundColor: mod === "thai" ? "rgba(239,68,68,0.18)" : "rgba(59,130,246,0.18)" }]}>
+                          <Text style={[styles.modBadgeText, { color: mod === "thai" ? "#f87171" : "#60a5fa", fontFamily: "Inter_700Bold" }]}>
+                            {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+                          </Text>
+                        </View>
+                      ))}
+                      <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {((1 - m.distance) * 100).toFixed(0)}%
+                      </Text>
+                    </View>
                   </View>
-                  {alreadyIn ? (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => confirmAttendance(m.studentId, true)}
-                      disabled={createAttMutation.isPending}
-                    >
-                      <Ionicons name="person-add-outline" size={14} color="#fff" />
-                      <Text style={[styles.confirmBtnText, { fontFamily: "Inter_600SemiBold" }]}>Confirmar</Text>
-                    </TouchableOpacity>
-                  )}
+                  {alreadyIn && <Ionicons name="checkmark-circle" size={20} color={colors.success} />}
                 </View>
               );
             })}
+            {unmatchedCount > 0 && (
+              <Text style={[styles.warnText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} não identificado{unmatchedCount !== 1 ? "s" : ""} — adicione a foto de perfil desses alunos.
+              </Text>
+            )}
           </View>
         )}
 
-        {/* Registrar presença manual */}
-        {selectedSessionId && mode === "manual" && (
+        {/* Modo MANUAL */}
+        {mode === "manual" && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-              REGISTRAR PRESENÇA
+              SESSÃO DE TREINO
             </Text>
             <TouchableOpacity
-              style={[styles.addStudentBtn, { backgroundColor: colors.primary }]}
-              onPress={() => { setStudentSearch(""); setStudentPickerOpen(true); }}
-              activeOpacity={0.85}
+              style={[styles.sessionPicker, { borderColor: colors.border, backgroundColor: colors.background }]}
+              onPress={() => setSessionPickerOpen(true)}
             >
-              <Ionicons name="person-add-outline" size={18} color="#fff" />
-              <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>
-                Adicionar Aluno Manualmente
+              <Ionicons name="barbell-outline" size={18} color={colors.mutedForeground} />
+              <Text
+                style={[styles.sessionPickerText, { color: selectedSession ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+                numberOfLines={1}
+              >
+                {selectedSession
+                  ? `${selectedSession.modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"} — ${new Date(selectedSession.sessionDate).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+                  : "Selecionar sessão de treino..."
+                }
               </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.mutedForeground} />
             </TouchableOpacity>
+
+            {selectedSessionId ? (
+              <TouchableOpacity
+                style={[styles.addStudentBtn, { backgroundColor: colors.primary }]}
+                onPress={() => { setStudentSearch(""); setStudentPickerOpen(true); }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="person-add-outline" size={18} color="#fff" />
+                <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>
+                  Adicionar Aluno Manualmente
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.warnText, { color: colors.primary, fontFamily: "Inter_400Regular" }]}>⚠ Selecione uma sessão para adicionar presenças</Text>
+            )}
           </View>
         )}
 
-        {/* Lista de presentes */}
-        {selectedSessionId && (
+        {/* Lista de presentes (manual) */}
+        {mode === "manual" && selectedSessionId && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.attendListHeader}>
               <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -908,7 +582,7 @@ export default function AttendanceScreen() {
                     key={att.id}
                     style={[styles.attendRow, { borderBottomColor: colors.border }]}
                   >
-                    <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22" }]}>
+                    <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
                       <Text style={[styles.attendInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
                         {initials}
                       </Text>
@@ -934,15 +608,6 @@ export default function AttendanceScreen() {
                 </Text>
               </View>
             )}
-          </View>
-        )}
-
-        {!selectedSessionId && (
-          <View style={styles.noSessionHint}>
-            <Ionicons name="finger-print-outline" size={48} color={colors.mutedForeground} />
-            <Text style={[styles.noSessionText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Selecione ou crie uma sessão para registrar presenças
-            </Text>
           </View>
         )}
       </ScrollView>
@@ -997,7 +662,7 @@ export default function AttendanceScreen() {
           <Text style={[styles.modalTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
             Adicionar Aluno
           </Text>
-          <View style={[styles.searchWrap, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.background }]}>
             <Ionicons name="search-outline" size={16} color={colors.mutedForeground} />
             <TextInput
               style={[styles.searchInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
@@ -1085,13 +750,7 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, borderWidth: 1, paddingVertical: 10 },
   modeBtnText: { fontSize: 13 },
 
-  cameraBox: { width: "100%", aspectRatio: 16 / 10, backgroundColor: "#000", alignItems: "center", justifyContent: "center", position: "relative" },
-  cameraOff: { alignItems: "center", gap: 8 },
-  cameraOffText: { fontSize: 13 },
-  cameraBorder: { ...StyleSheet.absoluteFillObject, borderWidth: 4 },
   cameraBtns: { flexDirection: "row", gap: 8 },
-  outlineBtn: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 13, alignItems: "center", justifyContent: "center" },
-  outlineBtnText: { fontSize: 14 },
   inlineRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   inlineText: { fontSize: 13 },
   warnText: { fontSize: 12, textAlign: "center" },
@@ -1104,8 +763,9 @@ const styles = StyleSheet.create({
   galleryBadgeText: { color: "#fff", fontSize: 11 },
   galleryHint: { fontSize: 12, lineHeight: 17 },
 
-  confirmBtn: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  confirmBtnText: { color: "#fff", fontSize: 12 },
+  modBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3, flexWrap: "wrap" },
+  modBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  modBadgeText: { fontSize: 9, letterSpacing: 0.3 },
 
   attendListHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   countBadge: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
@@ -1120,9 +780,6 @@ const styles = StyleSheet.create({
 
   emptyAttend: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyAttendText: { fontSize: 13 },
-
-  noSessionHint: { alignItems: "center", paddingVertical: 48, gap: 12 },
-  noSessionText: { fontSize: 14, textAlign: "center", maxWidth: 240 },
 
   restricted: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
   restrictedIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },

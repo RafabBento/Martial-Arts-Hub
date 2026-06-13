@@ -556,3 +556,117 @@ export const GetRecentActivityResponseItem = zod.object({
 export const GetRecentActivityResponse = zod.array(
   GetRecentActivityResponseItem,
 );
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1),
+  size: zod.number().min(1),
+  contentType: zod.string().min(1),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url(),
+  objectPath: zod.string(),
+  metadata: zod
+    .object({
+      name: zod.string().min(1),
+      size: zod.number().min(1),
+      contentType: zod.string().min(1),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const GetPublicObjectParams = zod.object({
+  filePath: zod.coerce.string(),
+});
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const GetStorageObjectParams = zod.object({
+  objectPath: zod.coerce.string(),
+});
+
+/**
+ * Server downloads the uploaded photo, sets it as the user's profile photo,
+and (for students) detects the face and stores the 128-float descriptor used
+as the recognition reference. Returns faceDetected=false if no face is found.
+
+ * @summary Set a user's profile photo and compute their reference face descriptor
+ */
+export const RegisterProfilePhotoBody = zod.object({
+  userId: zod.number(),
+  objectPath: zod
+    .string()
+    .describe(
+      "Object path returned by the upload endpoint (e.g. \/objects\/uploads\/uuid).",
+    ),
+});
+
+export const RegisterProfilePhotoResponse = zod.object({
+  faceDetected: zod.boolean(),
+  profilePhotoUrl: zod.string(),
+  message: zod.string(),
+});
+
+/**
+ * Server downloads the team photo, detects every face, and matches each one
+against stored student reference descriptors. Returns each matched student
+with the modalities they train (so attendance can be marked in both).
+
+ * @summary Detect and identify all students in a whole-team post-training photo
+ */
+export const RecognizeTeamBody = zod.object({
+  objectPath: zod
+    .string()
+    .describe("Object path of the uploaded whole-team photo."),
+});
+
+export const RecognizeTeamResponse = zod.object({
+  detectedFaces: zod.number(),
+  matchedCount: zod.number(),
+  unmatchedCount: zod.number(),
+  photoUrl: zod.string(),
+  matches: zod.array(
+    zod.object({
+      studentId: zod.number(),
+      name: zod.string(),
+      profilePhotoUrl: zod.string().nullish(),
+      distance: zod.number(),
+      modalityThai: zod.boolean(),
+      modalityJiu: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * For each student, for each modality they train, finds (or creates) today's
+session for that modality and inserts an attendance record if one does not
+already exist. Server-side dedupe prevents duplicate presence.
+
+ * @summary Mark attendance for many students across the modalities they train
+ */
+export const BulkAttendanceBody = zod.object({
+  teacherId: zod.number(),
+  photoUrl: zod.string().optional(),
+  students: zod.array(
+    zod.object({
+      studentId: zod.number().describe("The student profile id."),
+      modalities: zod.array(zod.enum(["thai", "jiu"])),
+    }),
+  ),
+});
+
+export const BulkAttendanceResponse = zod.object({
+  created: zod.number(),
+  skipped: zod.number(),
+});

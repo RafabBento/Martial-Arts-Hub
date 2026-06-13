@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import React, { useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -23,11 +24,14 @@ import {
   getGetStudentQueryKey,
   getListStudentsQueryKey,
   getListAttendanceQueryKey,
+  registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { ModalityBadge } from "@/components/ModalityBadge";
+import { uploadImageToStorage } from "@/lib/uploadImage";
+import { imageUrl } from "@/lib/imageUrl";
 
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
@@ -116,7 +120,6 @@ export default function StudentDetailScreen() {
   const [jiuColorPickerOpen, setJiuColorPickerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [faceUploading, setFaceUploading] = useState(false);
-  const faceInputRef = useRef<any>(null);
 
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) },
@@ -134,49 +137,46 @@ export default function StudentDetailScreen() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
-
-  const handleGalleryFace = async (file: File) => {
-    if (Platform.OS !== "web") return;
-    setFaceUploading(true);
+  const handlePickFace = async (source: "camera" | "gallery") => {
     try {
-      const faceapi = await import("face-api.js");
-      if (!faceapi.nets.ssdMobilenetv1.isLoaded) {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
-      }
-      const img = await createImageBitmap(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      canvas.getContext("2d")!.drawImage(img, 0, 0);
-      const detection = await (faceapi as any)
-        .detectSingleFace(canvas, new (faceapi as any).SsdMobilenetv1Options({ minConfidence: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      if (!detection) {
-        showToast("Nenhum rosto detectado na foto");
+      const perm = source === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        showToast("Permissão negada para câmera/galeria");
         return;
       }
-      const descriptor = Array.from(detection.descriptor);
-      const baseUrl = process.env.EXPO_PUBLIC_DOMAIN
-        ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-        : "";
-      const resp = await fetch(`${baseUrl}/api/students/${studentId}/face-descriptor`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ descriptor, photoUrl: null }),
+      const opts: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      };
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+
+      setFaceUploading(true);
+      const objectPath = await uploadImageToStorage(asset.uri, {
+        name: asset.fileName ?? "rosto.jpg",
+        contentType: asset.mimeType ?? "image/jpeg",
+        size: asset.fileSize,
       });
-      if (!resp.ok) throw new Error("Falha ao salvar");
+      const res = await registerProfilePhoto({ userId: studentId, objectPath });
       queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast("Rosto cadastrado com sucesso!");
-    } catch (err: any) {
-      showToast(err?.message === "Falha ao salvar" ? "Erro ao salvar o descritor" : "Erro ao processar a foto");
+      queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+      if (res.faceDetected) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast("Foto e rosto cadastrados com sucesso!");
+      } else {
+        showToast("Foto salva, mas nenhum rosto foi detectado");
+      }
+    } catch {
+      showToast("Erro ao enviar a foto");
     } finally {
       setFaceUploading(false);
-      if (faceInputRef.current) faceInputRef.current.value = "";
     }
   };
 
@@ -257,7 +257,7 @@ export default function StudentDetailScreen() {
         {/* Avatar + identidade */}
         <View style={styles.avatarBlock}>
           {student.profilePhotoUrl ? (
-            <Image source={{ uri: student.profilePhotoUrl }} style={styles.avatar} />
+            <Image source={{ uri: imageUrl(student.profilePhotoUrl) }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
               <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
@@ -511,54 +511,48 @@ export default function StudentDetailScreen() {
             </Text>
           </View>
 
-          {isMaster && Platform.OS === "web" && (
-            <>
-              {/* Hidden file input — web only */}
-              <input
-                ref={faceInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e: any) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleGalleryFace(file);
-                }}
-              />
-              <TouchableOpacity
-                style={[styles.faceBtn, {
-                  backgroundColor: colors.primary + "15",
-                  borderColor: colors.primary + "40",
-                  opacity: faceUploading ? 0.6 : 1,
-                }]}
-                onPress={() => faceInputRef.current?.click()}
-                disabled={faceUploading}
-              >
-                {faceUploading ? (
-                  <>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                      Processando...
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="images-outline" size={16} color={colors.primary} />
-                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                      {student.hasFaceDescriptor ? "Atualizar foto da galeria" : "Cadastrar pela galeria"}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-
-          {isMaster && Platform.OS !== "web" && (
-            <View style={[styles.faceNativeHint, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Ionicons name="information-circle-outline" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.faceHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", flex: 1 }]}>
-                Para cadastrar o rosto, acesse a versão web no computador.
-              </Text>
-            </View>
+          {isMaster && (
+            faceUploading ? (
+              <View style={[styles.faceBtn, {
+                backgroundColor: colors.primary + "15",
+                borderColor: colors.primary + "40",
+                opacity: 0.7,
+              }]}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  Enviando...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.faceBtnRow}>
+                <TouchableOpacity
+                  style={[styles.faceBtn, {
+                    backgroundColor: colors.primary + "15",
+                    borderColor: colors.primary + "40",
+                    flex: 1,
+                  }]}
+                  onPress={() => handlePickFace("camera")}
+                >
+                  <Ionicons name="camera-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                    Câmera
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.faceBtn, {
+                    backgroundColor: colors.primary + "15",
+                    borderColor: colors.primary + "40",
+                    flex: 1,
+                  }]}
+                  onPress={() => handlePickFace("gallery")}
+                >
+                  <Ionicons name="images-outline" size={16} color={colors.primary} />
+                  <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                    {student.hasFaceDescriptor ? "Atualizar" : "Galeria"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )
           )}
 
           {!isMaster && !student.hasFaceDescriptor && (
@@ -735,10 +729,7 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 10, borderWidth: 1, padding: 12,
   },
   faceBtnText: { fontSize: 14 },
-  faceNativeHint: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    borderRadius: 10, borderWidth: 1, padding: 10,
-  },
+  faceBtnRow: { flexDirection: "row", gap: 8 },
 
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 4 },

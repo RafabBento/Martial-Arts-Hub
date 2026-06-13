@@ -8,6 +8,8 @@ import attendanceRouter from "./attendance";
 import rankingsRouter from "./rankings";
 import statsRouter from "./stats";
 import paymentsRouter from "./payments";
+import storageRouter from "./storage";
+import faceRouter from "./face";
 
 const router: IRouter = Router();
 
@@ -20,5 +22,7 @@ router.use(attendanceRouter);
 router.use(rankingsRouter);
 router.use(statsRouter);
 router.use(paymentsRouter);
+router.use(storageRouter);
+router.use(faceRouter);
 
 export default router;

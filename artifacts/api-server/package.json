@@ -10,8 +10,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@napi-rs/canvas": "^1.0.0",
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "4.22.0",
     "@types/express-session": "^1.19.0",
     "@vladmandic/face-api": "^1.7.15",
     "@workspace/api-zod": "workspace:*",
@@ -21,6 +23,7 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "express-session": "^1.19.0",
+    "google-auth-library": "^10.7.0",
     "pino": "^9",
     "pino-http": "^10"
   },

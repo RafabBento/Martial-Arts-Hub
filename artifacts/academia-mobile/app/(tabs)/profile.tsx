@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { Redirect } from "expo-router";
 import React, { useState, useEffect } from "react";
 import {
@@ -23,11 +24,14 @@ import {
   useGetStudent,
   getListUsersQueryKey,
   getGetStudentQueryKey,
+  registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { ModalityBadge } from "@/components/ModalityBadge";
+import { uploadImageToStorage } from "@/lib/uploadImage";
+import { imageUrl } from "@/lib/imageUrl";
 
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
@@ -126,6 +130,8 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [modality, setModality] = useState<"thai" | "jiu">("thai");
   const [toast, setToast] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
 
   // Edit fields
   const [editName, setEditName] = useState("");
@@ -173,6 +179,54 @@ export default function ProfileScreen() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
+  };
+
+  const handlePickPhoto = async (source: "camera" | "gallery") => {
+    setPhotoSheetOpen(false);
+    if (!user) return;
+    try {
+      let perm;
+      if (source === "camera") {
+        perm = await ImagePicker.requestCameraPermissionsAsync();
+      } else {
+        perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      }
+      if (!perm.granted) {
+        showToast("Permissão negada para acessar a câmera/galeria");
+        return;
+      }
+      const opts: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      };
+      const result = source === "camera"
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+
+      setPhotoBusy(true);
+      const objectPath = await uploadImageToStorage(asset.uri, {
+        name: asset.fileName ?? "perfil.jpg",
+        contentType: asset.mimeType ?? "image/jpeg",
+        size: asset.fileSize,
+      });
+      const res = await registerProfilePhoto({ userId: user.id, objectPath });
+      setUser({ ...user, profilePhotoUrl: res.profilePhotoUrl });
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast(
+        res.faceDetected
+          ? "Foto de perfil atualizada! Rosto cadastrado."
+          : "Foto salva, mas nenhum rosto foi detectado. Use uma foto nítida do seu rosto.",
+      );
+    } catch {
+      showToast("Erro ao enviar a foto");
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
   const handleSave = () => {
@@ -331,13 +385,20 @@ export default function ProfileScreen() {
         {/* Card de identidade */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.avatarRow}>
-            {user.profilePhotoUrl ? (
-              <Image source={{ uri: user.profilePhotoUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
-                <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
+            <Pressable onPress={() => setPhotoSheetOpen(true)} disabled={photoBusy} style={styles.avatarWrap}>
+              {user.profilePhotoUrl ? (
+                <Image source={{ uri: imageUrl(user.profilePhotoUrl) }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
+                  <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
+                </View>
+              )}
+              <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+                {photoBusy
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="camera" size={14} color="#fff" />}
               </View>
-            )}
+            </Pressable>
             <View style={styles.nameBlock}>
               <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{user.name}</Text>
               <Text style={[styles.email, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{user.email}</Text>
@@ -726,6 +787,32 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Sheet de foto de perfil */}
+      <Modal visible={photoSheetOpen} transparent animationType="slide" onRequestClose={() => setPhotoSheetOpen(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setPhotoSheetOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Foto de perfil</Text>
+            <Text style={[styles.sheetSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              Use uma foto nítida do seu rosto — ela é usada no reconhecimento facial da presença.
+            </Text>
+            <TouchableOpacity
+              style={[styles.sheetRow, { borderColor: colors.border }]}
+              onPress={() => handlePickPhoto("camera")}
+            >
+              <Ionicons name="camera-outline" size={20} color={colors.primary} />
+              <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Tirar foto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetRow, { borderColor: colors.border }]}
+              onPress={() => handlePickPhoto("gallery")}
+            >
+              <Ionicons name="images-outline" size={20} color={colors.primary} />
+              <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Escolher da galeria</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -765,7 +852,13 @@ const styles = StyleSheet.create({
 
   card: { borderRadius: 16, borderWidth: 1, padding: 18, gap: 12 },
   avatarRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  avatarWrap: { position: "relative" },
   avatar: { width: 66, height: 66, borderRadius: 33 },
+  avatarBadge: {
+    position: "absolute", right: -2, bottom: -2,
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
   initials: { fontSize: 26 },
   nameBlock: { flex: 1, gap: 4 },
   name: { fontSize: 18 },
@@ -805,6 +898,7 @@ const styles = StyleSheet.create({
   sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: 18, gap: 8 },
   sheetTitle: { fontSize: 16, marginBottom: 6 },
+  sheetSubtitle: { fontSize: 12, lineHeight: 17, marginBottom: 12 },
   sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 6 },
   sheetRowText: { fontSize: 14, flex: 1 },
   degreeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 2 },

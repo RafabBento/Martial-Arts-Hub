@@ -25,6 +25,8 @@ tags:
     description: Attendance rankings
   - name: stats
     description: Dashboard statistics
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 
 paths:
   /healthz:
@@ -604,6 +606,169 @@ paths:
                 items:
                   $ref: "#/components/schemas/ActivityItem"
 
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /storage/objects/{objectPath}:
+    get:
+      tags: [Storage]
+      operationId: getStorageObject
+      summary: Serve an object entity from PRIVATE_OBJECT_DIR
+      parameters:
+        - name: objectPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Object not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /face/profile-photo:
+    post:
+      operationId: registerProfilePhoto
+      tags: [face]
+      summary: Set a user's profile photo and compute their reference face descriptor
+      description: |
+        Server downloads the uploaded photo, sets it as the user's profile photo,
+        and (for students) detects the face and stores the 128-float descriptor used
+        as the recognition reference. Returns faceDetected=false if no face is found.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterProfilePhotoInput"
+      responses:
+        "200":
+          description: Profile photo saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfilePhotoResult"
+        "400":
+          description: Bad request
+        "404":
+          description: User not found
+
+  /face/recognize-team:
+    post:
+      operationId: recognizeTeam
+      tags: [face]
+      summary: Detect and identify all students in a whole-team post-training photo
+      description: |
+        Server downloads the team photo, detects every face, and matches each one
+        against stored student reference descriptors. Returns each matched student
+        with the modalities they train (so attendance can be marked in both).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecognizeTeamInput"
+      responses:
+        "200":
+          description: Recognition result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamRecognitionResult"
+        "400":
+          description: Bad request
+
+  /attendance/bulk:
+    post:
+      operationId: bulkAttendance
+      tags: [attendance]
+      summary: Mark attendance for many students across the modalities they train
+      description: |
+        For each student, for each modality they train, finds (or creates) today's
+        session for that modality and inserts an attendance record if one does not
+        already exist. Server-side dedupe prevents duplicate presence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkAttendanceInput"
+      responses:
+        "200":
+          description: Bulk attendance result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkAttendanceResult"
+        "400":
+          description: Bad request
+
 components:
   schemas:
     HealthStatus:
@@ -1058,3 +1223,127 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        size:
+          type: integer
+          minimum: 1
+        contentType:
+          type: string
+          minLength: 1
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+        objectPath:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/UploadUrlRequest"
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    RegisterProfilePhotoInput:
+      type: object
+      required: [userId, objectPath]
+      properties:
+        userId:
+          type: integer
+        objectPath:
+          type: string
+          description: Object path returned by the upload endpoint (e.g. /objects/uploads/uuid).
+    ProfilePhotoResult:
+      type: object
+      required: [faceDetected, profilePhotoUrl, message]
+      properties:
+        faceDetected:
+          type: boolean
+        profilePhotoUrl:
+          type: string
+        message:
+          type: string
+
+    RecognizeTeamInput:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath:
+          type: string
+          description: Object path of the uploaded whole-team photo.
+    TeamMatch:
+      type: object
+      required: [studentId, name, distance, modalityThai, modalityJiu]
+      properties:
+        studentId:
+          type: integer
+        name:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        distance:
+          type: number
+        modalityThai:
+          type: boolean
+        modalityJiu:
+          type: boolean
+    TeamRecognitionResult:
+      type: object
+      required: [detectedFaces, matchedCount, unmatchedCount, photoUrl, matches]
+      properties:
+        detectedFaces:
+          type: integer
+        matchedCount:
+          type: integer
+        unmatchedCount:
+          type: integer
+        photoUrl:
+          type: string
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMatch"
+
+    BulkAttendanceStudent:
+      type: object
+      required: [studentId, modalities]
+      properties:
+        studentId:
+          type: integer
+          description: The student profile id.
+        modalities:
+          type: array
+          items:
+            type: string
+            enum: [thai, jiu]
+    BulkAttendanceInput:
+      type: object
+      required: [teacherId, students]
+      properties:
+        teacherId:
+          type: integer
+        photoUrl:
+          type: string
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/BulkAttendanceStudent"
+    BulkAttendanceResult:
+      type: object
+      required: [created, skipped]
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer

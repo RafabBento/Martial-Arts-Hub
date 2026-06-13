@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
+import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy } from "lucide-react";
+import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy, Loader2 } from "lucide-react";
+import { uploadImageToStorage } from "../lib/uploadImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -212,6 +213,8 @@ export default function Profile() {
   const [editJiuGradeColor, setEditJiuGradeColor] = useState(user?.jiuGradeColor ?? "");
   const [editJiuDegree, setEditJiuDegree] = useState<number>(user?.jiuDegree ?? 0);
   const [modality, setModality] = useState<Modality>("thai");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -287,6 +290,32 @@ export default function Profile() {
     );
   };
 
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploadingPhoto(true);
+    try {
+      const objectPath = await uploadImageToStorage(file);
+      const result = await registerProfilePhoto({ userId: user.id, objectPath });
+      setUser({ ...user, profilePhotoUrl: result.profilePhotoUrl });
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      if (result.faceDetected) {
+        toast({ title: "Foto de perfil atualizada", description: "Rosto detectado e cadastrado para reconhecimento." });
+      } else {
+        toast({
+          title: "Foto salva, mas nenhum rosto foi detectado",
+          description: "Envie uma foto nítida e de frente para o reconhecimento facial funcionar.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({ title: "Erro ao enviar a foto", variant: "destructive" });
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
+
   if (!user) return null;
 
   const rolePt =
@@ -356,18 +385,39 @@ export default function Profile() {
       {/* Dados do perfil */}
       <div className="bg-card border border-border rounded-lg p-6 space-y-6">
         <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-full bg-muted border-2 border-border overflow-hidden shrink-0">
-            {user.profilePhotoUrl ? (
-              <img
-                src={user.profilePhotoUrl}
-                alt={user.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-3xl font-black text-muted-foreground">
-                {user.name.charAt(0)}
-              </div>
-            )}
+          <div className="relative shrink-0">
+            <div className="w-20 h-20 rounded-full bg-muted border-2 border-border overflow-hidden">
+              {user.profilePhotoUrl ? (
+                <img
+                  src={user.profilePhotoUrl}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl font-black text-muted-foreground">
+                  {user.name.charAt(0)}
+                </div>
+              )}
+            </div>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              className="hidden"
+              onChange={handlePhotoChange}
+              data-testid="input-profile-photo"
+            />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              aria-label="Alterar foto de perfil"
+              data-testid="button-upload-photo"
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center border-2 border-card shadow-md hover:bg-primary/90 transition-colors disabled:opacity-70"
+            >
+              {uploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+            </button>
           </div>
           <div>
             <div className="text-2xl font-bold">{user.name}</div>

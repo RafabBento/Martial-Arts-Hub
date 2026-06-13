@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { db, attendanceTable, usersTable, trainingSessionsTable } from "@workspace/db";
 import {
   ListAttendanceQueryParams,
   CreateAttendanceBody,
   DeleteAttendanceParams,
+  BulkAttendanceBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -86,6 +87,115 @@ router.post("/attendance", async (req, res): Promise<void> => {
     faceRecognized: record.faceRecognized,
     createdAt: record.createdAt.toISOString(),
   });
+});
+
+router.post("/attendance/bulk", async (req, res): Promise<void> => {
+  // Authz: bulk attendance (facial recognition) is restricted to teachers/admins.
+  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
+  const requester = requesterId
+    ? (await db.select({ id: usersTable.id, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, requesterId)))[0]
+    : undefined;
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (requester.role !== "teacher" && requester.role !== "admin") {
+    res.status(403).json({ error: "Apenas professores podem registrar presença em massa" });
+    return;
+  }
+
+  const body = BulkAttendanceBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const { photoUrl, students } = body.data;
+  // Trust the authenticated requester as the session owner, not the client payload.
+  const teacherId = requester.id;
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  // Cache of today's sessions per modality, created lazily.
+  const sessionByModality = new Map<"thai" | "jiu", { id: number; ids: number[] }>();
+
+  async function ensureSession(modality: "thai" | "jiu"): Promise<{ id: number; ids: number[] }> {
+    const cached = sessionByModality.get(modality);
+    if (cached) return cached;
+
+    const todays = await db
+      .select({ id: trainingSessionsTable.id })
+      .from(trainingSessionsTable)
+      .where(
+        and(
+          eq(trainingSessionsTable.modality, modality),
+          gte(trainingSessionsTable.sessionDate, startOfDay),
+          lte(trainingSessionsTable.sessionDate, endOfDay),
+        ),
+      )
+      .orderBy(sql`${trainingSessionsTable.sessionDate} DESC`);
+
+    let ids = todays.map((s) => s.id);
+    let primaryId: number;
+    if (ids.length > 0) {
+      primaryId = ids[0];
+    } else {
+      const [createdSession] = await db
+        .insert(trainingSessionsTable)
+        .values({
+          modality,
+          sessionDate: now,
+          description: "Presença via reconhecimento facial",
+          teacherId,
+        })
+        .returning({ id: trainingSessionsTable.id });
+      primaryId = createdSession.id;
+      ids = [createdSession.id];
+    }
+
+    const entry = { id: primaryId, ids };
+    sessionByModality.set(modality, entry);
+    return entry;
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const student of students) {
+    const modalities = Array.from(new Set(student.modalities)) as ("thai" | "jiu")[];
+    for (const modality of modalities) {
+      const session = await ensureSession(modality);
+
+      // Dedupe: a student should not be marked twice in the same modality today.
+      const existing = await db
+        .select({ id: attendanceTable.id })
+        .from(attendanceTable)
+        .where(
+          and(
+            eq(attendanceTable.studentId, student.studentId),
+            inArray(attendanceTable.sessionId, session.ids),
+          ),
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        skipped += 1;
+        continue;
+      }
+
+      await db.insert(attendanceTable).values({
+        sessionId: session.id,
+        studentId: student.studentId,
+        postTrainingPhotoUrl: photoUrl,
+        faceRecognized: true,
+      });
+      created += 1;
+    }
+  }
+
+  res.json({ created, skipped });
 });
 
 router.delete("/attendance/:id", async (req, res): Promise<void> => {

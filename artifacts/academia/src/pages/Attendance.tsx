@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   useListSessions, getListSessionsQueryKey,
@@ -6,88 +6,18 @@ import {
   useListUsers, getListUsersQueryKey,
   useCreateSession,
   useCreateAttendance, useListAttendance, getListAttendanceQueryKey,
+  recognizeTeam, bulkAttendance,
+  type TeamMatch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Camera, CheckCircle, XCircle, Loader2, UserCheck, ScanFace, Users, Zap, ImagePlus, CalendarCheck, Clock, ShieldAlert } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, UserCheck, Users, Zap, ImagePlus, CalendarCheck, Clock, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
+import { uploadImageToStorage } from "../lib/uploadImage";
 
-type ModelStatus = "idle" | "loading" | "ready" | "error";
-type ScanStatus = "idle" | "scanning" | "upscaling" | "detecting" | "found" | "notfound";
-
-// ---- Utilitário: varredura por tiles ----
-// Divide o canvas em tiles COLS×ROWS com sobreposição relativa OVERLAP (0–1).
-// Detecta rostos em cada tile independentemente e combina todos os descritores.
-// Rostos próximos ao limite de dois tiles são capturados por ambos — a deduplicação
-// posterior (por distância entre descritores) remove duplicatas.
-async function detectInTiles(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  faceapi: any,
-  canvas: HTMLCanvasElement,
-  onProgress: (tile: number, total: number) => void,
-  opts: { cols?: number; rows?: number; overlap?: number; minConfidence?: number } = {}
-): Promise<Array<{ descriptor: Float32Array }>> {
-  const { cols = 2, rows = 2, overlap = 0.15, minConfidence = 0.3 } = opts;
-  const W = canvas.width;
-  const H = canvas.height;
-
-  const tileW = Math.ceil(W / cols);
-  const tileH = Math.ceil(H / rows);
-  const overlapPx_x = Math.ceil(tileW * overlap);
-  const overlapPx_y = Math.ceil(tileH * overlap);
-
-  const allDescriptors: Array<{ descriptor: Float32Array }> = [];
-  const total = cols * rows;
-  let idx = 0;
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const sx = Math.max(0, col * tileW - overlapPx_x);
-      const sy = Math.max(0, row * tileH - overlapPx_y);
-      const sw = Math.min(W - sx, tileW + overlapPx_x * 2);
-      const sh = Math.min(H - sy, tileH + overlapPx_y * 2);
-
-      const tileCanvas = document.createElement("canvas");
-      tileCanvas.width = sw;
-      tileCanvas.height = sh;
-      tileCanvas.getContext("2d")!.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-
-      const detections = await (faceapi as any)
-        .detectAllFaces(tileCanvas, new (faceapi as any).SsdMobilenetv1Options({ minConfidence }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-
-      allDescriptors.push(...detections);
-      idx++;
-      onProgress(idx, total);
-      // cede o event loop entre tiles para manter a UI responsiva
-      await new Promise(r => setTimeout(r, 10));
-    }
-  }
-
-  return allDescriptors;
-}
-
-// Deduplica descritores muito próximos entre si (duplicatas de rostos no limite
-// entre tiles). Usa distância euclidiana; DEDUP_THRESHOLD abaixo de 0.35 indica
-// que dois descritores provavelmente representam o mesmo rosto.
-function deduplicateDescriptors(
-  descriptors: Array<{ descriptor: Float32Array }>,
-  threshold = 0.35
-): Float32Array[] {
-  const kept: Float32Array[] = [];
-  for (const { descriptor } of descriptors) {
-    const isDup = kept.some(k => {
-      let sum = 0;
-      for (let i = 0; i < k.length; i++) sum += (k[i] - descriptor[i]) ** 2;
-      return Math.sqrt(sum) < threshold;
-    });
-    if (!isDup) kept.push(descriptor);
-  }
-  return kept;
-}
+type ScanStatus = "idle" | "uploading" | "recognizing" | "found" | "notfound";
 
 // ---------- Cronograma semanal ----------
 // days: 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
@@ -121,22 +51,11 @@ function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
 }
 
-interface IdentifyMatch {
-  studentId: number;
-  name: string;
-  profilePhotoUrl: string | null;
-  distance: number;
-  matched: boolean;
-}
-
-const MODEL_BASE = "https://vladmandic.github.io/face-api/model";
-
-async function loadFaceApi() {
-  const faceapi = await import("face-api.js");
-  await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_BASE);
-  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_BASE);
-  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_BASE);
-  return faceapi;
+function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
+  const list: ("thai" | "jiu")[] = [];
+  if (m.modalityThai) list.push("thai");
+  if (m.modalityJiu) list.push("jiu");
+  return list;
 }
 
 export default function Attendance() {
@@ -148,27 +67,18 @@ export default function Attendance() {
   // Bloquear acesso de alunos
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const faceApiRef = useRef<Awaited<ReturnType<typeof loadFaceApi>> | null>(null);
-
-  const [modelStatus, setModelStatus] = useState<ModelStatus>("idle");
   const [scanStatus, setScanStatus] = useState<ScanStatus>("idle");
-  const [cameraOn, setCameraOn] = useState(false);
   const [selectedSession, setSelectedSession] = useState("");
-  const [matches, setMatches] = useState<IdentifyMatch[]>([]);
+  const [matches, setMatches] = useState<TeamMatch[]>([]);
   const [unmatchedCount, setUnmatchedCount] = useState(0);
   const [confirmedIds, setConfirmedIds] = useState<Set<number>>(new Set());
-  const [mode, setMode] = useState<"face" | "gallery" | "manual">("gallery");
+  const [mode, setMode] = useState<"team" | "manual">("team");
   const [manualStudent, setManualStudent] = useState("");
-  const [galleryScanning, setGalleryScanning] = useState(false);
-  const [galleryPreviewUrl, setGalleryPreviewUrl] = useState<string | null>(null);
-  const [tileProgress, setTileProgress] = useState<{ current: number; total: number } | null>(null);
+  const [teamPreviewUrl, setTeamPreviewUrl] = useState<string | null>(null);
+  const [teamPhotoUrl, setTeamPhotoUrl] = useState<string | null>(null);
   const [registeringAll, setRegisteringAll] = useState(false);
   const [autoCreating, setAutoCreating] = useState(false);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const teamInputRef = useRef<HTMLInputElement>(null);
 
   const { data: sessions } = useListSessions(
     { modality: undefined },
@@ -196,7 +106,7 @@ export default function Attendance() {
       )
     : null;
 
-  // Auto-seleciona sessão de hoje quando carregada
+  // Auto-seleciona sessão de hoje quando carregada (usada na aba manual)
   useEffect(() => {
     if (todaySession && !selectedSession) {
       setSelectedSession(String(todaySession.id));
@@ -249,143 +159,32 @@ export default function Attendance() {
     { query: { queryKey: getListStudentsQueryKey() } }
   );
 
-  const { data: attendance, refetch: refetchAttendance } = useListAttendance(
+  const { data: attendance } = useListAttendance(
     { sessionId: selectedSession ? parseInt(selectedSession, 10) : undefined },
     { query: { enabled: !!selectedSession, queryKey: getListAttendanceQueryKey({ sessionId: selectedSession ? parseInt(selectedSession, 10) : undefined }) } }
   );
 
   const createAttMutation = useCreateAttendance();
 
-  const loadModels = useCallback(async () => {
-    if (modelStatus === "ready" || modelStatus === "loading") return;
-    setModelStatus("loading");
-    try {
-      faceApiRef.current = await loadFaceApi();
-      setModelStatus("ready");
-    } catch (e) {
-      setModelStatus("error");
-      toast({ title: "Erro ao carregar modelos de rosto", variant: "destructive" });
-    }
-  }, [modelStatus]);
-
-  const startCamera = useCallback(async () => {
-    await loadModels();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: "user" } });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      setCameraOn(true);
-    } catch {
-      toast({ title: "Nao foi possivel acessar a camera", variant: "destructive" });
-    }
-  }, [loadModels]);
-
-  const stopCamera = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraOn(false);
-    setScanStatus("idle");
-    setMatches([]);
-  }, []);
-
-  useEffect(() => {
-    return () => { stopCamera(); };
-  }, [stopCamera]);
-
-  const scanFaces = useCallback(async () => {
-    const faceapi = faceApiRef.current;
-    if (!faceapi || !videoRef.current || !canvasRef.current) return;
-    if (scanStatus === "scanning") return;
-
-    setScanStatus("scanning");
-    try {
-      const detections = await faceapi
-        .detectAllFaces(videoRef.current, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-
-      if (detections.length === 0) {
-        setScanStatus("idle");
-        return;
-      }
-
-      const descriptors = detections.map(d => Array.from(d.descriptor));
-
-      const resp = await fetch("/api/face/identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ descriptors }),
-      });
-
-      if (!resp.ok) throw new Error("Identify failed");
-
-      const result: IdentifyMatch[] = await resp.json();
-      const found = result.filter(r => r.matched);
-
-      if (found.length > 0) {
-        setMatches(found);
-        setScanStatus("found");
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      } else {
-        setScanStatus("notfound");
-        setTimeout(() => setScanStatus("idle"), 2000);
-      }
-    } catch {
-      setScanStatus("idle");
-    }
-  }, [scanStatus]);
-
-  const startContinuousScan = useCallback(() => {
-    if (intervalRef.current) return;
-    intervalRef.current = setInterval(scanFaces, 3000);
-  }, [scanFaces]);
-
-  const stopContinuousScan = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setScanStatus("idle");
-    setMatches([]);
-  }, []);
-
   const confirmAttendance = (studentId: number, faceRecognized: boolean) => {
     if (!selectedSession) {
-      toast({ title: "Selecione uma sessao primeiro", variant: "destructive" });
+      toast({ title: "Selecione uma sessão primeiro", variant: "destructive" });
       return;
     }
     if (confirmedIds.has(studentId)) {
-      toast({ title: "Presenca ja registrada para este aluno" });
+      toast({ title: "Presença já registrada para este aluno" });
       return;
     }
     createAttMutation.mutate(
-      {
-        data: {
-          sessionId: parseInt(selectedSession, 10),
-          studentId,
-          faceRecognized,
-        }
-      },
+      { data: { sessionId: parseInt(selectedSession, 10), studentId, faceRecognized } },
       {
         onSuccess: () => {
           setConfirmedIds(prev => new Set([...prev, studentId]));
           queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: parseInt(selectedSession, 10) }) });
-          toast({ title: `Presenca confirmada!` });
-          setMatches([]);
-          setScanStatus("idle");
-          if (mode === "face" && cameraOn) startContinuousScan();
+          toast({ title: "Presença confirmada!" });
         },
         onError: (e: any) => {
-          toast({ title: e?.data?.error ?? "Erro ao registrar presenca", variant: "destructive" });
+          toast({ title: e?.data?.error ?? "Erro ao registrar presença", variant: "destructive" });
         }
       }
     );
@@ -400,137 +199,74 @@ export default function Attendance() {
     setManualStudent("");
   };
 
-  const handleGalleryScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ---------------- Reconhecimento 100% no servidor ----------------
+  const handleTeamPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!selectedSession) {
-      toast({ title: "Selecione uma sessão primeiro", variant: "destructive" });
-      return;
-    }
-    setGalleryScanning(true);
     setMatches([]);
     setUnmatchedCount(0);
-    setScanStatus("scanning");
+    setScanStatus("uploading");
 
-    // Preview da foto
     const previewUrl = URL.createObjectURL(file);
-    setGalleryPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
+    setTeamPreviewUrl(prev => { if (prev) URL.revokeObjectURL(prev); return previewUrl; });
 
     try {
-      if (!faceApiRef.current) {
-        faceApiRef.current = await loadFaceApi();
-      }
-      const faceapi = faceApiRef.current;
-
-      // Carrega a imagem
-      const img = await createImageBitmap(file);
-
-      // Upscaling: amplia 2x para melhorar detecção de rostos pequenos,
-      // mas limita o lado maior a 6400px para não estourar memória.
-      setScanStatus("upscaling");
-      const MAX_SIDE = 6400;
-      const SCALE = 2;
-      const scaledW = Math.min(img.width * SCALE, MAX_SIDE);
-      const scaledH = Math.round(img.height * (scaledW / img.width));
-
-      const canvas = document.createElement("canvas");
-      canvas.width = scaledW;
-      canvas.height = scaledH;
-      const ctx = canvas.getContext("2d")!;
-      // imageSmoothingQuality alto para preservar detalhes ao ampliar
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, 0, 0, scaledW, scaledH);
-
-      // Aguarda o próximo frame para o browser renderizar o status
-      await new Promise(r => setTimeout(r, 50));
-      setScanStatus("detecting");
-      setTileProgress({ current: 0, total: 4 });
-
-      // Varredura por tiles 2×2 com 15% de sobreposição:
-      // cada tile é analisado independentemente para melhorar a detecção
-      // de rostos pequenos nas bordas e no fundo da foto.
-      const rawDetections = await detectInTiles(faceapi, canvas, (current, total) => {
-        setTileProgress({ current, total });
-      }, { cols: 2, rows: 2, overlap: 0.15, minConfidence: 0.3 });
-
-      // Remove duplicatas de rostos detectados em dois tiles adjacentes
-      const uniqueDescriptors = deduplicateDescriptors(rawDetections, 0.35);
-      setTileProgress(null);
-
-      if (uniqueDescriptors.length === 0) {
-        setScanStatus("notfound");
-        toast({ title: "Nenhum rosto detectado na foto", variant: "destructive" });
-        setTimeout(() => setScanStatus("idle"), 2000);
-        return;
-      }
-      const descriptors = uniqueDescriptors.map(d => Array.from(d));
-      const resp = await fetch("/api/face/identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ descriptors }),
-      });
-      if (!resp.ok) throw new Error("Identify failed");
-      const result: IdentifyMatch[] = await resp.json();
-
-      // Deduplicar: para cada aluno, manter apenas o match com menor distância
-      const matchMap = new Map<number, IdentifyMatch>();
-      for (const r of result) {
-        if (!r.matched) continue;
-        const existing = matchMap.get(r.studentId);
-        if (!existing || r.distance < existing.distance) {
-          matchMap.set(r.studentId, r);
-        }
-      }
-      const found = Array.from(matchMap.values());
-      const unmatched = descriptors.length - result.filter(r => r.matched).length;
-      setUnmatchedCount(Math.max(0, unmatched));
-
-      if (found.length > 0) {
-        setMatches(found);
+      const objectPath = await uploadImageToStorage(file);
+      setScanStatus("recognizing");
+      const result = await recognizeTeam({ objectPath });
+      setUnmatchedCount(result.unmatchedCount);
+      setTeamPhotoUrl(result.photoUrl);
+      if (result.matches.length > 0) {
+        setMatches(result.matches);
         setScanStatus("found");
       } else {
         setScanStatus("notfound");
-        toast({ title: "Nenhum aluno identificado na foto", variant: "destructive" });
-        setTimeout(() => setScanStatus("idle"), 2000);
+        toast({
+          title: "Nenhum aluno identificado na foto",
+          description: result.detectedFaces > 0
+            ? `${result.detectedFaces} rosto(s) detectado(s), mas nenhum corresponde a um aluno cadastrado.`
+            : "Nenhum rosto foi detectado na imagem.",
+          variant: "destructive",
+        });
       }
     } catch {
-      setScanStatus("idle");
+      setScanStatus("notfound");
       toast({ title: "Erro ao processar a foto", variant: "destructive" });
     } finally {
-      setGalleryScanning(false);
-      if (galleryInputRef.current) galleryInputRef.current.value = "";
+      if (teamInputRef.current) teamInputRef.current.value = "";
     }
   };
 
   const handleRegisterAll = async () => {
-    if (!selectedSession) return;
-    const toRegister = matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId));
+    if (!user) return;
+    const toRegister = matches.filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) {
       toast({ title: "Todos já estão registrados!" });
       return;
     }
     setRegisteringAll(true);
-    let count = 0;
-    for (const m of toRegister) {
-      await new Promise<void>((resolve) => {
-        createAttMutation.mutate(
-          { data: { sessionId: parseInt(selectedSession, 10), studentId: m.studentId, faceRecognized: true } },
-          {
-            onSuccess: () => {
-              setConfirmedIds(prev => new Set([...prev, m.studentId]));
-              count++;
-              resolve();
-            },
-            onError: () => resolve(),
-          }
-        );
+    try {
+      const result = await bulkAttendance({
+        teacherId: user.id,
+        photoUrl: teamPhotoUrl ?? undefined,
+        students: toRegister.map(m => ({ studentId: m.studentId, modalities: modalitiesOf(m) })),
       });
+      setConfirmedIds(prev => {
+        const next = new Set(prev);
+        toRegister.forEach(m => next.add(m.studentId));
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
+      toast({
+        title: `${result.created} presença${result.created !== 1 ? "s" : ""} registrada${result.created !== 1 ? "s" : ""}!`,
+        description: result.skipped > 0 ? `${result.skipped} já estavam registradas (ignoradas).` : "Marcadas em todas as modalidades de cada aluno.",
+      });
+    } catch {
+      toast({ title: "Erro ao registrar presenças", variant: "destructive" });
+    } finally {
+      setRegisteringAll(false);
     }
-    await queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: parseInt(selectedSession, 10) }) });
-    toast({ title: `${count} presença${count !== 1 ? "s" : ""} registrada${count !== 1 ? "s" : ""} com sucesso!` });
-    setRegisteringAll(false);
   };
 
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
@@ -555,7 +291,7 @@ export default function Attendance() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-3xl font-black tracking-tight uppercase">Controle de Presença</h1>
-        <p className="text-muted-foreground mt-1">Envie a foto pós-treino para registrar presenças automaticamente por reconhecimento facial</p>
+        <p className="text-muted-foreground mt-1">Envie a foto pós-treino da equipe — o reconhecimento facial é feito no servidor e marca a presença em todas as modalidades de cada aluno</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -603,216 +339,42 @@ export default function Attendance() {
             </div>
           )}
 
-          <div className="bg-card border border-border rounded-lg p-4">
-            <label className="text-sm font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Sessão de Treino</label>
-            <Select value={selectedSession} onValueChange={setSelectedSession} data-testid="select-session">
-              <SelectTrigger data-testid="select-session-trigger">
-                <SelectValue placeholder="Selecione a sessao..." />
-              </SelectTrigger>
-              <SelectContent>
-                {sessions?.map(s => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    <span className={`font-bold mr-2 ${s.modality === "thai" ? "text-red-400" : "text-blue-400"}`}>
-                      {s.modality === "thai" ? "[MT]" : "[JJ]"}
-                    </span>
-                    {new Date(s.sessionDate).toLocaleString("pt-BR")} — {s.description ?? "Treino"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="flex gap-2 flex-wrap">
             <Button
-              data-testid="button-mode-face"
-              variant={mode === "face" ? "default" : "outline"}
-              onClick={() => { setMode("face"); stopContinuousScan(); setMatches([]); setScanStatus("idle"); }}
+              data-testid="button-mode-team"
+              variant={mode === "team" ? "default" : "outline"}
+              onClick={() => { setMode("team"); }}
             >
-              <ScanFace size={16} className="mr-2" /> Câmera
-            </Button>
-            <Button
-              data-testid="button-mode-gallery"
-              variant={mode === "gallery" ? "default" : "outline"}
-              onClick={() => { setMode("gallery"); stopCamera(); setMatches([]); setScanStatus("idle"); }}
-            >
-              <ImagePlus size={16} className="mr-2" /> Galeria
+              <ImagePlus size={16} className="mr-2" /> Foto da equipe
             </Button>
             <Button
               data-testid="button-mode-manual"
               variant={mode === "manual" ? "default" : "outline"}
-              onClick={() => { setMode("manual"); stopCamera(); setMatches([]); setScanStatus("idle"); }}
+              onClick={() => { setMode("manual"); }}
             >
               <Users size={16} className="mr-2" /> Manual
             </Button>
           </div>
 
-          {mode === "face" && (
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <div className="relative aspect-video bg-black flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  data-testid="video-camera"
-                  className={`w-full h-full object-cover ${cameraOn ? "block" : "hidden"}`}
-                  muted
-                  playsInline
-                />
-                <canvas ref={canvasRef} className="hidden" />
-                {!cameraOn && (
-                  <div className="text-center space-y-3">
-                    <Camera size={48} className="text-muted-foreground mx-auto" />
-                    <div className="text-muted-foreground text-sm">Camera desligada</div>
-                  </div>
-                )}
-
-                {cameraOn && (
-                  <div className={`absolute inset-0 border-4 pointer-events-none transition-colors ${
-                    scanStatus === "found" ? "border-green-400" :
-                    scanStatus === "notfound" ? "border-red-500/60" :
-                    scanStatus === "scanning" ? "border-primary/60" :
-                    "border-transparent"
-                  }`} />
-                )}
-              </div>
-
-              <div className="p-4 space-y-3">
-                {modelStatus === "loading" && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 size={14} className="animate-spin" />
-                    Carregando modelos de reconhecimento facial...
-                  </div>
-                )}
-                {modelStatus === "error" && (
-                  <div className="flex items-center gap-2 text-sm text-destructive">
-                    <XCircle size={14} />
-                    Falha ao carregar modelos
-                  </div>
-                )}
-
-                <div className="flex gap-2 flex-wrap">
-                  {!cameraOn ? (
-                    <Button data-testid="button-start-camera" onClick={startCamera} disabled={modelStatus === "loading"}>
-                      {modelStatus === "loading" ? <><Loader2 size={14} className="animate-spin mr-2" />Carregando...</> : <><Camera size={14} className="mr-2" />Ligar Camera</>}
-                    </Button>
-                  ) : (
-                    <>
-                      <Button data-testid="button-stop-camera" variant="outline" onClick={stopCamera}>
-                        Desligar Camera
-                      </Button>
-                      {!intervalRef.current ? (
-                        <Button data-testid="button-start-scan" onClick={() => { startContinuousScan(); scanFaces(); }} disabled={!selectedSession}>
-                          <Zap size={14} className="mr-2" /> Iniciar Varredura
-                        </Button>
-                      ) : (
-                        <Button data-testid="button-stop-scan" variant="outline" onClick={stopContinuousScan}>
-                          Parar Varredura
-                        </Button>
-                      )}
-                      <Button data-testid="button-scan-once" variant="outline" onClick={scanFaces} disabled={scanStatus === "scanning" || !selectedSession}>
-                        {scanStatus === "scanning" ? <Loader2 size={14} className="animate-spin mr-2" /> : <ScanFace size={14} className="mr-2" />}
-                        Escanear
-                      </Button>
-                    </>
-                  )}
-                </div>
-
-                {scanStatus === "scanning" && (
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Analisando rosto...
-                  </div>
-                )}
-
-                {scanStatus === "notfound" && (
-                  <div className="flex items-center gap-2 text-sm text-red-400">
-                    <XCircle size={14} /> Rosto nao identificado na base
-                  </div>
-                )}
-
-                {matches.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-green-400 flex items-center gap-2">
-                      <CheckCircle size={14} /> {matches.length} rosto{matches.length > 1 ? "s" : ""} identificado{matches.length > 1 ? "s" : ""}
-                    </div>
-                    {matches.map(m => (
-                      <div key={m.studentId} data-testid={`match-${m.studentId}`} className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                        <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
-                          {m.profilePhotoUrl
-                            ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
-                          }
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-semibold">{m.name}</div>
-                          <div className="text-xs text-muted-foreground">Dist: {m.distance.toFixed(3)}</div>
-                        </div>
-                        {attendedIds.has(m.studentId) || confirmedIds.has(m.studentId) ? (
-                          <span className="text-xs text-green-400 font-bold">Ja registrado</span>
-                        ) : (
-                          <Button
-                            data-testid={`button-confirm-${m.studentId}`}
-                            size="sm"
-                            onClick={() => confirmAttendance(m.studentId, true)}
-                            disabled={createAttMutation.isPending}
-                          >
-                            <UserCheck size={14} className="mr-1" /> Confirmar
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {mode === "gallery" && (
+          {mode === "team" && (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               {/* Preview da foto */}
-              {galleryPreviewUrl && (
+              {teamPreviewUrl && (
                 <div className="relative">
                   <img
-                    src={galleryPreviewUrl}
+                    src={teamPreviewUrl}
                     alt="Foto pós-treino"
                     className="w-full max-h-72 object-cover"
                   />
-                  {galleryScanning && (
+                  {(scanStatus === "uploading" || scanStatus === "recognizing") && (
                     <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 px-6">
                       <Loader2 size={36} className="animate-spin text-primary" />
                       <span className="text-sm font-semibold text-white text-center">
-                        {scanStatus === "upscaling"
-                          ? "Ampliando imagem…"
-                          : scanStatus === "detecting" && tileProgress
-                          ? `Varrendo região ${tileProgress.current} de ${tileProgress.total}…`
-                          : "Analisando…"}
+                        {scanStatus === "uploading" ? "Enviando foto…" : "Reconhecendo rostos no servidor…"}
                       </span>
-                      {/* Barra de progresso dos tiles */}
-                      {scanStatus === "detecting" && tileProgress && (
-                        <div className="w-full max-w-[180px]">
-                          {/* Grid visual 2×2 dos tiles */}
-                          <div className="grid grid-cols-2 gap-1 mb-2">
-                            {Array.from({ length: tileProgress.total }).map((_, i) => (
-                              <div
-                                key={i}
-                                className={`h-2 rounded-sm transition-colors duration-300 ${
-                                  i < tileProgress.current
-                                    ? "bg-primary"
-                                    : "bg-white/20"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <p className="text-xs text-white/60 text-center">
-                            Varredura por regiões · 2× upscale
-                          </p>
-                        </div>
-                      )}
-                      {scanStatus === "upscaling" && (
-                        <p className="text-xs text-white/60 text-center">
-                          2× upscale · preservando detalhes
-                        </p>
-                      )}
                     </div>
                   )}
-                  {matches.length > 0 && !galleryScanning && (
+                  {matches.length > 0 && scanStatus === "found" && (
                     <div className="absolute top-3 left-3 bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
                       <CheckCircle size={13} className="text-green-400" />
                       {matches.length} identificado{matches.length !== 1 ? "s" : ""}
@@ -823,64 +385,61 @@ export default function Attendance() {
               )}
 
               <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-bold text-sm uppercase tracking-wide">Foto Pós-Treino</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Envie a foto do grupo para registrar as presenças automaticamente</p>
-                  </div>
+                <div>
+                  <h3 className="font-bold text-sm uppercase tracking-wide">Foto Pós-Treino</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Envie a foto do grupo — o servidor identifica cada aluno e registra a presença em todas as modalidades que ele treina</p>
                 </div>
 
                 <input
-                  ref={galleryInputRef}
+                  ref={teamInputRef}
                   type="file"
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={handleGalleryScan}
+                  onChange={handleTeamPhoto}
+                  data-testid="input-team-photo"
                 />
                 <Button
-                  onClick={() => galleryInputRef.current?.click()}
-                  disabled={galleryScanning || !selectedSession}
+                  onClick={() => teamInputRef.current?.click()}
+                  disabled={scanStatus === "uploading" || scanStatus === "recognizing"}
                   className="w-full"
                   size="lg"
+                  data-testid="button-team-photo"
                 >
-                  {galleryScanning
-                    ? <><Loader2 size={16} className="animate-spin mr-2" />Analisando foto...</>
-                    : <><ImagePlus size={16} className="mr-2" />{galleryPreviewUrl ? "Trocar foto" : "Enviar foto do grupo"}</>
+                  {scanStatus === "uploading" || scanStatus === "recognizing"
+                    ? <><Loader2 size={16} className="animate-spin mr-2" />Processando…</>
+                    : <><ImagePlus size={16} className="mr-2" />{teamPreviewUrl ? "Trocar foto" : "Enviar foto do grupo"}</>
                   }
                 </Button>
 
-                {!selectedSession && (
-                  <p className="text-xs text-primary text-center">⚠ Selecione uma sessão de treino antes de enviar a foto</p>
-                )}
-
                 {scanStatus === "notfound" && (
                   <div className="flex items-center gap-2 text-sm text-red-400">
-                    <XCircle size={14} /> Nenhum aluno identificado — certifique-se que os rostos estão cadastrados no sistema
+                    <XCircle size={14} /> Nenhum aluno identificado — certifique-se que os rostos estão cadastrados (foto de perfil) no sistema
                   </div>
                 )}
 
                 {matches.length > 0 && (
                   <div className="space-y-3">
-                    {/* Botão registrar todos */}
-                    {matches.some(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)) && (
+                    {matches.some(m => !confirmedIds.has(m.studentId)) && (
                       <Button
                         className="w-full"
                         onClick={handleRegisterAll}
-                        disabled={registeringAll || !selectedSession}
+                        disabled={registeringAll}
+                        data-testid="button-register-all"
                       >
                         {registeringAll
                           ? <><Loader2 size={16} className="animate-spin mr-2" />Registrando...</>
-                          : <><UserCheck size={16} className="mr-2" />Registrar {matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !attendedIds.has(m.studentId) && !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}</>
+                          : <><UserCheck size={16} className="mr-2" />Registrar {matches.filter(m => !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}</>
                         }
                       </Button>
                     )}
 
                     <div className="space-y-2">
                       {matches.map(m => {
-                        const alreadyIn = attendedIds.has(m.studentId) || confirmedIds.has(m.studentId);
+                        const alreadyIn = confirmedIds.has(m.studentId);
+                        const mods = modalitiesOf(m);
                         return (
-                          <div key={m.studentId} className={`flex items-center gap-3 p-3 rounded-lg border ${alreadyIn ? "bg-green-500/10 border-green-500/30" : "bg-muted/40 border-border"}`}>
+                          <div key={m.studentId} data-testid={`match-${m.studentId}`} className={`flex items-center gap-3 p-3 rounded-lg border ${alreadyIn ? "bg-green-500/10 border-green-500/30" : "bg-muted/40 border-border"}`}>
                             <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
                               {m.profilePhotoUrl
                                 ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
@@ -889,7 +448,14 @@ export default function Attendance() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-sm">{m.name}</div>
-                              <div className="text-xs text-muted-foreground">Confiança: {((1 - m.distance) * 100).toFixed(0)}%</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {mods.map(mod => (
+                                  <span key={mod} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${mod === "thai" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}`}>
+                                    {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+                                  </span>
+                                ))}
+                                <span className="text-xs text-muted-foreground">Confiança: {((1 - m.distance) * 100).toFixed(0)}%</span>
+                              </div>
                             </div>
                             {alreadyIn
                               ? <CheckCircle size={18} className="text-green-400 shrink-0" />
@@ -913,7 +479,27 @@ export default function Attendance() {
 
           {mode === "manual" && (
             <div className="bg-card border border-border rounded-lg p-5 space-y-4">
-              <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Adicionar Presenca Manualmente</h3>
+              <h3 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Adicionar Presença Manualmente</h3>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Sessão de Treino</label>
+                <Select value={selectedSession} onValueChange={setSelectedSession} data-testid="select-session">
+                  <SelectTrigger data-testid="select-session-trigger">
+                    <SelectValue placeholder="Selecione a sessão..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sessions?.map(s => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        <span className={`font-bold mr-2 ${s.modality === "thai" ? "text-red-400" : "text-blue-400"}`}>
+                          {s.modality === "thai" ? "[MT]" : "[JJ]"}
+                        </span>
+                        {new Date(s.sessionDate).toLocaleString("pt-BR")} — {s.description ?? "Treino"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-3">
                 <Select value={manualStudent} onValueChange={setManualStudent}>
                   <SelectTrigger data-testid="select-manual-student" className="flex-1">
@@ -937,6 +523,10 @@ export default function Attendance() {
                 </Button>
               </div>
 
+              {!selectedSession && (
+                <p className="text-xs text-primary">⚠ Selecione uma sessão de treino antes de adicionar presenças manuais</p>
+              )}
+
               <div className="space-y-2">
                 {students?.filter(s => attendedIds.has(s.userId) || confirmedIds.has(s.userId)).map(s => (
                   <div key={s.userId} className="flex items-center gap-2 text-sm text-green-400">
@@ -951,11 +541,11 @@ export default function Attendance() {
         <div className="bg-card border border-border rounded-lg p-5">
           <div className="flex items-center gap-2 mb-4">
             <UserCheck size={18} className="text-primary" />
-            <h2 className="font-bold uppercase tracking-wide text-sm">Presentes Hoje</h2>
+            <h2 className="font-bold uppercase tracking-wide text-sm">Presentes (sessão)</h2>
             <span className="ml-auto text-sm font-bold text-primary">{attendance?.length ?? 0}</span>
           </div>
           {!selectedSession ? (
-            <div className="text-center py-8 text-muted-foreground text-xs">Selecione uma sessao</div>
+            <div className="text-center py-8 text-muted-foreground text-xs">Selecione uma sessão na aba Manual para ver os presentes</div>
           ) : attendance && attendance.length > 0 ? (
             <div className="space-y-2 max-h-[480px] overflow-y-auto">
               {attendance.map(rec => (
@@ -974,7 +564,7 @@ export default function Attendance() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground text-xs">Nenhuma presenca ainda</div>
+            <div className="text-center py-8 text-muted-foreground text-xs">Nenhuma presença ainda</div>
           )}
         </div>
       </div>
