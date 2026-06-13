@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
-import { db, attendanceTable, usersTable, trainingSessionsTable } from "@workspace/db";
+import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
 import {
   ListAttendanceQueryParams,
   CreateAttendanceBody,
@@ -164,7 +164,19 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
   let skipped = 0;
 
   for (const student of students) {
-    const modalities = Array.from(new Set(student.modalities)) as ("thai" | "jiu")[];
+    // Derive modalities from the student's registration, never from the client
+    // payload — attendance must follow each student's registered modalities.
+    const [profile] = await db
+      .select({ thai: studentProfilesTable.modalityThai, jiu: studentProfilesTable.modalityJiu })
+      .from(studentProfilesTable)
+      .where(eq(studentProfilesTable.userId, student.studentId));
+    if (!profile) {
+      skipped += 1;
+      continue;
+    }
+    const modalities: ("thai" | "jiu")[] = [];
+    if (profile.thai) modalities.push("thai");
+    if (profile.jiu) modalities.push("jiu");
     for (const modality of modalities) {
       const session = await ensureSession(modality);
 

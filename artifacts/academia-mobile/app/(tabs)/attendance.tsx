@@ -508,7 +508,17 @@ export default function AttendanceScreen() {
                       </Text>
                     </View>
                   </View>
-                  {alreadyIn && <Ionicons name="checkmark-circle" size={20} color={colors.success} />}
+                  {alreadyIn ? (
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
+                      hitSlop={10}
+                      accessibilityLabel={`Remover ${m.name}`}
+                    >
+                      <Ionicons name="close-circle" size={22} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })}

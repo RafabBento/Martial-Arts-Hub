@@ -20,4 +20,6 @@ derive identity from the session — never trust a client-supplied `userId`/`tea
 the body. For "act on a user" routes, allow self OR teacher/admin; for master-only
 actions (team recognition, bulk attendance), require `teacher`/`admin`. For bulk
 attendance, the session user is used as the session owner (`teacherId`), ignoring the
-client-sent value.
+client-sent value. Bulk attendance also derives each student's modalities from
+`student_profiles` server-side and ignores the client-sent `modalities` array —
+attendance must follow registration, not the request payload.

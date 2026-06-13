@@ -459,7 +459,16 @@ export default function Attendance() {
                             </div>
                             {alreadyIn
                               ? <CheckCircle size={18} className="text-green-400 shrink-0" />
-                              : <div className="w-2 h-2 rounded-full bg-muted-foreground/40 shrink-0" />
+                              : <button
+                                  type="button"
+                                  onClick={() => setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
+                                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                                  title="Remover este aluno antes de registrar"
+                                  aria-label={`Remover ${m.name}`}
+                                  data-testid={`button-remove-match-${m.studentId}`}
+                                >
+                                  <XCircle size={18} />
+                                </button>
                             }
                           </div>
                         );

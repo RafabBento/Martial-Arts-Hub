@@ -1,6 +1,7 @@
 import React from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { imageUrl } from "@/lib/imageUrl";
 
 interface RankingRowProps {
   rank: number;
@@ -27,7 +28,7 @@ export function RankingRow({
         #{rank}
       </Text>
       {profilePhotoUrl ? (
-        <Image source={{ uri: profilePhotoUrl }} style={styles.avatar} />
+        <Image source={{ uri: imageUrl(profilePhotoUrl) }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
           <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>

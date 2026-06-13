@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { imageUrl } from "@/lib/imageUrl";
 import { ModalityBadge } from "./ModalityBadge";
 
 interface StudentCardProps {
@@ -86,7 +87,7 @@ export function StudentCard({
     >
       <View style={styles.row}>
         {profilePhotoUrl ? (
-          <Image source={{ uri: profilePhotoUrl }} style={styles.avatar} />
+          <Image source={{ uri: imageUrl(profilePhotoUrl) }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatar, styles.initials, { backgroundColor: colors.primary + "22" }]}>
             <Text style={[styles.initialsText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
