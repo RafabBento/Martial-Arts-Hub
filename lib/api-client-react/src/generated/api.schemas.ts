@@ -186,24 +186,6 @@ export interface StudentProfileUpdate {
   jiuDegree?: number;
 }
 
-export interface FaceDescriptorInput {
-  descriptor: number[];
-  photoUrl?: string;
-}
-
-export interface FaceIdentifyInput {
-  descriptors: number[][];
-}
-
-export interface FaceMatch {
-  studentId: number;
-  name: string;
-  /** @nullable */
-  profilePhotoUrl?: string | null;
-  distance: number;
-  matched: boolean;
-}
-
 export type TrainingSessionModality =
   (typeof TrainingSessionModality)[keyof typeof TrainingSessionModality];
 

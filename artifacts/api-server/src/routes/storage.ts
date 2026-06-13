@@ -5,10 +5,26 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+// Uploads are images only (profile photos + team photos), capped to keep the
+// bucket from being abused via the presigned URL.
+const ALLOWED_UPLOAD_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+
+function sessionUserId(req: Request): number | undefined {
+  return (req.session as unknown as Record<string, unknown> | undefined)?.userId as
+    | number
+    | undefined;
+}
 
 /**
  * POST /storage/uploads/request-url
@@ -16,8 +32,16 @@ const objectStorageService = new ObjectStorageService();
  * Request a presigned URL for file upload.
  * The client sends JSON metadata (name, size, contentType) — NOT the file.
  * Then uploads the file directly to the returned presigned URL.
+ *
+ * Restricted to authenticated users; only image uploads under the size cap are
+ * allowed so the presigned URL cannot be abused to dump arbitrary content.
  */
 router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
+  if (!sessionUserId(req)) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Missing or invalid required fields" });
@@ -26,6 +50,15 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
 
   try {
     const { name, size, contentType } = parsed.data;
+
+    if (!ALLOWED_UPLOAD_TYPES.has(contentType.toLowerCase())) {
+      res.status(400).json({ error: "Tipo de arquivo não permitido (apenas imagens)" });
+      return;
+    }
+    if (typeof size === "number" && size > MAX_UPLOAD_BYTES) {
+      res.status(400).json({ error: "Arquivo muito grande" });
+      return;
+    }
 
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
@@ -85,26 +118,19 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * be protected with authentication or ACL checks based on the use case.
  */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
+  // Private objects (profile photos, team photos) are only served to
+  // authenticated users. Cookies are sent by both the web app and the native
+  // <Image> component (shared session cookie jar).
+  if (!sessionUserId(req)) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
 
     const response = await objectStorageService.downloadObject(objectFile);
 

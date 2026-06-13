@@ -23,3 +23,11 @@ attendance, the session user is used as the session owner (`teacherId`), ignorin
 client-sent value. Bulk attendance also derives each student's modalities from
 `student_profiles` server-side and ignores the client-sent `modalities` array —
 attendance must follow registration, not the request payload.
+
+Object storage routes are part of this same no-middleware model: the presigned
+upload-URL issuer (`/storage/uploads/request-url`) and the private object server
+(`/storage/objects/*`) must each check `session.userId` themselves, or any caller
+can upload to / read from the bucket. Uploads are restricted to image content
+types under a size cap. Native `<Image>` sends the session cookie (shared cookie
+jar), so cookie-gating private objects works on web and mobile alike.
+`/storage/public-objects/*` stays intentionally open.

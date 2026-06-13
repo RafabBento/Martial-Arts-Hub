@@ -312,38 +312,6 @@ export const UpdateStudentResponse = zod.object({
 });
 
 /**
- * @summary Save face descriptor for a student
- */
-export const SaveFaceDescriptorParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const SaveFaceDescriptorBody = zod.object({
-  descriptor: zod.array(zod.number()),
-  photoUrl: zod.string().optional(),
-});
-
-export const SaveFaceDescriptorResponse = zod.object({
-  message: zod.string(),
-});
-
-/**
- * @summary Identify students from a photo descriptor
- */
-export const IdentifyFaceBody = zod.object({
-  descriptors: zod.array(zod.array(zod.number())),
-});
-
-export const IdentifyFaceResponseItem = zod.object({
-  studentId: zod.number(),
-  name: zod.string(),
-  profilePhotoUrl: zod.string().nullish(),
-  distance: zod.number(),
-  matched: zod.boolean(),
-});
-export const IdentifyFaceResponse = zod.array(IdentifyFaceResponseItem);
-
-/**
  * @summary List training sessions
  */
 export const ListSessionsQueryParams = zod.object({

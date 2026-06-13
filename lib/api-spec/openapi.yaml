@@ -272,52 +272,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/StudentProfile"
 
-  /students/{id}/face-descriptor:
-    post:
-      operationId: saveFaceDescriptor
-      tags: [students, face]
-      summary: Save face descriptor for a student
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FaceDescriptorInput"
-      responses:
-        "200":
-          description: Face descriptor saved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MessageResponse"
-
-  /face/identify:
-    post:
-      operationId: identifyFace
-      tags: [face]
-      summary: Identify students from a photo descriptor
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FaceIdentifyInput"
-      responses:
-        "200":
-          description: Identified students
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/FaceMatch"
-
   /sessions:
     get:
       operationId: listSessions
@@ -1006,43 +960,6 @@ components:
           type: string
         jiuDegree:
           type: integer
-
-    FaceDescriptorInput:
-      type: object
-      required: [descriptor]
-      properties:
-        descriptor:
-          type: array
-          items:
-            type: number
-        photoUrl:
-          type: string
-
-    FaceIdentifyInput:
-      type: object
-      required: [descriptors]
-      properties:
-        descriptors:
-          type: array
-          items:
-            type: array
-            items:
-              type: number
-
-    FaceMatch:
-      type: object
-      required: [studentId, name, distance, matched]
-      properties:
-        studentId:
-          type: integer
-        name:
-          type: string
-        profilePhotoUrl:
-          type: ["string", "null"]
-        distance:
-          type: number
-        matched:
-          type: boolean
 
     TrainingSession:
       type: object
