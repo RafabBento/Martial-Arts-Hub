@@ -5,6 +5,7 @@ import {
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { getObjectAclPolicy, ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -132,6 +133,24 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+
+    // Per-object ACL: objects assigned a policy are enforced — profile photos are
+    // "public" (readable by any authenticated user), team photos are owner-only.
+    // Legacy objects predating ACLs have no policy; since the only such objects
+    // are profile avatars (intentionally shared) and team photos always receive a
+    // private policy at creation, a missing policy falls back to authenticated read.
+    const policy = await getObjectAclPolicy(objectFile);
+    if (policy) {
+      const allowed = await objectStorageService.canAccessObjectEntity({
+        userId: String(sessionUserId(req)),
+        objectFile,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!allowed) {
+        res.status(403).json({ error: "Sem permissão para acessar este arquivo" });
+        return;
+      }
+    }
 
     const response = await objectStorageService.downloadObject(objectFile);
 

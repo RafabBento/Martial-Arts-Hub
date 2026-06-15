@@ -6,6 +6,7 @@ import {
   RecognizeTeamBody,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { getObjectAclPolicy } from "../lib/objectAcl";
 import {
   detectSingleDescriptor,
   detectAllDescriptors,
@@ -50,6 +51,18 @@ async function downloadObjectBytes(objectPath: string): Promise<Buffer> {
 }
 
 /**
+ * Guards against IDOR via a client-supplied objectPath: an uploaded object can
+ * only be claimed/processed by the user who owns it. Freshly uploaded objects
+ * have no ACL policy yet (returns true); an object already owned by someone else
+ * is rejected. Throws ObjectNotFoundError if the path does not exist.
+ */
+async function isObjectOwnableBy(objectPath: string, ownerId: number): Promise<boolean> {
+  const file = await objectStorageService.getObjectEntityFile(objectPath);
+  const existing = await getObjectAclPolicy(file);
+  return !existing || existing.owner === String(ownerId);
+}
+
+/**
  * POST /face/profile-photo
  * Sets a user's profile photo and, for students, computes & stores the
  * reference face descriptor used by team recognition.
@@ -83,6 +96,18 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
 
   const photoUrl = servingUrl(objectPath);
 
+  // IDOR guard: cannot claim an object already owned by another user.
+  try {
+    if (!(await isObjectOwnableBy(objectPath, userId))) {
+      res.status(403).json({ error: "Este arquivo não pertence a este usuário" });
+      return;
+    }
+  } catch (error) {
+    req.log.warn({ err: error }, "Foto de perfil: objeto não encontrado");
+    res.status(400).json({ error: "Imagem enviada não encontrada" });
+    return;
+  }
+
   let descriptor: number[] | null = null;
   try {
     const bytes = await downloadObjectBytes(objectPath);
@@ -110,6 +135,18 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
         facePhotoUrl: descriptor ? photoUrl : null,
       })
       .where(eq(studentProfilesTable.userId, userId));
+  }
+
+  // Lock the object to the target user. Profile photos are intentionally
+  // visible to ALL authenticated users (rankings, student lists, dashboard),
+  // so visibility is "public" — the serving route still requires a session.
+  try {
+    await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+      owner: String(userId),
+      visibility: "public",
+    });
+  } catch (error) {
+    req.log.warn({ err: error }, "Não foi possível definir a ACL da foto de perfil");
   }
 
   const faceDetected = descriptor !== null;
@@ -148,6 +185,18 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
 
   const { objectPath } = body.data;
 
+  // IDOR guard: cannot process an object already owned by another user.
+  try {
+    if (!(await isObjectOwnableBy(objectPath, requester.id))) {
+      res.status(403).json({ error: "Este arquivo não pertence a este usuário" });
+      return;
+    }
+  } catch (error) {
+    req.log.warn({ err: error }, "Foto da equipe: objeto não encontrado");
+    res.status(400).json({ error: "Imagem enviada não encontrada" });
+    return;
+  }
+
   let descriptors: number[][];
   try {
     const bytes = await downloadObjectBytes(objectPath);
@@ -156,6 +205,17 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
     req.log.error({ err: error }, "Falha ao processar foto da equipe");
     res.status(400).json({ error: "Não foi possível processar a imagem enviada" });
     return;
+  }
+
+  // Team photos contain sensitive group images and are NOT shown back to other
+  // users — lock to the uploading mestre (private, owner-only).
+  try {
+    await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+      owner: String(requester.id),
+      visibility: "private",
+    });
+  } catch (error) {
+    req.log.warn({ err: error }, "Não foi possível definir a ACL da foto da equipe");
   }
 
   const studentsWithFaces = await db

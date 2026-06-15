@@ -33,6 +33,20 @@ upload-URL issuer (`/storage/uploads/request-url`) and the private object server
 can upload to / read from the bucket. Uploads are restricted to image content
 types under a size cap. `/storage/public-objects/*` stays intentionally open.
 
+**Per-object ACL model (avatars are shared; team photos are private).** Beyond the
+session gate, `/storage/objects/*` enforces the object's ACL policy (`lib/objectAcl.ts`,
+stored as `custom:aclPolicy` metadata): profile photos get `visibility:"public"`
+(readable by ANY authenticated user — required for rankings/lists/dashboard), team
+photos get `visibility:"private"` owner=uploading-mestre (never re-shown to others).
+Policies are set at assignment time in `/face/profile-photo` and `/face/recognize-team`.
+Those endpoints also IDOR-guard the client-supplied `objectPath`: an object already
+owned by a different user is rejected (fresh uploads have no policy → allowed).
+**Why:** the product intentionally shows avatars across accounts, so blanket
+owner-only ACLs are WRONG — only team photos are truly private. **How to apply:**
+when adding a route that consumes a client `objectPath`, verify ownership before
+processing and set an ACL policy after. Objects with NO policy fall back to
+authenticated-read (legacy avatars predating ACLs; team photos always get a policy).
+
 **Mobile private images need the Bearer token, NOT cookies.** The native app
 authenticates with a Bearer token (AsyncStorage → `setAuthTokenGetter`), and sends
 NO session cookie. A plain `<Image source={{ uri }}>` therefore gets 401 from the
