@@ -6,3 +6,21 @@ id = "5KB23LsB2UZ2R9LAKLOTV"
 uri = "file://artifacts/academia-mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "4uKMBd1qdMC1cEJswrNz2"
+uri = "file://artifacts/api-server/test/fixtures/student-thai.png"
+type = "image"
+title = "student thai face"
+
+[[generated]]
+id = "w-yheJR0G4Zve7CHKZaig"
+uri = "file://artifacts/api-server/test/fixtures/student-jiu.png"
+type = "image"
+title = "student jiu face"
+
+[[generated]]
+id = "jMuUbAWb3FT3vGqrIL3C7"
+uri = "file://artifacts/api-server/test/fixtures/student-both.png"
+type = "image"
+title = "student both face"
