@@ -564,15 +564,24 @@ export default function Register() {
       </div>
 
       <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
-        <div className="absolute inset-0 bg-[url('/bg-register.jpg')] bg-cover bg-center opacity-80"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(220,38,38,0.18),transparent_60%)]"></div>
         <div className="absolute inset-0 bg-gradient-to-l from-background to-transparent"></div>
-        <div className="relative z-10 flex flex-col justify-end p-12 w-full text-right items-end">
-          <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white text-right">
-            Comprometa-se <br /> com a Grandeza
-          </h2>
-          <p className="mt-4 text-zinc-400 text-lg max-w-md text-right">
-            Disciplina é tudo. Entre na Front Artes Marciais e acompanhe sua jornada nas artes marciais.
-          </p>
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full text-right items-end">
+          <div className="flex-1 flex items-center justify-center w-full">
+            <img
+              src="/logo-thai-clean.png"
+              alt="Front Artes Marciais"
+              className="w-[60%] max-w-sm object-contain drop-shadow-2xl"
+            />
+          </div>
+          <div className="items-end">
+            <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white text-right">
+              Comprometa-se <br /> com a Grandeza
+            </h2>
+            <p className="mt-4 text-zinc-400 text-lg max-w-md text-right">
+              Disciplina é tudo. Entre na Front Artes Marciais e acompanhe sua jornada nas artes marciais.
+            </p>
+          </div>
         </div>
       </div>
     </div>

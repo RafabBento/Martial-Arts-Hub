@@ -73,17 +73,26 @@ export default function Login() {
         </Link>
       </div>
 
-      {/* Lado esquerdo — imagem */}
+      {/* Lado esquerdo — símbolo da marca */}
       <div className="hidden lg:flex flex-1 relative bg-zinc-900 overflow-hidden z-10">
-        <div className="absolute inset-0 bg-[url('/bg-login-v2.png')] bg-cover bg-center opacity-80"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(220,38,38,0.18),transparent_60%)]"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-background to-transparent"></div>
-        <div className="relative z-10 flex flex-col justify-end p-12 w-full">
-          <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
-            Entre <br /> Na Arena
-          </h2>
-          <p className="mt-4 text-zinc-400 text-lg max-w-md">
-            Acesse sua conta para acompanhar seu progresso, ver seu ranking e gerenciar seus treinos.
-          </p>
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          <div className="flex-1 flex items-center justify-center">
+            <img
+              src="/logo-thai-clean.png"
+              alt="Front Artes Marciais"
+              className="w-[60%] max-w-sm object-contain drop-shadow-2xl"
+            />
+          </div>
+          <div>
+            <h2 className="text-5xl font-black uppercase tracking-tighter leading-tight text-white">
+              Entre <br /> Na Arena
+            </h2>
+            <p className="mt-4 text-zinc-400 text-lg max-w-md">
+              Acesse sua conta para acompanhar seu progresso, ver seu ranking e gerenciar seus treinos.
+            </p>
+          </div>
         </div>
       </div>
 
