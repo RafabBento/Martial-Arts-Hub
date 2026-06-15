@@ -49,6 +49,9 @@ export function CameraCaptureModal({
     stopStream();
     const myRequest = requestIdRef.current;
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new DOMException("unsupported", "NotSupportedError");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: mode },
         audio: false,
@@ -64,11 +67,23 @@ export function CameraCaptureModal({
         await videoRef.current.play().catch(() => {});
       }
       setReady(true);
-    } catch {
+    } catch (err) {
       if (myRequest !== requestIdRef.current) return;
-      setError(
-        "Não foi possível acessar a câmera. Verifique as permissões do navegador ou use a opção de enviar um arquivo.",
-      );
+      const name = err instanceof DOMException ? err.name : "";
+      // When the app runs inside Replit's embedded preview iframe, the browser
+      // blocks camera access (Permissions Policy). Opening in a real tab fixes it.
+      const blockedInFrame = window.self !== window.top;
+      if (name === "NotFoundError" || name === "OverconstrainedError") {
+        setError("Nenhuma câmera foi encontrada neste dispositivo. Use a opção de enviar um arquivo.");
+      } else if (blockedInFrame) {
+        setError(
+          "A câmera está bloqueada na pré-visualização incorporada. Abra o app em uma nova aba do navegador (botão abaixo) e permita o acesso à câmera — ou envie um arquivo.",
+        );
+      } else {
+        setError(
+          "Não foi possível acessar a câmera. Permita o acesso nas configurações do navegador ou use a opção de enviar um arquivo.",
+        );
+      }
     }
   }, [stopStream]);
 
@@ -139,6 +154,17 @@ export function CameraCaptureModal({
             <div className="flex flex-col items-center gap-3 px-6 text-center">
               <AlertTriangle size={32} className="text-red-400" />
               <p className="text-sm text-muted-foreground">{error}</p>
+              {window.self !== window.top && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => window.open(window.location.href, "_blank", "noopener")}
+                >
+                  Abrir em nova aba
+                </Button>
+              )}
             </div>
           ) : (
             <>
