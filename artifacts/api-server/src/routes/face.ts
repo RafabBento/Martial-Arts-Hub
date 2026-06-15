@@ -15,7 +15,14 @@ import {
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-const MATCH_THRESHOLD = 0.5;
+// Strict by default: a detected face matches a student only when its descriptor
+// is within this euclidean distance. Lower = fewer false positives (safer);
+// override with FACE_MATCH_THRESHOLD if needed.
+const MATCH_THRESHOLD = (() => {
+  const raw = process.env["FACE_MATCH_THRESHOLD"];
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) ? n : 0.5;
+})();
 
 function servingUrl(objectPath: string): string {
   return `/api/storage${objectPath}`;
