@@ -3,8 +3,11 @@ name: API server auth model
 description: How authentication/authorization is enforced in artifacts/api-server (there is no middleware).
 ---
 
-The Express api-server has **no auth middleware**. There is no `requireAuth`/`requireRole`
-guard mounted on the router. Each route handler that needs auth must manually:
+The Express api-server has a global `bearerAuth` middleware (`src/middlewares/bearerAuth.ts`),
+but it is **populate-only, not a guard**: it sets `req.session.userId` when a valid session
+cookie or Bearer token is present and otherwise just calls `next()` — it never returns 401.
+There is no `requireAuth`/`requireRole` guard. So every route handler that needs auth must
+still manually:
 
 1. Read the session user id: `(req.session as unknown as Record<string, unknown>).userId as number | undefined`
 2. Look up the role from `usersTable` (roles: `student` | `teacher` | `admin`)
