@@ -35,7 +35,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { uploadImageToStorage } from "@/lib/uploadImage";
-import { imageUrl } from "@/lib/imageUrl";
+import { AuthImage } from "@/components/AuthImage";
 import * as Haptics from "expo-haptics";
 
 type ScanStatus = "idle" | "uploading" | "recognizing" | "found" | "notfound";
@@ -489,7 +489,7 @@ export default function AttendanceScreen() {
               return (
                 <View key={m.studentId} style={[styles.attendRow, { borderBottomColor: colors.border }]}>
                   {m.profilePhotoUrl
-                    ? <Image source={{ uri: imageUrl(m.profilePhotoUrl) }} style={styles.attendAvatar} />
+                    ? <AuthImage path={m.profilePhotoUrl} style={styles.attendAvatar} />
                     : <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
                         <Text style={[styles.attendInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
                       </View>}

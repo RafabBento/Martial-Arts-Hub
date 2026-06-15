@@ -31,7 +31,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { ModalityBadge } from "@/components/ModalityBadge";
 import { uploadImageToStorage } from "@/lib/uploadImage";
-import { imageUrl } from "@/lib/imageUrl";
+import { AuthImage } from "@/components/AuthImage";
 
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
@@ -387,7 +387,7 @@ export default function ProfileScreen() {
           <View style={styles.avatarRow}>
             <Pressable onPress={() => setPhotoSheetOpen(true)} disabled={photoBusy} style={styles.avatarWrap}>
               {user.profilePhotoUrl ? (
-                <Image source={{ uri: imageUrl(user.profilePhotoUrl) }} style={styles.avatar} />
+                <AuthImage path={user.profilePhotoUrl} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
                   <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>

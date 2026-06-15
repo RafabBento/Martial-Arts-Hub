@@ -31,6 +31,12 @@ Object storage routes are part of this same no-middleware model: the presigned
 upload-URL issuer (`/storage/uploads/request-url`) and the private object server
 (`/storage/objects/*`) must each check `session.userId` themselves, or any caller
 can upload to / read from the bucket. Uploads are restricted to image content
-types under a size cap. Native `<Image>` sends the session cookie (shared cookie
-jar), so cookie-gating private objects works on web and mobile alike.
-`/storage/public-objects/*` stays intentionally open.
+types under a size cap. `/storage/public-objects/*` stays intentionally open.
+
+**Mobile private images need the Bearer token, NOT cookies.** The native app
+authenticates with a Bearer token (AsyncStorage → `setAuthTokenGetter`), and sends
+NO session cookie. A plain `<Image source={{ uri }}>` therefore gets 401 from the
+cookie/session-gated `/storage/objects/*`. Fix: mobile renders remote private
+images via `components/AuthImage.tsx`, which attaches `headers: { Authorization:
+Bearer <token> }` to the Image source so `bearerAuth` can populate `session.userId`.
+Do not assume `<Image>` shares a cookie jar with the API client — it does not.

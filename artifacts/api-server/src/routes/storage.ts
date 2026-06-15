@@ -119,8 +119,9 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   // Private objects (profile photos, team photos) are only served to
-  // authenticated users. Cookies are sent by both the web app and the native
-  // <Image> component (shared session cookie jar).
+  // authenticated users. The web app authenticates via session cookies; the
+  // native app sends no cookies, so its image requests carry a Bearer token
+  // (see AuthImage on mobile) which bearerAuth decodes into session.userId.
   if (!sessionUserId(req)) {
     res.status(401).json({ error: "Não autenticado" });
     return;

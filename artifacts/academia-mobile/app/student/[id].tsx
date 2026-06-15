@@ -31,7 +31,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { ModalityBadge } from "@/components/ModalityBadge";
 import { uploadImageToStorage } from "@/lib/uploadImage";
-import { imageUrl } from "@/lib/imageUrl";
+import { AuthImage } from "@/components/AuthImage";
 
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
@@ -257,7 +257,7 @@ export default function StudentDetailScreen() {
         {/* Avatar + identidade */}
         <View style={styles.avatarBlock}>
           {student.profilePhotoUrl ? (
-            <Image source={{ uri: imageUrl(student.profilePhotoUrl) }} style={styles.avatar} />
+            <AuthImage path={student.profilePhotoUrl} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
               <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>

@@ -3,7 +3,6 @@ import { Redirect, useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Image,
   Platform,
   RefreshControl,
   ScrollView,
@@ -16,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGetDashboardStats, useGetRecentActivity } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { imageUrl } from "@/lib/imageUrl";
+import { AuthImage } from "@/components/AuthImage";
 import { StatCard } from "@/components/StatCard";
 
 export default function DashboardScreen() {
@@ -139,7 +138,7 @@ export default function DashboardScreen() {
                 style={[styles.activityItem, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: accentColor }]}
               >
                 {item.studentPhotoUrl ? (
-                  <Image source={{ uri: imageUrl(item.studentPhotoUrl) }} style={styles.activityAvatar} />
+                  <AuthImage path={item.studentPhotoUrl} style={styles.activityAvatar} />
                 ) : (
                   <View style={[styles.activityAvatar, { backgroundColor: accentColor + "30", alignItems: "center", justifyContent: "center" }]}>
                     <Text style={[styles.activityAvatarText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
