@@ -32,6 +32,14 @@ strict to avoid false positives). Matched students dedupe by userId (best distan
 unmatched = detected faces with no student within threshold. The mestre reviews/removes
 matches before bulk-marking, so slightly favoring recall is acceptable.
 
+**Detector over-reports face count.** The multi-pass strategy inflates `detectedFaces`/
+`unmatchedCount` with phantom/partial detections even on clean inputs — a synthetic 6×4
+collage of 24 distinct frontal faces detected 38 "faces" (all 24 real students matched
+correctly, 13 phantom unmatched). So `matchedCount` is reliable, but `detectedFaces` and
+`unmatchedCount` should NOT be shown to users as a literal head count. This is the core
+reason team attendance needs a per-face review UI (zoom each detected box, confirm/discard)
+rather than trusting raw counts.
+
 ## How to apply
 - Tune via env, not code: `FACE_MIN_CONFIDENCE` (0.3), `FACE_MAX_DIM` (1600),
   `FACE_TILE_GRID` (2), `FACE_TILE_OVERLAP` (0.18), `FACE_MAX_TILE_UPSCALE` (2),

@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "5KB23LsB2UZ2R9LAKLOTV"
@@ -24,3 +23,9 @@ id = "jMuUbAWb3FT3vGqrIL3C7"
 uri = "file://artifacts/api-server/test/fixtures/student-both.png"
 type = "image"
 title = "student both face"
+
+[[outputs]]
+id = "khpZsrdEC6QS0R6ax1NmE"
+uri = "file://attached_assets/foto_equipe_teste.jpg"
+type = "image"
+title = "Foto da equipe de teste — 24 alunos"
