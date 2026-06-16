@@ -3,7 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -132,6 +132,7 @@ export default function ProfileScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const pendingPhotoSource = useRef<"camera" | "gallery" | null>(null);
 
   // Edit fields
   const [editName, setEditName] = useState("");
@@ -181,8 +182,21 @@ export default function ProfileScreen() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const handlePickPhoto = async (source: "camera" | "gallery") => {
+  const selectPhotoSource = (source: "camera" | "gallery") => {
+    if (pendingPhotoSource.current || photoBusy) return;
+    pendingPhotoSource.current = source;
     setPhotoSheetOpen(false);
+    // On iOS the image picker cannot be presented while the sheet Modal is
+    // still dismissing, so we defer the launch to the Modal's onDismiss.
+    // Other platforms have no such restriction, so launch right away.
+    if (Platform.OS !== "ios") {
+      const s = pendingPhotoSource.current;
+      pendingPhotoSource.current = null;
+      if (s) void runPhotoPicker(s);
+    }
+  };
+
+  const runPhotoPicker = async (source: "camera" | "gallery") => {
     if (!user) return;
     try {
       let perm;
@@ -192,7 +206,11 @@ export default function ProfileScreen() {
         perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       }
       if (!perm.granted) {
-        showToast("Permissão negada para acessar a câmera/galeria");
+        showToast(
+          source === "camera"
+            ? "Permissão da câmera negada. Ative em Ajustes › Expo Go › Câmera."
+            : "Permissão da galeria negada. Ative em Ajustes › Expo Go › Fotos.",
+        );
         return;
       }
       const opts: ImagePicker.ImagePickerOptions = {
@@ -789,7 +807,17 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* Sheet de foto de perfil */}
-      <Modal visible={photoSheetOpen} transparent animationType="slide" onRequestClose={() => setPhotoSheetOpen(false)}>
+      <Modal
+        visible={photoSheetOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPhotoSheetOpen(false)}
+        onDismiss={() => {
+          const s = pendingPhotoSource.current;
+          pendingPhotoSource.current = null;
+          if (s) void runPhotoPicker(s);
+        }}
+      >
         <Pressable style={styles.sheetBackdrop} onPress={() => setPhotoSheetOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Foto de perfil</Text>
@@ -798,14 +826,14 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.sheetRow, { borderColor: colors.border }]}
-              onPress={() => handlePickPhoto("camera")}
+              onPress={() => selectPhotoSource("camera")}
             >
               <Ionicons name="camera-outline" size={20} color={colors.primary} />
               <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Tirar foto</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.sheetRow, { borderColor: colors.border }]}
-              onPress={() => handlePickPhoto("gallery")}
+              onPress={() => selectPhotoSource("gallery")}
             >
               <Ionicons name="images-outline" size={20} color={colors.primary} />
               <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Escolher da galeria</Text>
