@@ -58,6 +58,23 @@ function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
   return list;
 }
 
+function studentToMatch(s: {
+  userId: number;
+  name: string;
+  profilePhotoUrl?: string | null;
+  modalityThai?: boolean;
+  modalityJiu?: boolean;
+}): TeamMatch {
+  return {
+    studentId: s.userId,
+    name: s.name,
+    profilePhotoUrl: s.profilePhotoUrl ?? null,
+    distance: 0,
+    modalityThai: !!s.modalityThai,
+    modalityJiu: !!s.modalityJiu,
+  };
+}
+
 export default function Attendance() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -78,6 +95,8 @@ export default function Attendance() {
   const [teamPhotoUrl, setTeamPhotoUrl] = useState<string | null>(null);
   const [registeringAll, setRegisteringAll] = useState(false);
   const [autoCreating, setAutoCreating] = useState(false);
+  const [manualAdds, setManualAdds] = useState<TeamMatch[]>([]);
+  const [teamAddStudent, setTeamAddStudent] = useState("");
   const teamInputRef = useRef<HTMLInputElement>(null);
 
   const { data: sessions } = useListSessions(
@@ -204,6 +223,8 @@ export default function Attendance() {
     const file = e.target.files?.[0];
     if (!file) return;
     setMatches([]);
+    setManualAdds([]);
+    setTeamPhotoUrl(null);
     setUnmatchedCount(0);
     setScanStatus("uploading");
 
@@ -237,9 +258,18 @@ export default function Attendance() {
     }
   };
 
+  const addTeamStudent = (v: string) => {
+    const id = parseInt(v, 10);
+    const s = students?.find(st => st.userId === id);
+    if (!s) return;
+    if (matches.some(m => m.studentId === id) || manualAdds.some(m => m.studentId === id)) return;
+    setManualAdds(prev => [...prev, studentToMatch(s)]);
+    setTeamAddStudent("");
+  };
+
   const handleRegisterAll = async () => {
     if (!user) return;
-    const toRegister = matches.filter(m => !confirmedIds.has(m.studentId));
+    const toRegister = [...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) {
       toast({ title: "Todos já estão registrados!" });
       return;
@@ -270,6 +300,12 @@ export default function Attendance() {
   };
 
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
+
+  const teamAddCandidates = (students ?? []).filter(s =>
+    !matches.some(m => m.studentId === s.userId) &&
+    !manualAdds.some(m => m.studentId === s.userId) &&
+    !confirmedIds.has(s.userId)
+  );
 
   if (!isMaster) {
     return (
@@ -418,9 +454,79 @@ export default function Attendance() {
                   </div>
                 )}
 
-                {matches.length > 0 && (
+                {(matches.length > 0 || manualAdds.length > 0 || scanStatus === "found" || scanStatus === "notfound") && (
                   <div className="space-y-3">
-                    {matches.some(m => !confirmedIds.has(m.studentId)) && (
+                    <p className="text-xs text-muted-foreground">
+                      Confira a lista, remova quem não treinou e adicione quem faltou. Depois confirme a presença.
+                    </p>
+
+                    {(matches.length > 0 || manualAdds.length > 0) && (
+                      <div className="space-y-2">
+                        {[...matches, ...manualAdds].map(m => {
+                          const alreadyIn = confirmedIds.has(m.studentId);
+                          const isManual = manualAdds.some(a => a.studentId === m.studentId);
+                          const mods = modalitiesOf(m);
+                          return (
+                            <div key={m.studentId} data-testid={`match-${m.studentId}`} className={`flex items-center gap-3 p-3 rounded-lg border ${alreadyIn ? "bg-green-500/10 border-green-500/30" : "bg-muted/40 border-border"}`}>
+                              <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
+                                {m.profilePhotoUrl
+                                  ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
+                                  : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
+                                }
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm">{m.name}</div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {mods.map(mod => (
+                                    <span key={mod} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${mod === "thai" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}`}>
+                                      {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+                                    </span>
+                                  ))}
+                                  <span className="text-xs text-muted-foreground">{isManual ? "Adicionado manualmente" : `Confiança: ${((1 - m.distance) * 100).toFixed(0)}%`}</span>
+                                </div>
+                              </div>
+                              {alreadyIn
+                                ? <CheckCircle size={18} className="text-green-400 shrink-0" />
+                                : <button
+                                    type="button"
+                                    onClick={() => isManual
+                                      ? setManualAdds(prev => prev.filter(x => x.studentId !== m.studentId))
+                                      : setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
+                                    className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                                    title="Remover este aluno"
+                                    aria-label={`Remover ${m.name}`}
+                                    data-testid={`button-remove-match-${m.studentId}`}
+                                  >
+                                    <XCircle size={18} />
+                                  </button>
+                              }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {matches.length === 0 && manualAdds.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum aluno reconhecido automaticamente. Use o seletor abaixo para adicionar quem treinou.
+                      </p>
+                    )}
+
+                    {/* Adicionar quem faltou */}
+                    <Select value={teamAddStudent} onValueChange={addTeamStudent}>
+                      <SelectTrigger data-testid="select-team-add-student">
+                        <SelectValue placeholder="Adicionar quem faltou..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teamAddCandidates.length === 0
+                          ? <div className="px-2 py-1.5 text-sm text-muted-foreground">Nenhum aluno disponível</div>
+                          : teamAddCandidates.map(s => (
+                            <SelectItem key={s.userId} value={String(s.userId)}>{s.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+
+                    {[...matches, ...manualAdds].some(m => !confirmedIds.has(m.studentId)) && (
                       <Button
                         className="w-full"
                         onClick={handleRegisterAll}
@@ -429,55 +535,14 @@ export default function Attendance() {
                       >
                         {registeringAll
                           ? <><Loader2 size={16} className="animate-spin mr-2" />Registrando...</>
-                          : <><UserCheck size={16} className="mr-2" />Registrar {matches.filter(m => !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}</>
+                          : <><UserCheck size={16} className="mr-2" />Confirmar {[...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId)).length} presença{[...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}</>
                         }
                       </Button>
                     )}
 
-                    <div className="space-y-2">
-                      {matches.map(m => {
-                        const alreadyIn = confirmedIds.has(m.studentId);
-                        const mods = modalitiesOf(m);
-                        return (
-                          <div key={m.studentId} data-testid={`match-${m.studentId}`} className={`flex items-center gap-3 p-3 rounded-lg border ${alreadyIn ? "bg-green-500/10 border-green-500/30" : "bg-muted/40 border-border"}`}>
-                            <div className="w-10 h-10 rounded-full bg-muted border border-border overflow-hidden shrink-0">
-                              {m.profilePhotoUrl
-                                ? <img src={m.profilePhotoUrl} alt={m.name} className="w-full h-full object-cover" />
-                                : <div className="w-full h-full flex items-center justify-center text-sm font-bold">{m.name.charAt(0)}</div>
-                              }
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm">{m.name}</div>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                {mods.map(mod => (
-                                  <span key={mod} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${mod === "thai" ? "bg-red-500/20 text-red-400" : "bg-blue-500/20 text-blue-400"}`}>
-                                    {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
-                                  </span>
-                                ))}
-                                <span className="text-xs text-muted-foreground">Confiança: {((1 - m.distance) * 100).toFixed(0)}%</span>
-                              </div>
-                            </div>
-                            {alreadyIn
-                              ? <CheckCircle size={18} className="text-green-400 shrink-0" />
-                              : <button
-                                  type="button"
-                                  onClick={() => setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
-                                  className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                                  title="Remover este aluno antes de registrar"
-                                  aria-label={`Remover ${m.name}`}
-                                  data-testid={`button-remove-match-${m.studentId}`}
-                                >
-                                  <XCircle size={18} />
-                                </button>
-                            }
-                          </div>
-                        );
-                      })}
-                    </div>
-
                     {unmatchedCount > 0 && (
                       <p className="text-xs text-muted-foreground text-center">
-                        {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} não identificado{unmatchedCount !== 1 ? "s" : ""} — adicione a foto de perfil desses alunos no sistema
+                        O servidor detectou {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} a mais que não casaram com alunos cadastrados — podem ser detecções falsas. Confira a lista e adicione manualmente quem faltar.
                       </p>
                     )}
                   </div>

@@ -80,6 +80,23 @@ function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
   return list;
 }
 
+function studentToMatch(s: {
+  userId: number;
+  name: string;
+  profilePhotoUrl?: string | null;
+  modalityThai?: boolean;
+  modalityJiu?: boolean;
+}): TeamMatch {
+  return {
+    studentId: s.userId,
+    name: s.name,
+    profilePhotoUrl: s.profilePhotoUrl ?? null,
+    distance: 0,
+    modalityThai: !!s.modalityThai,
+    modalityJiu: !!s.modalityJiu,
+  };
+}
+
 export default function AttendanceScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -103,6 +120,8 @@ export default function AttendanceScreen() {
   const [teamPhotoUri, setTeamPhotoUri] = useState<string | null>(null);
   const [teamPhotoUrl, setTeamPhotoUrl] = useState<string | null>(null);
   const [registeringAll, setRegisteringAll] = useState(false);
+  const [manualAdds, setManualAdds] = useState<TeamMatch[]>([]);
+  const [pickerMode, setPickerMode] = useState<"manual" | "team">("manual");
 
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
@@ -204,7 +223,9 @@ export default function AttendanceScreen() {
       const asset = result.assets[0];
 
       setMatches([]);
+      setManualAdds([]);
       setUnmatchedCount(0);
+      setTeamPhotoUrl(null);
       setTeamPhotoUri(asset.uri);
       setScanStatus("uploading");
 
@@ -235,9 +256,23 @@ export default function AttendanceScreen() {
     }
   };
 
+  const toggleTeamAdd = (s: {
+    userId: number;
+    name: string;
+    profilePhotoUrl?: string | null;
+    modalityThai?: boolean;
+    modalityJiu?: boolean;
+  }) => {
+    setManualAdds(prev =>
+      prev.some(a => a.studentId === s.userId)
+        ? prev.filter(a => a.studentId !== s.userId)
+        : [...prev, studentToMatch(s)],
+    );
+  };
+
   const handleRegisterAll = async () => {
     if (!user) return;
-    const toRegister = matches.filter(m => !confirmedIds.has(m.studentId));
+    const toRegister = [...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) { showToast("Todos já estão registrados!"); return; }
     setRegisteringAll(true);
     try {
@@ -278,6 +313,15 @@ export default function AttendanceScreen() {
       (studentSearch === "" || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
     );
   }, [students, attendedIds, confirmedIds, studentSearch]);
+
+  const teamAddCandidates = useMemo(() => {
+    if (!students) return [];
+    const recognized = new Set(matches.map(m => m.studentId));
+    return students.filter(s =>
+      !recognized.has(s.userId) && !confirmedIds.has(s.userId) &&
+      (studentSearch === "" || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+    );
+  }, [students, matches, confirmedIds, studentSearch]);
 
   if (!user && !authLoading) return <Redirect href="/login" />;
 
@@ -460,30 +504,22 @@ export default function AttendanceScreen() {
           </View>
         )}
 
-        {/* Alunos identificados (team) */}
-        {mode === "team" && matches.length > 0 && (
+        {/* Revisão da presença (team) */}
+        {mode === "team" && (matches.length > 0 || manualAdds.length > 0 || scanStatus === "found" || scanStatus === "notfound") && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.inlineRow}>
-              <Ionicons name="checkmark-circle" size={16} color="#4ade80" />
-              <Text style={[styles.cardLabel, { color: "#4ade80", fontFamily: "Inter_700Bold" }]}>
-                {matches.length} ALUNO{matches.length !== 1 ? "S" : ""} IDENTIFICADO{matches.length !== 1 ? "S" : ""}
+              <Ionicons name="people-circle-outline" size={16} color={colors.primary} />
+              <Text style={[styles.cardLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {matches.length} IDENTIFICADO{matches.length !== 1 ? "S" : ""}{manualAdds.length > 0 ? ` · ${manualAdds.length} ADICIONADO${manualAdds.length !== 1 ? "S" : ""}` : ""}
               </Text>
             </View>
-            {matches.some(m => !confirmedIds.has(m.studentId)) && (
-              <TouchableOpacity
-                style={[styles.addStudentBtn, { backgroundColor: colors.primary, opacity: registeringAll ? 0.6 : 1 }]}
-                onPress={handleRegisterAll}
-                disabled={registeringAll}
-              >
-                {registeringAll
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <><Ionicons name="checkmark-done-outline" size={18} color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>
-                      Registrar {matches.filter(m => !confirmedIds.has(m.studentId)).length} presença{matches.filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}
-                    </Text></>}
-              </TouchableOpacity>
-            )}
-            {matches.map((m) => {
+            <Text style={[styles.galleryHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              Confira a lista, remova quem não treinou e adicione quem faltou. Depois confirme a presença.
+            </Text>
+
+            {[...matches, ...manualAdds].map((m) => {
               const alreadyIn = confirmedIds.has(m.studentId);
+              const isManual = manualAdds.some(a => a.studentId === m.studentId);
               const initials = m.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
               const mods = modalitiesOf(m);
               return (
@@ -504,7 +540,7 @@ export default function AttendanceScreen() {
                         </View>
                       ))}
                       <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {((1 - m.distance) * 100).toFixed(0)}%
+                        {isManual ? "Adicionado" : `${((1 - m.distance) * 100).toFixed(0)}%`}
                       </Text>
                     </View>
                   </View>
@@ -512,7 +548,9 @@ export default function AttendanceScreen() {
                     <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                   ) : (
                     <TouchableOpacity
-                      onPress={() => setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
+                      onPress={() => isManual
+                        ? setManualAdds(prev => prev.filter(x => x.studentId !== m.studentId))
+                        : setMatches(prev => prev.filter(x => x.studentId !== m.studentId))}
                       hitSlop={10}
                       accessibilityLabel={`Remover ${m.name}`}
                     >
@@ -522,9 +560,40 @@ export default function AttendanceScreen() {
                 </View>
               );
             })}
+
+            {matches.length === 0 && manualAdds.length === 0 && (
+              <Text style={[styles.warnText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                Nenhum aluno reconhecido automaticamente. Adicione manualmente quem treinou hoje.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.addStudentBtn, { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.primary }]}
+              onPress={() => { setPickerMode("team"); setStudentSearch(""); setStudentPickerOpen(true); }}
+            >
+              <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+              <Text style={[styles.addStudentText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                Adicionar quem faltou
+              </Text>
+            </TouchableOpacity>
+
+            {[...matches, ...manualAdds].some(m => !confirmedIds.has(m.studentId)) && (
+              <TouchableOpacity
+                style={[styles.addStudentBtn, { backgroundColor: colors.primary, opacity: registeringAll ? 0.6 : 1 }]}
+                onPress={handleRegisterAll}
+                disabled={registeringAll}
+              >
+                {registeringAll
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <><Ionicons name="checkmark-done-outline" size={18} color="#fff" /><Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>
+                      Confirmar {[...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId)).length} presença{[...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId)).length !== 1 ? "s" : ""}
+                    </Text></>}
+              </TouchableOpacity>
+            )}
+
             {unmatchedCount > 0 && (
               <Text style={[styles.warnText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} não identificado{unmatchedCount !== 1 ? "s" : ""} — adicione a foto de perfil desses alunos.
+                O servidor detectou {unmatchedCount} rosto{unmatchedCount !== 1 ? "s" : ""} a mais que não casaram com alunos cadastrados — podem ser detecções falsas ou alunos sem foto de perfil. Use "Adicionar quem faltou" se faltar alguém.
               </Text>
             )}
           </View>
@@ -556,7 +625,7 @@ export default function AttendanceScreen() {
             {selectedSessionId ? (
               <TouchableOpacity
                 style={[styles.addStudentBtn, { backgroundColor: colors.primary }]}
-                onPress={() => { setStudentSearch(""); setStudentPickerOpen(true); }}
+                onPress={() => { setPickerMode("manual"); setStudentSearch(""); setStudentPickerOpen(true); }}
                 activeOpacity={0.85}
               >
                 <Ionicons name="person-add-outline" size={18} color="#fff" />
@@ -684,15 +753,16 @@ export default function AttendanceScreen() {
             />
           </View>
           <FlatList
-            data={filteredStudents}
+            data={pickerMode === "team" ? teamAddCandidates : filteredStudents}
             keyExtractor={item => String(item.userId)}
             style={{ maxHeight: 350 }}
             renderItem={({ item }) => {
               const initials = item.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+              const added = pickerMode === "team" && manualAdds.some(a => a.studentId === item.userId);
               return (
                 <TouchableOpacity
                   style={[styles.studentItem, { borderBottomColor: colors.border }]}
-                  onPress={() => confirmAttendance(item.userId)}
+                  onPress={() => pickerMode === "team" ? toggleTeamAdd(item) : confirmAttendance(item.userId)}
                 >
                   <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22" }]}>
                     <Text style={[styles.attendInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
@@ -703,14 +773,14 @@ export default function AttendanceScreen() {
                     <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{item.name}</Text>
                     <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{item.email}</Text>
                   </View>
-                  <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                  <Ionicons name={added ? "checkmark-circle" : "add-circle-outline"} size={22} color={added ? colors.success : colors.primary} />
                 </TouchableOpacity>
               );
             }}
             ListEmptyComponent={
               <View style={styles.emptyAttend}>
                 <Text style={[styles.emptyAttendText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {studentSearch ? "Nenhum aluno encontrado" : "Todos os alunos já estão presentes"}
+                  {studentSearch ? "Nenhum aluno encontrado" : (pickerMode === "team" ? "Todos os alunos já estão na lista" : "Todos os alunos já estão presentes")}
                 </Text>
               </View>
             }
