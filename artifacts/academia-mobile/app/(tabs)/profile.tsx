@@ -134,6 +134,7 @@ export default function ProfileScreen() {
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const pendingPhotoSource = useRef<"camera" | "gallery" | null>(null);
+  const viewerOpenedAt = useRef(0);
 
   // Edit fields
   const [editName, setEditName] = useState("");
@@ -406,7 +407,14 @@ export default function ProfileScreen() {
           <View style={styles.avatarRow}>
             <View style={styles.avatarWrap}>
               <Pressable
-                onPress={() => (user.profilePhotoUrl ? setViewerOpen(true) : setPhotoSheetOpen(true))}
+                onPress={() => {
+                  if (user.profilePhotoUrl) {
+                    viewerOpenedAt.current = Date.now();
+                    setViewerOpen(true);
+                  } else {
+                    setPhotoSheetOpen(true);
+                  }
+                }}
                 disabled={photoBusy}
               >
                 {user.profilePhotoUrl ? (
@@ -856,7 +864,13 @@ export default function ProfileScreen() {
 
       {/* Visualizador da foto de perfil em tela cheia */}
       <Modal visible={viewerOpen} transparent animationType="fade" onRequestClose={() => setViewerOpen(false)}>
-        <Pressable style={styles.viewerBackdrop} onPress={() => setViewerOpen(false)}>
+        <Pressable
+          style={styles.viewerBackdrop}
+          onPress={() => {
+            if (Date.now() - viewerOpenedAt.current < 350) return;
+            setViewerOpen(false);
+          }}
+        >
           {user.profilePhotoUrl && (
             <AuthImage path={user.profilePhotoUrl} style={styles.viewerImage} resizeMode="contain" />
           )}
