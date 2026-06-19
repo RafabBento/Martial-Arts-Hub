@@ -252,6 +252,7 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
     modalityJiu: boolean;
   }>();
   let unmatchedCount = 0;
+  const diag: { best: string; distance: number; matched: boolean }[] = [];
 
   for (const detected of descriptors) {
     let best: { student: typeof studentsWithFaces[number]; distance: number } | null = null;
@@ -264,6 +265,12 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
         best = { student, distance };
       }
     }
+
+    diag.push({
+      best: best ? best.student.name : "(nenhum candidato)",
+      distance: best ? Number(best.distance.toFixed(3)) : -1,
+      matched: !!best && best.distance <= MATCH_THRESHOLD,
+    });
 
     if (best && best.distance <= MATCH_THRESHOLD) {
       const existing = matchedByUser.get(best.student.userId);
@@ -283,6 +290,17 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
   }
 
   const matches = Array.from(matchedByUser.values()).sort((a, b) => a.distance - b.distance);
+
+  req.log.info(
+    {
+      detectedFaces: descriptors.length,
+      enrolledCandidates: studentsWithFaces.length,
+      matchThreshold: MATCH_THRESHOLD,
+      matchedCount: matches.length,
+      perFace: diag,
+    },
+    "recognize-team: resultado do reconhecimento",
+  );
 
   res.json({
     detectedFaces: descriptors.length,

@@ -132,6 +132,7 @@ export default function ProfileScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const pendingPhotoSource = useRef<"camera" | "gallery" | null>(null);
 
   // Edit fields
@@ -403,20 +404,31 @@ export default function ProfileScreen() {
         {/* Card de identidade */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.avatarRow}>
-            <Pressable onPress={() => setPhotoSheetOpen(true)} disabled={photoBusy} style={styles.avatarWrap}>
-              {user.profilePhotoUrl ? (
-                <AuthImage path={user.profilePhotoUrl} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
-                  <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
-                </View>
-              )}
-              <View style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
+            <View style={styles.avatarWrap}>
+              <Pressable
+                onPress={() => (user.profilePhotoUrl ? setViewerOpen(true) : setPhotoSheetOpen(true))}
+                disabled={photoBusy}
+              >
+                {user.profilePhotoUrl ? (
+                  <AuthImage path={user.profilePhotoUrl} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={[styles.initials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{initials}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => setPhotoSheetOpen(true)}
+                disabled={photoBusy}
+                hitSlop={8}
+                accessibilityLabel="Alterar foto de perfil"
+                style={[styles.avatarBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}
+              >
                 {photoBusy
                   ? <ActivityIndicator size="small" color="#fff" />
                   : <Ionicons name="camera" size={14} color="#fff" />}
-              </View>
-            </Pressable>
+              </Pressable>
+            </View>
             <View style={styles.nameBlock}>
               <Text style={[styles.name, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{user.name}</Text>
               <Text style={[styles.email, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{user.email}</Text>
@@ -841,6 +853,23 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Visualizador da foto de perfil em tela cheia */}
+      <Modal visible={viewerOpen} transparent animationType="fade" onRequestClose={() => setViewerOpen(false)}>
+        <Pressable style={styles.viewerBackdrop} onPress={() => setViewerOpen(false)}>
+          {user.profilePhotoUrl && (
+            <AuthImage path={user.profilePhotoUrl} style={styles.viewerImage} resizeMode="contain" />
+          )}
+          <Pressable
+            style={[styles.viewerClose, { top: topPad + 12 }]}
+            onPress={() => setViewerOpen(false)}
+            hitSlop={10}
+            accessibilityLabel="Fechar"
+          >
+            <Ionicons name="close" size={26} color="#fff" />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -857,6 +886,13 @@ function InfoRow({ icon, label, value, colors }: { icon: any; label: string; val
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  viewerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.94)", alignItems: "center", justifyContent: "center" },
+  viewerImage: { width: "100%", height: "100%" },
+  viewerClose: {
+    position: "absolute", right: 16,
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center",
+  },
   toast: {
     position: "absolute", top: 60, left: 16, right: 16, zIndex: 99,
     padding: 12, borderRadius: 10, borderWidth: 1,

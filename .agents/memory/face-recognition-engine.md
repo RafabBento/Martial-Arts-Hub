@@ -40,6 +40,16 @@ correctly, 13 phantom unmatched). So `matchedCount` is reliable, but `detectedFa
 reason team attendance needs a per-face review UI (zoom each detected box, confirm/discard)
 rather than trusting raw counts.
 
+## Enrolled-data reality (diagnosing "ninguém é reconhecido")
+The bulk of stored descriptors are **seed/test fixtures** — fictional people generated from a
+test collage — NOT real academy members. A real class photo therefore legitimately matches
+~0 of them; recognition is working, the enrolled set just doesn't overlap reality. Before
+blaming the engine/threshold, confirm whether the people in the photo are actually enrolled.
+`recognize-team` logs a `perFace` diag (best candidate name + distance + matched) under
+`req.log.info "recognize-team: resultado do reconhecimento"` — read those distances first to
+decide if a miss is a threshold issue (distance just above 0.5, face-api norm is 0.6) vs the
+person simply not being enrolled. Don't raise `FACE_MATCH_THRESHOLD` blindly.
+
 ## How to apply
 - Tune via env, not code: `FACE_MIN_CONFIDENCE` (0.3), `FACE_MAX_DIM` (1600),
   `FACE_TILE_GRID` (2), `FACE_TILE_OVERLAP` (0.18), `FACE_MAX_TILE_UPSCALE` (2),
