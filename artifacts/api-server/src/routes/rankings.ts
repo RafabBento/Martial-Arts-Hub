@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, sql, gte } from "drizzle-orm";
+import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
 import { ListRankingsQueryParams } from "@workspace/api-zod";
 
@@ -77,7 +77,7 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       eq(usersTable.id, studentProfilesTable.userId),
       eq(modalityCol, true),
     ))
-    .where(eq(usersTable.role, "student"))
+    .where(inArray(usersTable.role, ["student", "teacher"]))
     .groupBy(
       usersTable.id,
       usersTable.name,
@@ -119,7 +119,7 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
             ${dateFilter ? sql`AND ts.session_date >= ${dateFilter}` : sql``}
           )`
         ))
-        .where(eq(usersTable.role, "student"))
+        .where(inArray(usersTable.role, ["student", "teacher"]))
         .groupBy(
           usersTable.id,
           usersTable.name,

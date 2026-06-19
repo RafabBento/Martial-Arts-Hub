@@ -121,7 +121,10 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
   // Always save the photo as the user's avatar.
   await db.update(usersTable).set({ profilePhotoUrl: photoUrl }).where(eq(usersTable.id, userId));
 
-  // For students, persist the descriptor (or clear it if no face was found).
+  // Persist the reference descriptor on the user's training profile (or clear
+  // it if no face was found). Students always have a profile; teachers may not
+  // yet — create one (defaulting to both modalities) so they can be recognized
+  // in team photos and appear in the rankings too.
   const [profile] = await db
     .select({ id: studentProfilesTable.id })
     .from(studentProfilesTable)
@@ -135,6 +138,14 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
         facePhotoUrl: descriptor ? photoUrl : null,
       })
       .where(eq(studentProfilesTable.userId, userId));
+  } else if (user.role === "student" || user.role === "teacher") {
+    await db.insert(studentProfilesTable).values({
+      userId,
+      modalityThai: true,
+      modalityJiu: true,
+      faceDescriptor: descriptor ?? null,
+      facePhotoUrl: descriptor ? photoUrl : null,
+    });
   }
 
   // Lock the object to the target user. Profile photos are intentionally

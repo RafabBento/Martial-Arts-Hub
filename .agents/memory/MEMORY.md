@@ -1,2 +1,3 @@
 - [API server auth model](api-server-auth.md) — global `bearerAuth` is populate-only (never 401s); no auth guard, so every route must hand-roll session+role checks.
 - [Server face recognition engine](face-recognition-engine.md) — multi-pass (full-frame + overlapping tiled/upscaled) detection with spatial+descriptor dedupe; all params env-clamped.
+- [Teacher participation](teacher-participation.md) — a `student_profiles` row (not role) gates recognition/bulk/rankings; teachers get both-modality rows, rankings = role student+teacher (admin excluded).
