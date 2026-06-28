@@ -70,6 +70,7 @@ A full-stack management platform for a Muay Thai and Jiu-Jitsu academy. Handles 
 
 - Language: Portuguese (pt-BR) for all UI text
 - Dark mode mandatory; red primary color (hsl 0 84% 45%)
+- **Feature parity mobile ↔ web**: from now on, any feature added to the mobile app (`artifacts/academia-mobile`) must also be added to the web app (`artifacts/academia`), and vice-versa. (Note: the multi-angle face enrollment was originally built mobile-only and still needs to be ported to web to satisfy this.)
 
 ## Gotchas
 
