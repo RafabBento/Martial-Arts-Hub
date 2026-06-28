@@ -48,7 +48,7 @@ export default defineConfig({
           "Front Artes Marciais — gestão da academia de Muay Thai e Jiu-Jitsu: presença, graduações e rankings.",
         lang: "pt-BR",
         dir: "ltr",
-        theme_color: "#d42b2b",
+        theme_color: "#0d0d0d",
         background_color: "#0d0d0d",
         display: "standalone",
         orientation: "portrait",
