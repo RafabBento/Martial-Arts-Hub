@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
-import { db, usersTable, studentProfilesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { db, usersTable, studentProfilesTable, studentFaceDescriptorsTable } from "@workspace/db";
 import {
   RegisterProfilePhotoBody,
   RecognizeTeamBody,
+  EnrollFaceBody,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { getObjectAclPolicy } from "../lib/objectAcl";
@@ -170,6 +171,165 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
   });
 });
 
+// Two stored angles closer than this euclidean distance are considered the
+// same pose and deduplicated, so a burst of near-identical frames does not
+// bloat the descriptor set. Override with FACE_ENROLL_DEDUPE if needed.
+const ENROLL_DEDUPE = (() => {
+  const raw = process.env["FACE_ENROLL_DEDUPE"];
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) ? n : 0.35;
+})();
+
+// Cap on how many distinct angles we keep per student.
+const ENROLL_MAX_ANGLES = (() => {
+  const raw = process.env["FACE_ENROLL_MAX_ANGLES"];
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 8;
+})();
+
+/**
+ * POST /face/enroll
+ * Multi-angle face enrollment. Accepts a burst of still frames (front/left/
+ * right/up/down), detects the best face per frame, deduplicates near-identical
+ * angles, and replaces the student's stored multi-angle descriptor set.
+ */
+router.post("/face/enroll", async (req, res): Promise<void> => {
+  const body = EnrollFaceBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const { userId, objectPaths } = body.data;
+
+  // Authz: users may enroll their own face; teachers/admins may enroll anyone's.
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  const isMaster = requester.role === "teacher" || requester.role === "admin";
+  if (!isMaster && requester.id !== userId) {
+    res.status(403).json({ error: "Sem permissão para cadastrar o rosto deste usuário" });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) {
+    res.status(404).json({ error: "Usuário não encontrado" });
+    return;
+  }
+
+  // Detect the best face per frame. Frames without a face are rejected.
+  const descriptors: number[][] = [];
+  let framesAccepted = 0;
+  let framesRejected = 0;
+  let firstAcceptedPath: string | null = null;
+
+  for (const objectPath of objectPaths) {
+    // IDOR guard: skip any object that already belongs to someone else.
+    try {
+      if (!(await isObjectOwnableBy(objectPath, userId))) {
+        framesRejected += 1;
+        continue;
+      }
+    } catch (error) {
+      req.log.warn({ err: error }, "Cadastro facial: quadro não encontrado");
+      framesRejected += 1;
+      continue;
+    }
+
+    let descriptor: number[] | null = null;
+    try {
+      const bytes = await downloadObjectBytes(objectPath);
+      descriptor = await detectSingleDescriptor(bytes);
+    } catch (error) {
+      req.log.warn({ err: error }, "Cadastro facial: falha ao processar quadro");
+    }
+
+    if (!descriptor) {
+      framesRejected += 1;
+      continue;
+    }
+
+    framesAccepted += 1;
+    if (!firstAcceptedPath) firstAcceptedPath = objectPath;
+
+    // Dedupe: drop angles too close to one we already kept.
+    const isDuplicate = descriptors.some((d) => euclideanDistance(d, descriptor!) < ENROLL_DEDUPE);
+    if (!isDuplicate && descriptors.length < ENROLL_MAX_ANGLES) {
+      descriptors.push(descriptor);
+    }
+
+    // Lock each accepted frame to the user (public, like profile photos).
+    try {
+      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+        owner: String(userId),
+        visibility: "public",
+      });
+    } catch (error) {
+      req.log.warn({ err: error }, "Não foi possível definir a ACL do quadro de cadastro");
+    }
+  }
+
+  if (descriptors.length === 0) {
+    res.json({
+      anglesStored: 0,
+      framesAccepted,
+      framesRejected,
+      profilePhotoUrl: user.profilePhotoUrl ?? null,
+      message:
+        "Nenhum rosto foi detectado nos quadros enviados. Refaça o cadastro com boa iluminação e o rosto bem visível.",
+    });
+    return;
+  }
+
+  // Ensure the user has a training profile so they can be recognized/ranked.
+  const [profile] = await db
+    .select({ id: studentProfilesTable.id })
+    .from(studentProfilesTable)
+    .where(eq(studentProfilesTable.userId, userId));
+  if (!profile && (user.role === "student" || user.role === "teacher")) {
+    await db.insert(studentProfilesTable).values({
+      userId,
+      modalityThai: true,
+      modalityJiu: true,
+    });
+  }
+
+  // Set a profile photo from the first good frame when the user has none yet.
+  let profilePhotoUrl = user.profilePhotoUrl ?? null;
+  const setProfilePhoto = !profilePhotoUrl && !!firstAcceptedPath;
+  if (setProfilePhoto) {
+    profilePhotoUrl = servingUrl(firstAcceptedPath!);
+  }
+
+  // Replace the student's previous multi-angle set with the new one atomically:
+  // a failed insert must never leave the student with an emptied descriptor set.
+  await db.transaction(async (tx) => {
+    await tx.delete(studentFaceDescriptorsTable).where(eq(studentFaceDescriptorsTable.userId, userId));
+    await tx.insert(studentFaceDescriptorsTable).values(
+      descriptors.map((descriptor) => ({ userId, descriptor })),
+    );
+
+    if (setProfilePhoto) {
+      await tx.update(usersTable).set({ profilePhotoUrl }).where(eq(usersTable.id, userId));
+      await tx
+        .update(studentProfilesTable)
+        .set({ facePhotoUrl: profilePhotoUrl })
+        .where(eq(studentProfilesTable.userId, userId));
+    }
+  });
+
+  res.json({
+    anglesStored: descriptors.length,
+    framesAccepted,
+    framesRejected,
+    profilePhotoUrl,
+    message: `Cadastro concluído — ${descriptors.length} ${descriptors.length === 1 ? "ângulo capturado" : "ângulos capturados"}.`,
+  });
+});
+
 /**
  * POST /face/recognize-team
  * Detects every face in a whole-team photo and matches each against the
@@ -229,7 +389,7 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
     req.log.warn({ err: error }, "Não foi possível definir a ACL da foto da equipe");
   }
 
-  const studentsWithFaces = await db
+  const profileRows = await db
     .select({
       userId: usersTable.id,
       name: usersTable.name,
@@ -239,8 +399,50 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
       faceDescriptor: studentProfilesTable.faceDescriptor,
     })
     .from(usersTable)
-    .innerJoin(studentProfilesTable, eq(usersTable.id, studentProfilesTable.userId))
-    .where(sql`${studentProfilesTable.faceDescriptor} IS NOT NULL`);
+    .innerJoin(studentProfilesTable, eq(usersTable.id, studentProfilesTable.userId));
+
+  // Load every stored multi-angle descriptor and group them by student.
+  const angleRows = await db
+    .select({
+      userId: studentFaceDescriptorsTable.userId,
+      descriptor: studentFaceDescriptorsTable.descriptor,
+    })
+    .from(studentFaceDescriptorsTable);
+  const anglesByUser = new Map<number, number[][]>();
+  for (const row of angleRows) {
+    const d = row.descriptor as number[];
+    if (!Array.isArray(d)) continue;
+    const list = anglesByUser.get(row.userId) ?? [];
+    list.push(d);
+    anglesByUser.set(row.userId, list);
+  }
+
+  // A candidate carries ALL of a student's reference descriptors: the legacy
+  // single one (until they re-enroll) plus every multi-angle one.
+  type Candidate = {
+    userId: number;
+    name: string;
+    profilePhotoUrl: string | null;
+    modalityThai: boolean;
+    modalityJiu: boolean;
+    descriptors: number[][];
+  };
+  const studentsWithFaces: Candidate[] = [];
+  for (const row of profileRows) {
+    const descriptorSet: number[][] = [];
+    const legacy = row.faceDescriptor as number[] | null;
+    if (Array.isArray(legacy)) descriptorSet.push(legacy);
+    descriptorSet.push(...(anglesByUser.get(row.userId) ?? []));
+    if (descriptorSet.length === 0) continue;
+    studentsWithFaces.push({
+      userId: row.userId,
+      name: row.name,
+      profilePhotoUrl: row.profilePhotoUrl,
+      modalityThai: row.modalityThai,
+      modalityJiu: row.modalityJiu,
+      descriptors: descriptorSet,
+    });
+  }
 
   const photoUrl = servingUrl(objectPath);
   const matchedByUser = new Map<number, {
@@ -258,11 +460,16 @@ router.post("/face/recognize-team", async (req, res): Promise<void> => {
     let best: { student: typeof studentsWithFaces[number]; distance: number } | null = null;
 
     for (const student of studentsWithFaces) {
-      const stored = student.faceDescriptor as number[];
-      if (!Array.isArray(stored) || stored.length !== detected.length) continue;
-      const distance = euclideanDistance(stored, detected);
-      if (best === null || distance < best.distance) {
-        best = { student, distance };
+      // Best (closest) angle for this student wins.
+      let studentBest = Infinity;
+      for (const stored of student.descriptors) {
+        if (stored.length !== detected.length) continue;
+        const distance = euclideanDistance(stored, detected);
+        if (distance < studentBest) studentBest = distance;
+      }
+      if (studentBest === Infinity) continue;
+      if (best === null || studentBest < best.distance) {
+        best = { student, distance: studentBest };
       }
     }
 

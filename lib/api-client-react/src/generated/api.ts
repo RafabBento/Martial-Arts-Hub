@@ -24,6 +24,8 @@ import type {
   BulkAttendanceInput,
   BulkAttendanceResult,
   DashboardStats,
+  EnrollFaceInput,
+  EnrollFaceResult,
   ErrorEnvelope,
   HealthStatus,
   ListAttendanceParams,
@@ -2581,6 +2583,98 @@ export const useRegisterProfilePhoto = <
   TContext
 > => {
   return useMutation(getRegisterProfilePhotoMutationOptions(options));
+};
+
+/**
+ * Server downloads each uploaded frame (front/left/right/up/down burst),
+detects the best face per frame, deduplicates near-identical angles and
+stores multiple 128-float descriptors for the student. Replaces the
+student's previous multi-angle descriptor set. Also sets one frame as the
+profile photo when the user has none yet.
+
+ * @summary Enroll a student's face from multiple guided angle frames
+ */
+export const getEnrollFaceUrl = () => {
+  return `/api/face/enroll`;
+};
+
+export const enrollFace = async (
+  enrollFaceInput: EnrollFaceInput,
+  options?: RequestInit,
+): Promise<EnrollFaceResult> => {
+  return customFetch<EnrollFaceResult>(getEnrollFaceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(enrollFaceInput),
+  });
+};
+
+export const getEnrollFaceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollFace>>,
+    TError,
+    { data: BodyType<EnrollFaceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enrollFace>>,
+  TError,
+  { data: BodyType<EnrollFaceInput> },
+  TContext
+> => {
+  const mutationKey = ["enrollFace"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enrollFace>>,
+    { data: BodyType<EnrollFaceInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return enrollFace(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnrollFaceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enrollFace>>
+>;
+export type EnrollFaceMutationBody = BodyType<EnrollFaceInput>;
+export type EnrollFaceMutationError = ErrorType<void>;
+
+/**
+ * @summary Enroll a student's face from multiple guided angle frames
+ */
+export const useEnrollFace = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollFace>>,
+    TError,
+    { data: BodyType<EnrollFaceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enrollFace>>,
+  TError,
+  { data: BodyType<EnrollFaceInput> },
+  TContext
+> => {
+  return useMutation(getEnrollFaceMutationOptions(options));
 };
 
 /**

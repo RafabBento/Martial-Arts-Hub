@@ -587,6 +587,34 @@ export const RegisterProfilePhotoResponse = zod.object({
 });
 
 /**
+ * Server downloads each uploaded frame (front/left/right/up/down burst),
+detects the best face per frame, deduplicates near-identical angles and
+stores multiple 128-float descriptors for the student. Replaces the
+student's previous multi-angle descriptor set. Also sets one frame as the
+profile photo when the user has none yet.
+
+ * @summary Enroll a student's face from multiple guided angle frames
+ */
+
+export const EnrollFaceBody = zod.object({
+  userId: zod.number(),
+  objectPaths: zod
+    .array(zod.string())
+    .min(1)
+    .describe("Object paths of the captured burst frames (one per still)."),
+});
+
+export const EnrollFaceResponse = zod.object({
+  anglesStored: zod
+    .number()
+    .describe("Number of distinct descriptors stored after dedupe."),
+  framesAccepted: zod.number().describe("Frames where a face was detected."),
+  framesRejected: zod.number().describe("Frames where no face was detected."),
+  profilePhotoUrl: zod.string().nullable(),
+  message: zod.string(),
+});
+
+/**
  * Server downloads the team photo, detects every face, and matches each one
 against stored student reference descriptors. Returns each matched student
 with the modalities they train (so attendance can be marked in both).

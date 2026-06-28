@@ -358,6 +358,27 @@ export interface ProfilePhotoResult {
   message: string;
 }
 
+export interface EnrollFaceInput {
+  userId: number;
+  /**
+   * Object paths of the captured burst frames (one per still).
+   * @minItems 1
+   */
+  objectPaths: string[];
+}
+
+export interface EnrollFaceResult {
+  /** Number of distinct descriptors stored after dedupe. */
+  anglesStored: number;
+  /** Frames where a face was detected. */
+  framesAccepted: number;
+  /** Frames where no face was detected. */
+  framesRejected: number;
+  /** @nullable */
+  profilePhotoUrl: string | null;
+  message: string;
+}
+
 export interface RecognizeTeamInput {
   /** Object path of the uploaded whole-team photo. */
   objectPath: string;

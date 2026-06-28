@@ -30,6 +30,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { ModalityBadge } from "@/components/ModalityBadge";
+import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 import { uploadImageToStorage } from "@/lib/uploadImage";
 import { AuthImage } from "@/components/AuthImage";
 
@@ -120,6 +121,7 @@ export default function StudentDetailScreen() {
   const [jiuColorPickerOpen, setJiuColorPickerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [faceUploading, setFaceUploading] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
 
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) },
@@ -524,33 +526,47 @@ export default function StudentDetailScreen() {
                 </Text>
               </View>
             ) : (
-              <View style={styles.faceBtnRow}>
+              <View style={{ gap: 8 }}>
                 <TouchableOpacity
                   style={[styles.faceBtn, {
-                    backgroundColor: colors.primary + "15",
-                    borderColor: colors.primary + "40",
-                    flex: 1,
+                    backgroundColor: colors.primary,
+                    borderColor: colors.primary,
                   }]}
-                  onPress={() => handlePickFace("camera")}
+                  onPress={() => setEnrollOpen(true)}
                 >
-                  <Ionicons name="camera-outline" size={16} color={colors.primary} />
-                  <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                    Câmera
+                  <Ionicons name="scan-outline" size={16} color="#fff" />
+                  <Text style={[styles.faceBtnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
+                    {student.hasFaceDescriptor ? "Refazer cadastro (vários ângulos)" : "Cadastrar rosto (vários ângulos)"}
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.faceBtn, {
-                    backgroundColor: colors.primary + "15",
-                    borderColor: colors.primary + "40",
-                    flex: 1,
-                  }]}
-                  onPress={() => handlePickFace("gallery")}
-                >
-                  <Ionicons name="images-outline" size={16} color={colors.primary} />
-                  <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                    {student.hasFaceDescriptor ? "Atualizar" : "Galeria"}
-                  </Text>
-                </TouchableOpacity>
+                <View style={styles.faceBtnRow}>
+                  <TouchableOpacity
+                    style={[styles.faceBtn, {
+                      backgroundColor: colors.primary + "15",
+                      borderColor: colors.primary + "40",
+                      flex: 1,
+                    }]}
+                    onPress={() => handlePickFace("camera")}
+                  >
+                    <Ionicons name="camera-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                      Câmera
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.faceBtn, {
+                      backgroundColor: colors.primary + "15",
+                      borderColor: colors.primary + "40",
+                      flex: 1,
+                    }]}
+                    onPress={() => handlePickFace("gallery")}
+                  >
+                    <Ionicons name="images-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.faceBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                      Galeria
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )
           )}
@@ -562,6 +578,19 @@ export default function StudentDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Cadastro facial guiado (vários ângulos) */}
+      <FaceEnrollModal
+        visible={enrollOpen}
+        userId={studentId}
+        title={`Cadastrar rosto — ${student.name.split(" ")[0]}`}
+        onClose={() => setEnrollOpen(false)}
+        onDone={(res) => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+          queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+          showToast(res.message);
+        }}
+      />
 
       {/* ─── Modal: Prajied Thai ─────────────────────────── */}
       <Modal visible={thaiPickerOpen} transparent animationType="slide" onRequestClose={() => setThaiPickerOpen(false)}>

@@ -42,6 +42,12 @@
           "cameraPermission": "O Front Artes Marciais usa a câmera para tirar sua foto de perfil (rosto de referência para o reconhecimento facial).",
           "photosPermission": "O Front Artes Marciais acessa suas fotos para definir sua foto de perfil (rosto de referência para o reconhecimento facial)."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Front Artes Marciais usa a câmera para o cadastro facial guiado (captura do seu rosto em vários ângulos para o reconhecimento na presença)."
+        }
       ]
     ],
     "experiments": {

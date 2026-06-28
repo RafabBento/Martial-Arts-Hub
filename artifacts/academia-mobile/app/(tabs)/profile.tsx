@@ -33,6 +33,7 @@ import { MenuButton } from "@/components/MenuButton";
 import { ModalityBadge } from "@/components/ModalityBadge";
 import { uploadImageToStorage } from "@/lib/uploadImage";
 import { AuthImage } from "@/components/AuthImage";
+import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
@@ -133,6 +134,7 @@ export default function ProfileScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const pendingPhotoSource = useRef<"camera" | "gallery" | null>(null);
   const viewerOpenedAt = useRef(0);
@@ -848,6 +850,19 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.sheetRow, { borderColor: colors.border }]}
+              onPress={() => {
+                setPhotoSheetOpen(false);
+                setEnrollOpen(true);
+              }}
+            >
+              <Ionicons name="scan-outline" size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Cadastrar rosto (vários ângulos)</Text>
+                <Text style={[styles.sheetRowSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Recomendado — melhora o reconhecimento na presença</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetRow, { borderColor: colors.border }]}
               onPress={() => selectPhotoSource("camera")}
             >
               <Ionicons name="camera-outline" size={20} color={colors.primary} />
@@ -863,6 +878,19 @@ export default function ProfileScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Cadastro facial guiado (vários ângulos) */}
+      <FaceEnrollModal
+        visible={enrollOpen}
+        userId={user.id}
+        title="Cadastrar meu rosto"
+        onClose={() => setEnrollOpen(false)}
+        onDone={(res) => {
+          if (res.profilePhotoUrl) setUser({ ...user, profilePhotoUrl: res.profilePhotoUrl });
+          queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+          showToast(res.message);
+        }}
+      />
 
       {/* Visualizador da foto de perfil em tela cheia */}
       <Modal visible={viewerOpen} transparent animationType="fade" onRequestClose={() => setViewerOpen(false)}>
@@ -981,6 +1009,7 @@ const styles = StyleSheet.create({
   sheetSubtitle: { fontSize: 12, lineHeight: 17, marginBottom: 12 },
   sheetRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 6 },
   sheetRowText: { fontSize: 14, flex: 1 },
+  sheetRowSub: { fontSize: 11, marginTop: 2 },
   degreeRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 2 },
   degreeLabel: { fontSize: 12 },
   degreeBtn: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },

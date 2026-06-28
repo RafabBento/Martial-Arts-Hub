@@ -17,6 +17,8 @@ export * from "./bulkAttendanceResult";
 export * from "./bulkAttendanceStudent";
 export * from "./bulkAttendanceStudentModalitiesItem";
 export * from "./dashboardStats";
+export * from "./enrollFaceInput";
+export * from "./enrollFaceResult";
 export * from "./errorEnvelope";
 export * from "./healthStatus";
 export * from "./listAttendanceModality";
