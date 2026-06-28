@@ -36,6 +36,11 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "robots.txt"],
+      devOptions: {
+        enabled: true,
+        type: "module",
+        suppressWarnings: true,
+      },
       manifest: {
         name: "Front Artes Marciais",
         short_name: "Front",
@@ -44,7 +49,7 @@ export default defineConfig({
         lang: "pt-BR",
         dir: "ltr",
         theme_color: "#d42b2b",
-        background_color: "#0a0a0a",
+        background_color: "#0d0d0d",
         display: "standalone",
         orientation: "portrait",
         categories: ["sports", "lifestyle"],

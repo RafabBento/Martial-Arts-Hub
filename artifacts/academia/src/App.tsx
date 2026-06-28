@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { PaymentReminder } from "./components/PaymentReminder";
+import { InstallPrompt } from "./components/InstallPrompt";
 import { Layout } from "./components/Layout";
 
 import Home from "./pages/Home";
@@ -111,6 +112,7 @@ function App() {
             <Router />
           </WouterRouter>
           <PaymentReminder />
+          <InstallPrompt />
           <Toaster />
         </TooltipProvider>
       </AuthProvider>
