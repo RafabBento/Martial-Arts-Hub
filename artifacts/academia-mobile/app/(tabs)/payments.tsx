@@ -21,6 +21,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 
@@ -127,10 +128,15 @@ export default function PaymentsScreen() {
       )}
 
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Mensalidades</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {isMaster ? "Controle de pagamentos" : "Minha situação"}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <MenuButton />
+          <View>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Mensalidades</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {isMaster ? "Controle de pagamentos" : "Minha situação"}
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView

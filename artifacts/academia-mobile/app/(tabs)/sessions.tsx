@@ -24,6 +24,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import { SessionCard } from "@/components/SessionCard";
 import * as Haptics from "expo-haptics";
 
@@ -106,11 +107,14 @@ export default function SessionsScreen() {
 
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Sessões</Text>
-            <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {data?.length ?? 0} registradas
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <MenuButton />
+            <View>
+              <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Sessões</Text>
+              <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {data?.length ?? 0} registradas
+              </Text>
+            </View>
           </View>
           {isMaster && (
             <TouchableOpacity

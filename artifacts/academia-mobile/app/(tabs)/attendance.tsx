@@ -34,6 +34,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import { uploadImageToStorage } from "@/lib/uploadImage";
 import { AuthImage } from "@/components/AuthImage";
 import * as Haptics from "expo-haptics";
@@ -332,7 +333,10 @@ export default function AttendanceScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Presença</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <MenuButton />
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Presença</Text>
+          </View>
         </View>
         <View style={styles.restricted}>
           <View style={[styles.restrictedIcon, { backgroundColor: colors.primary + "18" }]}>
@@ -370,11 +374,14 @@ export default function AttendanceScreen() {
       )}
 
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <View>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Presença</Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Foto da equipe — reconhecimento no servidor
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <MenuButton />
+          <View>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Presença</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              Foto da equipe — reconhecimento no servidor
+            </Text>
+          </View>
         </View>
       </View>
 

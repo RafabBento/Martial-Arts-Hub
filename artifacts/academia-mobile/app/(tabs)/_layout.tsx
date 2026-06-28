@@ -1,90 +1,32 @@
-import { Feather, Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
-import { useColors } from "@/hooks/useColors";
-import { useAuth } from "@/context/AuthContext";
+import { DrawerProvider } from "@/context/DrawerContext";
 
+/**
+ * Layout das telas principais.
+ *
+ * A navegação agora é feita pela gaveta lateral (DrawerProvider + AppDrawer),
+ * acionada pelo botão de menu (três barrinhas) no cabeçalho de cada tela.
+ * Por isso a barra de abas inferior padrão fica escondida — mantemos as
+ * <Tabs.Screen> apenas para registrar as rotas das telas.
+ */
 export default function TabLayout() {
-  const colors = useColors();
-  const { user } = useAuth();
-  const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
-  const isMaster = user?.role === "teacher" || user?.role === "admin";
-
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.background,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
-          ) : null,
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Início",
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={22} color={color} />,
+    <DrawerProvider>
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: { display: "none" },
         }}
-      />
-      <Tabs.Screen
-        name="students"
-        options={{
-          title: "Alunos",
-          tabBarIcon: ({ color }) => <Ionicons name="people-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="sessions"
-        options={{
-          title: "Sessões",
-          tabBarIcon: ({ color }) => <Feather name="activity" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="attendance"
-        options={{
-          title: "Presença",
-          tabBarIcon: ({ color }) => <Ionicons name="camera-outline" size={22} color={color} />,
-          tabBarItemStyle: isMaster ? {} : { display: "none" },
-        }}
-      />
-      <Tabs.Screen
-        name="payments"
-        options={{
-          title: "Mensalidade",
-          tabBarIcon: ({ color }) => <Ionicons name="card-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="rankings"
-        options={{
-          title: "Rankings",
-          tabBarIcon: ({ color }) => <Ionicons name="trophy-outline" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Perfil",
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={22} color={color} />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen name="index" options={{ title: "Início" }} />
+        <Tabs.Screen name="students" options={{ title: "Alunos" }} />
+        <Tabs.Screen name="sessions" options={{ title: "Sessões" }} />
+        <Tabs.Screen name="attendance" options={{ title: "Presença" }} />
+        <Tabs.Screen name="payments" options={{ title: "Mensalidade" }} />
+        <Tabs.Screen name="rankings" options={{ title: "Rankings" }} />
+        <Tabs.Screen name="profile" options={{ title: "Perfil" }} />
+      </Tabs>
+    </DrawerProvider>
   );
 }

@@ -29,6 +29,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import { ModalityBadge } from "@/components/ModalityBadge";
 import { uploadImageToStorage } from "@/lib/uploadImage";
 import { AuthImage } from "@/components/AuthImage";
@@ -343,6 +344,7 @@ export default function ProfileScreen() {
       {/* Cabeçalho com logos */}
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
         <View style={styles.headerRow}>
+          <MenuButton />
           {/* Logo Thai — sempre visível para quem tem Thai */}
           <Image
             source={logoThai}

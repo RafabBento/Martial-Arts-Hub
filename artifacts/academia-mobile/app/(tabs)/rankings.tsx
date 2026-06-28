@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useListRankings } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import { RankingRow } from "@/components/RankingRow";
 
 const MODALITIES = [
@@ -44,7 +45,10 @@ export default function RankingsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Rankings</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <MenuButton />
+          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Rankings</Text>
+        </View>
         <View style={styles.filters}>
           {MODALITIES.map(m => (
             <TouchableOpacity

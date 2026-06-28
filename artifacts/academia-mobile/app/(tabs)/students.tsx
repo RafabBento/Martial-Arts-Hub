@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useListStudents } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { MenuButton } from "@/components/MenuButton";
 import { StudentCard } from "@/components/StudentCard";
 
 const MODALITY_FILTERS = [
@@ -58,11 +59,14 @@ export default function StudentsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Alunos</Text>
-          <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {filtered.length} cadastrados
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <MenuButton />
+          <View style={[styles.titleRow, { flex: 1 }]}>
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Alunos</Text>
+            <Text style={[styles.count, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {filtered.length} cadastrados
+            </Text>
+          </View>
         </View>
 
         <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
