@@ -184,7 +184,7 @@ const ENROLL_DEDUPE = (() => {
 const ENROLL_MAX_ANGLES = (() => {
   const raw = process.env["FACE_ENROLL_MAX_ANGLES"];
   const n = raw === undefined ? NaN : Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 8;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 12;
 })();
 
 /**

@@ -29,7 +29,7 @@ const STEPS: { key: StepKey; label: string; hint: string; Icon: LucideIcon }[] =
   { key: "down", label: "Incline o rosto para baixo", hint: "Abaixe o queixo levemente", Icon: ArrowDown },
 ];
 
-const FRAMES_PER_STEP = 2;
+const FRAMES_PER_STEP = 3;
 const FRAME_INTERVAL_MS = 450;
 const STEP_SETTLE_MS = 900;
 
