@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
-import { X, Share, Plus, Download, MoreVertical } from "lucide-react";
+import { X, Share, Plus, Download, MoreVertical, Compass } from "lucide-react";
 
 const DISMISS_KEY = "pwa-install-dismissed";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function getDismissed(): boolean {
+  try {
+    return !!localStorage.getItem(DISMISS_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function setDismissed(): void {
+  try {
+    localStorage.setItem(DISMISS_KEY, "1");
+  } catch {
+    /* ignore (private mode / sandboxed iframe) */
+  }
 }
 
 function isStandalone(): boolean {
@@ -15,29 +31,32 @@ function isStandalone(): boolean {
   );
 }
 
-type Platform = "ios" | "android";
+type Mode = "ios-safari" | "ios-other" | "android";
 
 export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
-  const [platform, setPlatform] = useState<Platform | null>(null);
+  const [mode, setMode] = useState<Mode | null>(null);
 
   useEffect(() => {
     if (isStandalone()) return;
-    if (localStorage.getItem(DISMISS_KEY)) return;
+    if (getDismissed()) return;
 
     const ua = window.navigator.userAgent;
     const ios = /iphone|ipad|ipod/i.test(ua);
     const android = /android/i.test(ua);
     if (!ios && !android) return; // só em navegadores de celular
 
-    setPlatform(ios ? "ios" : "android");
-
     if (ios) {
+      const otherBrowser = /crios|fxios|edgios|opios|mercury|brave/i.test(ua);
+      const safari = /safari/i.test(ua) && !otherBrowser;
+      setMode(safari ? "ios-safari" : "ios-other");
       setVisible(true);
       return; // iOS não tem beforeinstallprompt
     }
 
+    // Android / Chromium
+    setMode("android");
     let captured = false;
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
@@ -47,7 +66,7 @@ export function InstallPrompt() {
     };
     const onInstalled = () => {
       setVisible(false);
-      localStorage.setItem(DISMISS_KEY, "1");
+      setDismissed();
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
@@ -64,11 +83,11 @@ export function InstallPrompt() {
     };
   }, []);
 
-  if (!visible || !platform) return null;
+  if (!visible || !mode) return null;
 
   const dismiss = () => {
     setVisible(false);
-    localStorage.setItem(DISMISS_KEY, "1");
+    setDismissed();
   };
 
   const install = async () => {
@@ -77,7 +96,7 @@ export function InstallPrompt() {
     const { outcome } = await deferred.userChoice;
     if (outcome === "accepted") {
       setVisible(false);
-      localStorage.setItem(DISMISS_KEY, "1");
+      setDismissed();
     }
     setDeferred(null);
   };
@@ -85,7 +104,10 @@ export function InstallPrompt() {
   const iconSrc = `${import.meta.env.BASE_URL}pwa-192x192.png`;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 dark pointer-events-none">
+    <div
+      className="fixed inset-x-0 bottom-0 z-[60] p-3 dark pointer-events-none"
+      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+    >
       <div className="pointer-events-auto mx-auto max-w-md rounded-2xl border border-border bg-card/95 backdrop-blur shadow-2xl p-4">
         <div className="flex items-start gap-3">
           <img
@@ -97,18 +119,40 @@ export function InstallPrompt() {
             <div className="text-sm font-bold text-foreground">
               Instalar Front Artes Marciais
             </div>
-            {platform === "ios" ? (
+
+            {mode === "ios-safari" && (
+              <ol className="mt-2 space-y-1.5 text-xs text-muted-foreground leading-relaxed">
+                <li className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground">1.</span> Toque em
+                  <Share size={14} className="text-primary" />
+                  <span>(Compartilhar), na barra do Safari.</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground">2.</span> Escolha
+                  <Plus size={14} className="text-primary" />
+                  <span className="font-medium text-foreground">“Adicionar à Tela de Início”.</span>
+                </li>
+              </ol>
+            )}
+
+            {mode === "ios-other" && (
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Toque em{" "}
-                <Share size={13} className="inline -mt-0.5 text-primary" /> e depois em
-                <span className="font-medium text-foreground"> “Adicionar à Tela de Início”</span>{" "}
-                <Plus size={13} className="inline -mt-0.5 text-primary" /> para usar como app.
+                Para instalar no iPhone, abra este site no{" "}
+                <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                  <Compass size={13} className="text-primary" /> Safari
+                </span>
+                , toque em <Share size={13} className="inline -mt-0.5 text-primary" /> e depois em
+                <span className="font-medium text-foreground"> “Adicionar à Tela de Início”</span>.
               </p>
-            ) : deferred ? (
+            )}
+
+            {mode === "android" && deferred && (
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
                 Adicione o app à sua tela inicial para abrir com um toque, em tela cheia.
               </p>
-            ) : (
+            )}
+
+            {mode === "android" && !deferred && (
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
                 Abra o menu{" "}
                 <MoreVertical size={13} className="inline -mt-0.5 text-primary" /> do navegador e
@@ -127,7 +171,8 @@ export function InstallPrompt() {
             <X size={18} />
           </button>
         </div>
-        {platform === "android" && deferred && (
+
+        {mode === "android" && deferred && (
           <button
             type="button"
             onClick={install}
