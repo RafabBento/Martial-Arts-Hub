@@ -148,6 +148,37 @@ export default function AttendanceScreen() {
   const selectedSession = sessions?.find(s => s.id === selectedSessionId);
   const attendedIds = useMemo(() => new Set(attendance?.map(a => a.studentId) ?? []), [attendance]);
 
+  // Lista unificada de presentes: junta quem foi confirmado pelo reconhecimento
+  // facial / foto da equipe (estado local) com os registros da sessão selecionada,
+  // para que os rostos reconhecidos apareçam imediatamente em "Presentes na sessão".
+  const presentList = useMemo(() => {
+    const map = new Map<number, { studentId: number; name: string; photoUrl: string | null; faceRecognized: boolean }>();
+    for (const rec of attendance ?? []) {
+      const student = students?.find(s => s.userId === rec.studentId);
+      map.set(rec.studentId, {
+        studentId: rec.studentId,
+        name: student?.name ?? rec.studentName ?? "Aluno",
+        photoUrl: student?.profilePhotoUrl ?? rec.studentPhotoUrl ?? null,
+        faceRecognized: rec.faceRecognized ?? false,
+      });
+    }
+    // Só funde as confirmações locais da foto da equipe no modo "team".
+    // No modo manual a lista fica estritamente atrelada à sessão selecionada,
+    // evitando que confirmações de outra sessão vazem para cá.
+    if (mode === "team") {
+      for (const m of [...matches, ...manualAdds]) {
+        if (!confirmedIds.has(m.studentId) || map.has(m.studentId)) continue;
+        map.set(m.studentId, {
+          studentId: m.studentId,
+          name: m.name,
+          photoUrl: m.profilePhotoUrl ?? null,
+          faceRecognized: matches.some(x => x.studentId === m.studentId),
+        });
+      }
+    }
+    return [...map.values()];
+  }, [attendance, students, matches, manualAdds, confirmedIds, mode]);
+
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
@@ -646,8 +677,8 @@ export default function AttendanceScreen() {
           </View>
         )}
 
-        {/* Lista de presentes (manual) */}
-        {mode === "manual" && selectedSessionId && (
+        {/* Lista de presentes (reconhecimento facial + sessão) */}
+        {(presentList.length > 0 || (mode === "manual" && selectedSessionId)) && (
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.attendListHeader}>
               <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -655,17 +686,16 @@ export default function AttendanceScreen() {
               </Text>
               <View style={[styles.countBadge, { backgroundColor: colors.primary + "22" }]}>
                 <Text style={[styles.countText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-                  {(attendance?.length ?? 0)}
+                  {presentList.length}
                 </Text>
               </View>
             </View>
-            {attendance && attendance.length > 0 ? (
-              attendance.map((att) => {
-                const student = students?.find(s => s.userId === att.studentId);
-                const initials = (student?.name ?? att.studentName ?? "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+            {presentList.length > 0 ? (
+              presentList.map((p) => {
+                const initials = (p.name ?? "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
                 return (
                   <View
-                    key={att.id}
+                    key={p.studentId}
                     style={[styles.attendRow, { borderBottomColor: colors.border }]}
                   >
                     <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
@@ -675,11 +705,10 @@ export default function AttendanceScreen() {
                     </View>
                     <View style={styles.attendInfo}>
                       <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                        {student?.name ?? att.studentName ?? "Aluno"}
+                        {p.name}
                       </Text>
                       <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {att.faceRecognized ? "Reconhecimento facial" : "Registro manual"}
-                        {att.createdAt ? ` · ${new Date(att.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                        {p.faceRecognized ? "Reconhecimento facial" : "Registro manual"}
                       </Text>
                     </View>
                     <Ionicons name="checkmark-circle" size={20} color={colors.success} />

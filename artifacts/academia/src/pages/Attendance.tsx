@@ -301,6 +301,36 @@ export default function Attendance() {
 
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
 
+  // Lista unificada de presentes: junta quem foi confirmado pelo reconhecimento
+  // facial / foto da equipe (estado local) com os registros da sessão selecionada,
+  // para que os rostos reconhecidos apareçam imediatamente em "Presentes (sessão)".
+  const presentList = (() => {
+    const map = new Map<number, { studentId: number; name: string; photoUrl: string | null; faceRecognized: boolean }>();
+    for (const rec of attendance ?? []) {
+      map.set(rec.studentId, {
+        studentId: rec.studentId,
+        name: rec.studentName,
+        photoUrl: rec.studentPhotoUrl ?? null,
+        faceRecognized: rec.faceRecognized ?? false,
+      });
+    }
+    // Só funde as confirmações locais da foto da equipe no modo "team".
+    // No modo manual a lista fica estritamente atrelada à sessão selecionada,
+    // evitando que confirmações de outra sessão vazem para cá.
+    if (mode === "team") {
+      for (const m of [...matches, ...manualAdds]) {
+        if (!confirmedIds.has(m.studentId) || map.has(m.studentId)) continue;
+        map.set(m.studentId, {
+          studentId: m.studentId,
+          name: m.name,
+          photoUrl: m.profilePhotoUrl ?? null,
+          faceRecognized: matches.some(x => x.studentId === m.studentId),
+        });
+      }
+    }
+    return [...map.values()];
+  })();
+
   const teamAddCandidates = (students ?? []).filter(s =>
     !matches.some(m => m.studentId === s.userId) &&
     !manualAdds.some(m => m.studentId === s.userId) &&
@@ -615,29 +645,29 @@ export default function Attendance() {
           <div className="flex items-center gap-2 mb-4">
             <UserCheck size={18} className="text-primary" />
             <h2 className="font-bold uppercase tracking-wide text-sm">Presentes (sessão)</h2>
-            <span className="ml-auto text-sm font-bold text-primary">{attendance?.length ?? 0}</span>
+            <span className="ml-auto text-sm font-bold text-primary">{presentList.length}</span>
           </div>
-          {!selectedSession ? (
-            <div className="text-center py-8 text-muted-foreground text-xs">Selecione uma sessão na aba Manual para ver os presentes</div>
-          ) : attendance && attendance.length > 0 ? (
+          {presentList.length > 0 ? (
             <div className="space-y-2 max-h-[480px] overflow-y-auto">
-              {attendance.map(rec => (
-                <div key={rec.id} data-testid={`att-confirmed-${rec.studentId}`} className="flex items-center gap-2 py-2 border-b border-border/50 last:border-0">
+              {presentList.map(p => (
+                <div key={p.studentId} data-testid={`att-confirmed-${p.studentId}`} className="flex items-center gap-2 py-2 border-b border-border/50 last:border-0">
                   <div className="w-8 h-8 rounded-full bg-muted border border-border overflow-hidden shrink-0">
-                    {rec.studentPhotoUrl
-                      ? <img src={rec.studentPhotoUrl} alt={rec.studentName} className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">{rec.studentName.charAt(0)}</div>
+                    {p.photoUrl
+                      ? <img src={p.photoUrl} alt={p.name} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">{p.name.charAt(0)}</div>
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">{rec.studentName}</div>
-                    {rec.faceRecognized && <div className="text-xs text-green-400">Facial</div>}
+                    <div className="text-sm font-medium truncate">{p.name}</div>
+                    {p.faceRecognized && <div className="text-xs text-green-400">Facial</div>}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground text-xs">Nenhuma presença ainda</div>
+            <div className="text-center py-8 text-muted-foreground text-xs">
+              {selectedSession ? "Nenhuma presença ainda" : "Reconheça uma foto da equipe ou selecione uma sessão na aba Manual"}
+            </div>
           )}
         </div>
       </div>
