@@ -868,13 +868,6 @@ export default function ProfileScreen() {
               <Ionicons name="camera-outline" size={20} color={colors.primary} />
               <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Tirar foto</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.sheetRow, { borderColor: colors.border }]}
-              onPress={() => selectPhotoSource("gallery")}
-            >
-              <Ionicons name="images-outline" size={20} color={colors.primary} />
-              <Text style={[styles.sheetRowText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Escolher da galeria</Text>
-            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>

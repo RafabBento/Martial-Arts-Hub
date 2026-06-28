@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,12 +7,6 @@ import { uploadImageToStorage } from "../lib/uploadImage";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
 import logoThai from "/logo-thai.png";
@@ -222,7 +216,6 @@ export default function Profile() {
   const [modality, setModality] = useState<Modality>("thai");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -319,14 +312,7 @@ export default function Profile() {
       toast({ title: "Erro ao enviar a foto", variant: "destructive" });
     } finally {
       setUploadingPhoto(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
     }
-  };
-
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await processPhotoFile(file);
   };
 
   const handleCameraCapture = async (file: File) => {
@@ -417,43 +403,16 @@ export default function Profile() {
                 </div>
               )}
             </div>
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoChange}
-              data-testid="input-profile-photo"
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  disabled={uploadingPhoto}
-                  aria-label="Alterar foto de perfil"
-                  data-testid="button-upload-photo"
-                  className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center border-2 border-card shadow-md hover:bg-primary/90 transition-colors disabled:opacity-70"
-                >
-                  {uploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem
-                  onClick={() => setCameraOpen(true)}
-                  data-testid="menu-take-photo"
-                  className="gap-2"
-                >
-                  <Camera size={15} /> Tirar foto
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => photoInputRef.current?.click()}
-                  data-testid="menu-choose-file"
-                  className="gap-2"
-                >
-                  <User size={15} /> Escolher arquivo
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              type="button"
+              onClick={() => setCameraOpen(true)}
+              disabled={uploadingPhoto}
+              aria-label="Tirar foto de perfil"
+              data-testid="button-upload-photo"
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center border-2 border-card shadow-md hover:bg-primary/90 transition-colors disabled:opacity-70"
+            >
+              {uploadingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+            </button>
           </div>
           <div>
             <div className="text-2xl font-bold">{user.name}</div>

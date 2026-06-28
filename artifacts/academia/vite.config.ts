@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { VitePWA } from "vite-plugin-pwa";
 
 const rawPort = process.env.PORT;
 
@@ -32,6 +33,28 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.svg", "apple-touch-icon.png", "robots.txt"],
+      manifest: {
+        name: "Front Artes Marciais",
+        short_name: "Front",
+        description:
+          "Front Artes Marciais — gestão da academia de Muay Thai e Jiu-Jitsu: presença, graduações e rankings.",
+        lang: "pt-BR",
+        dir: "ltr",
+        theme_color: "#d42b2b",
+        background_color: "#0a0a0a",
+        display: "standalone",
+        orientation: "portrait",
+        categories: ["sports", "lifestyle"],
+        icons: [
+          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "pwa-maskable-512x512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
+      },
+    }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
