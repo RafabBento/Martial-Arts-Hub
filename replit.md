@@ -47,7 +47,7 @@ A full-stack management platform for a Muay Thai and Jiu-Jitsu academy. Handles 
 
 - **Dashboard**: Stats overview (total students, sessions, monthly attendance, modality distribution) + recent activity feed + quick actions.
 - **Students**: Searchable/filterable grid with modality badges, grades, attendance counts. Click through to detailed profile.
-- **Student Detail**: Belt/grade management (Thai grade/color, Jiu faixa/color), attendance history per modality, face descriptor status. Mestre can run the guided multi-angle face enrollment for a student (mobile, `FaceEnrollModal` → `/api/face/enroll`) or set a single reference photo (camera/gallery → upload → `/api/face/profile-photo`).
+- **Student Detail**: Belt/grade management (Thai grade/color, Jiu faixa/color), attendance history per modality, face descriptor status. Mestre can run the guided multi-angle face enrollment for a student (`FaceEnrollModal` on both web and mobile → `/api/face/enroll`) or set a single reference photo (camera/gallery → upload → `/api/face/profile-photo`).
 - **Sessions**: List/create training sessions by modality (Muay Thai / Jiu-Jitsu) with teacher assignment.
 - **Session Detail**: View attendees per session, remove individual attendance records.
 - **Attendance** (mestre only): "Foto da equipe" mode — upload/capture one group photo → server recognizes all students → review list with per-student modality badges → bulk-mark attendance. Plus a "Manual" mode (session + student picker) fallback.
@@ -70,7 +70,7 @@ A full-stack management platform for a Muay Thai and Jiu-Jitsu academy. Handles 
 
 - Language: Portuguese (pt-BR) for all UI text
 - Dark mode mandatory; red primary color (hsl 0 84% 45%)
-- **Feature parity mobile ↔ web**: from now on, any feature added to the mobile app (`artifacts/academia-mobile`) must also be added to the web app (`artifacts/academia`), and vice-versa. (Note: the multi-angle face enrollment was originally built mobile-only and still needs to be ported to web to satisfy this.)
+- **Feature parity mobile ↔ web**: from now on, any feature added to the mobile app (`artifacts/academia-mobile`) must also be added to the web app (`artifacts/academia`), and vice-versa.
 
 ## Gotchas
 

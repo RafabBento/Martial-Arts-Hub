@@ -8,8 +8,9 @@ import {
   registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2 } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2, ScanFace } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -97,6 +98,7 @@ export default function StudentDetail() {
   const studentId = params ? parseInt(params.id, 10) : 0;
   const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai");
   const [faceUploading, setFaceUploading] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
   const faceInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -242,6 +244,15 @@ export default function StudentDetail() {
                   onChange={handleGalleryFace}
                 />
                 <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={faceUploading}
+                  onClick={() => setEnrollOpen(true)}
+                >
+                  <ScanFace size={14} className="mr-2" />
+                  {student.hasFaceDescriptor ? "Refazer cadastro facial" : "Cadastrar rosto (vários ângulos)"}
+                </Button>
+                <Button
                   variant="outline"
                   size="sm"
                   className="w-full"
@@ -250,7 +261,7 @@ export default function StudentDetail() {
                 >
                   {faceUploading
                     ? <><Loader2 size={14} className="animate-spin mr-2" />Processando...</>
-                    : <><ImagePlus size={14} className="mr-2" />{student.hasFaceDescriptor ? "Atualizar foto da galeria" : "Cadastrar pelo galeria"}</>
+                    : <><ImagePlus size={14} className="mr-2" />Enviar foto da galeria</>
                   }
                 </Button>
               </>
@@ -411,6 +422,18 @@ export default function StudentDetail() {
           </div>
         </div>
       </div>
+
+      <FaceEnrollModal
+        open={enrollOpen}
+        userId={studentId}
+        title="Cadastro facial do aluno"
+        onClose={() => setEnrollOpen(false)}
+        onDone={() => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+          queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+          toast({ title: "Cadastro facial concluído!" });
+        }}
+      />
     </div>
   );
 }

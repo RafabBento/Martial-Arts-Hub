@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy, Loader2 } from "lucide-react";
+import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy, Loader2, ScanFace } from "lucide-react";
 import { uploadImageToStorage } from "../lib/uploadImage";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
+import { FaceEnrollModal } from "../components/FaceEnrollModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -216,6 +217,7 @@ export default function Profile() {
   const [modality, setModality] = useState<Modality>("thai");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [enrollOpen, setEnrollOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -417,6 +419,14 @@ export default function Profile() {
           <div>
             <div className="text-2xl font-bold">{user.name}</div>
             <div className="text-sm text-muted-foreground">{user.email}</div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 gap-2"
+              onClick={() => setEnrollOpen(true)}
+            >
+              <ScanFace size={14} /> Cadastrar rosto (vários ângulos)
+            </Button>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className={`inline-block px-3 py-0.5 rounded-full text-xs font-bold ${
@@ -799,6 +809,19 @@ export default function Profile() {
         onCapture={handleCameraCapture}
         facing="user"
         title="Foto de perfil"
+      />
+
+      <FaceEnrollModal
+        open={enrollOpen}
+        userId={user.id}
+        title="Cadastro facial"
+        onClose={() => setEnrollOpen(false)}
+        onDone={(result) => {
+          if (result.profilePhotoUrl) {
+            setUser({ ...user, profilePhotoUrl: result.profilePhotoUrl });
+          }
+          toast({ title: "Cadastro facial concluído!" });
+        }}
       />
     </div>
   );
