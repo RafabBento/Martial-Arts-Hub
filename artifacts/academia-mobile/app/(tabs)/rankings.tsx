@@ -1,3 +1,5 @@
+// Tela de rankings de frequência. Lista os alunos ordenados por presença,
+// com filtros de modalidade (Thai/Jiu/ambos) e período (semana/mês/ano/geral).
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
 import React, { useState } from "react";
@@ -17,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { MenuButton } from "@/components/MenuButton";
 import { RankingRow } from "@/components/RankingRow";
 
+// Opções dos filtros de modalidade e período exibidos como "chips".
 const MODALITIES = [
   { label: "Todos", value: "both" as const },
   { label: "Thai", value: "thai" as const },
@@ -32,14 +35,18 @@ const PERIODS = [
 export default function RankingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  // Filtros selecionados que alimentam a query de rankings.
   const [modality, setModality] = useState<"both" | "thai" | "jiu">("both");
   const [period, setPeriod] = useState<"week" | "month" | "year" | "all">("month");
   const { user, isLoading: authLoading } = useAuth();
 
+  // Busca o ranking no servidor conforme modalidade e período escolhidos.
   const { data, isLoading, refetch } = useListRankings({ modality, period });
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Padding superior: fixo no web, área segura no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   return (

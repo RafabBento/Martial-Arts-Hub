@@ -1,3 +1,7 @@
+// Tela de perfil do usuário. Mostra identidade, plano (Bollacha), informações
+// editáveis e a graduação (faixas) em Muay Thai e Jiu-Jitsu. Permite trocar a
+// foto de perfil / cadastrar o rosto e, para mestres, editar a própria
+// graduação. Também concentra os componentes visuais de faixa/prajied.
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -38,18 +42,21 @@ import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
 
+// Rótulos em pt-BR para o papel (role) do usuário.
 const ROLE_LABEL: Record<string, string> = {
   student: "Aluno",
   teacher: "Professor",
   admin: "Administrador",
 };
 
+// Unidades (academias) disponíveis na edição do perfil.
 const UNIT_OPTIONS = [
   { value: "matriz" as const, label: "Front Matriz", address: "Endereço atual" },
   { value: "panobianco" as const, label: "Front Panobianco", address: "R. Benjamin Pereira, 548" },
   { value: "upfitness" as const, label: "Front Up Fitness", address: "Av. Gustavo Adolfo, 588" },
 ];
 
+// Verifica se a data de nascimento (YYYY-MM-DD) cai no dia de hoje (dia/mês).
 function isBirthdayToday(birthDate: string | null | undefined): boolean {
   if (!birthDate) return false;
   const today = new Date();
@@ -60,6 +67,7 @@ function isBirthdayToday(birthDate: string | null | undefined): boolean {
   );
 }
 
+// Graus de prajied (faixas do Muay Thai), com cor principal e ponta opcional.
 const PRAJIED_GRADES = [
   { value: "branco",                 label: "Branco",                 primary: "#f5f5f5", secondary: null },
   { value: "branco-ponta-vermelha",  label: "Branco ponta vermelha",  primary: "#f5f5f5", secondary: "#dc2626" },
@@ -74,6 +82,7 @@ const PRAJIED_GRADES = [
   { value: "preta",                  label: "Preta",                  primary: "#111827", secondary: null },
 ];
 
+// Cores das faixas de Jiu-Jitsu (chave interna, rótulo pt-BR e hex).
 const JIU_COLORS = [
   { value: "white",  label: "Branca",  hex: "#f5f5f5" },
   { value: "blue",   label: "Azul",    hex: "#2563eb" },
@@ -82,8 +91,10 @@ const JIU_COLORS = [
   { value: "black",  label: "Preta",   hex: "#111827" },
 ];
 
+// Ordem das faixas de Jiu-Jitsu (usada no seletor de graduação).
 const JIU_GRADES = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
 
+// Componente visual: desenha a faixa de Muay Thai (prajied) com a cor do grau.
 function PrajiedStripe({ grade }: { grade: string }) {
   const entry = PRAJIED_GRADES.find(p => p.label === grade || p.value === grade);
   if (!entry) return null;
@@ -103,6 +114,8 @@ const prajStyles = StyleSheet.create({
   tip: { width: 22, position: "absolute", right: 0, top: 0, bottom: 0 },
 });
 
+// Componente visual: desenha a faixa de Jiu-Jitsu com a cor e os graus (graus =
+// traços na ponta preta, limitados de 0 a 4).
 function JiuBeltStripe({ color, degree }: { color: string; degree?: number | null }) {
   const hex = JIU_COLORS.find(c => c.value === color)?.hex ?? "#555";
   const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
@@ -129,6 +142,7 @@ export default function ProfileScreen() {
   const { user, setUser, logout, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
+  // Estados de UI: modo edição, modalidade exibida, toast, foto e modais.
   const [editing, setEditing] = useState(false);
   const [modality, setModality] = useState<"thai" | "jiu">("thai");
   const [toast, setToast] = useState<string | null>(null);
@@ -136,42 +150,50 @@ export default function ProfileScreen() {
   const [photoSheetOpen, setPhotoSheetOpen] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
+  // Refs auxiliares: fonte de foto pendente (iOS) e instante de abertura do viewer.
   const pendingPhotoSource = useRef<"camera" | "gallery" | null>(null);
   const viewerOpenedAt = useRef(0);
 
-  // Edit fields
+  // Campos do formulário de edição de perfil.
   const [editName, setEditName] = useState("");
   const [editUnit, setEditUnit] = useState<"matriz" | "panobianco" | "upfitness">("matriz");
   const [editPhone, setEditPhone] = useState("");
   const [editBirth, setEditBirth] = useState("");
   const [editPayDay, setEditPayDay] = useState("");
 
-  // Master own-graduation pickers
+  // Seletores de graduação do próprio mestre (prajied/faixa e rascunho do grau).
   const [thaiPickerOpen, setThaiPickerOpen] = useState(false);
   const [jiuGradePickerOpen, setJiuGradePickerOpen] = useState(false);
   const [jiuDegreeDraft, setJiuDegreeDraft] = useState(0);
 
+  // Mutações para atualizar dados do usuário e do aluno (plano Bollacha).
   const updateUserMutation = useUpdateUser();
   const updateStudentMutation = useUpdateStudent();
 
+  // Professores/admins têm permissões e exibição diferentes dos alunos.
   const isTeacherOrAdmin = user?.role === "teacher" || user?.role === "admin";
 
+  // Busca dados do aluno (faixas/plano) — só habilitada para usuários "student".
   const { data: studentData, refetch: refetchStudent } = useGetStudent(user?.id ?? 0, {
     query: { enabled: !!user?.id && user?.role === "student", queryKey: getGetStudentQueryKey(user?.id ?? 0) },
   });
 
+  // Flags derivadas: modalidades do usuário, se mostra o toggle Thai/Jiu, plano
+  // Bollacha e se exibe o logo de Jiu.
   const hasThai = studentData?.modalityThai ?? (user?.modalityThai ?? false);
   const hasJiu = studentData?.modalityJiu ?? (user?.modalityJiu ?? false);
   const showToggle = hasThai && hasJiu;
   const isBollacha = !isTeacherOrAdmin && (studentData?.bollacha === true);
   const showJiuLogo = hasJiu && isBollacha;
 
+  // Se o aluno só treina Jiu, já mostra a modalidade Jiu por padrão.
   useEffect(() => {
     if (!isTeacherOrAdmin && studentData && !studentData.modalityThai && studentData.modalityJiu) {
       setModality("jiu");
     }
   }, [studentData, isTeacherOrAdmin]);
 
+  // Preenche os campos do formulário com os dados atuais e entra no modo edição.
   const startEditing = () => {
     if (!user) return;
     setEditName(user.name ?? "");
@@ -182,11 +204,13 @@ export default function ProfileScreen() {
     setEditing(true);
   };
 
+  // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Guarda a fonte escolhida (câmera/galeria) e dispara o seletor de imagem.
   const selectPhotoSource = (source: "camera" | "gallery") => {
     if (pendingPhotoSource.current || photoBusy) return;
     pendingPhotoSource.current = source;
@@ -201,6 +225,8 @@ export default function ProfileScreen() {
     }
   };
 
+  // Pede permissão, abre câmera/galeria, faz upload da imagem e registra como
+  // foto de perfil (que também alimenta o reconhecimento facial).
   const runPhotoPicker = async (source: "camera" | "gallery") => {
     if (!user) return;
     try {
@@ -252,6 +278,7 @@ export default function ProfileScreen() {
     }
   };
 
+  // Salva as edições do perfil via API e atualiza o usuário no contexto/cache.
   const handleSave = () => {
     if (!user) return;
     updateUserMutation.mutate(
@@ -278,6 +305,7 @@ export default function ProfileScreen() {
     );
   };
 
+  // Alterna o plano do aluno entre "Apenas Front" e "Front e Bollacha".
   const handleBollachaToggle = (newVal: boolean) => {
     if (!user) return;
     updateStudentMutation.mutate(
@@ -294,6 +322,7 @@ export default function ProfileScreen() {
     );
   };
 
+  // Atualiza a graduação do próprio mestre (faixa de Thai e/ou Jiu) via API.
   const handleMasterGrade = (data: { thaiGrade?: string; thaiGradeColor?: string; jiuGrade?: string; jiuGradeColor?: string; jiuDegree?: number }) => {
     if (!user) return;
     updateUserMutation.mutate(
@@ -310,20 +339,25 @@ export default function ProfileScreen() {
     );
   };
 
+  // Copia a chave PIX (e-mail) para a área de transferência.
   const copyPix = async () => {
     await Clipboard.setStringAsync("frontartesmarciais@gmail.com");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Chave PIX copiada!");
   };
 
+  // Encerra a sessão (com feedback háptico) via AuthContext.
   const handleLogout = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await logout();
   };
 
+  // Guarda de autenticação: sem usuário logado, redireciona; enquanto carrega, nada.
   if (!user && !authLoading) return <Redirect href="/login" />;
   if (!user) return null;
 
+  // Valores derivados para a renderização: paddings, iniciais do avatar, banner
+  // de aniversário e graduações (do mestre via user, do aluno via studentData).
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const initials = user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
@@ -911,6 +945,7 @@ export default function ProfileScreen() {
   );
 }
 
+// Linha simples de informação (ícone + rótulo + valor) usada no card de dados.
 function InfoRow({ icon, label, value, colors }: { icon: any; label: string; value: string; colors: any }) {
   return (
     <View style={styles.infoRow}>

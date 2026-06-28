@@ -1,3 +1,6 @@
+// Tela inicial (Dashboard). Mostra a saudação ao usuário, cartões de estatísticas
+// gerais, atalhos de ações rápidas e a lista de atividade recente. Suporta
+// "puxar para atualizar" (pull-to-refresh).
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import React from "react";
@@ -25,15 +28,20 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
 
+  // Queries do dashboard: estatísticas agregadas e atividade recente.
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetDashboardStats();
   const { data: activity, isLoading: actLoading, refetch: refetchAct } = useGetRecentActivity();
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Professores/admins veem o atalho extra de "Presença".
   const isMaster = user?.role === "teacher" || user?.role === "admin";
+  // Loading combinado e handler do pull-to-refresh (recarrega ambas as queries).
   const dataLoading = statsLoading || actLoading;
   const onRefresh = () => { refetchStats(); refetchAct(); };
 
+  // Padding superior/inferior: fixos no web, área segura no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : 0;
 
@@ -133,6 +141,7 @@ export default function DashboardScreen() {
         {actLoading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
         ) : activity && activity.length > 0 ? (
+          // Mostra as 10 atividades mais recentes; a cor de destaque varia por modalidade.
           activity.slice(0, 10).map((item, i) => {
             const isThai = item.modality === "thai";
             const accentColor = isThai ? colors.thai : colors.jiu;

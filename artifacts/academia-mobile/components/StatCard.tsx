@@ -1,3 +1,5 @@
+// Cartão de estatística reutilizável (ex.: total de alunos, presenças). Exibe
+// um valor em destaque e um rótulo, com cor de acento configurável.
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -10,6 +12,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, accent = "primary" }: StatCardProps) {
   const colors = useColors();
+  // Resolve a cor do valor de acordo com o acento escolhido.
   const accentColor =
     accent === "thai" ? colors.thai :
     accent === "jiu" ? colors.jiu :

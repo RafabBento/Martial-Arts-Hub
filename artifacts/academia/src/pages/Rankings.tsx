@@ -1,14 +1,20 @@
+// Página de ranking de presenças. Exibe duas listas lado a lado (Muay Thai e
+// Jiu-Jitsu) ordenadas por frequência, com filtro de período (geral/ano/mês/semana).
+// Cada item mostra colocação, foto, faixa/prajied e percentual de presença.
 import { useState } from "react";
 import { useListRankings, getListRankingsQueryKey } from "@workspace/api-client-react";
 import { Trophy, Medal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
+// Mapa de cor da faixa de Jiu-Jitsu (valor da faixa -> classe Tailwind de fundo).
 const JIU_BG: Record<string, string> = {
   white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
   brown: "bg-amber-800", black: "bg-gray-900",
 };
 
+// Mapa do prajied (graduação de Muay Thai) -> cores da faixinha. "primary" é a cor
+// principal e "secondary" (opcional) é a ponta de cor diferente.
 const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "branco":                 { primary: "bg-white" },
   "branco-ponta-vermelha":  { primary: "bg-white",     secondary: "bg-red-600"    },
@@ -24,6 +30,8 @@ const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
 };
 
 /** Prajied stripe for Muay Thai */
+// Renderiza a faixinha visual do prajied. Normaliza o texto da graduação para a
+// chave do mapa; se tiver cor secundária, desenha a ponta com a segunda cor.
 function PrajiedStripe({ grade }: { grade: string | null | undefined }) {
   if (!grade) return null;
   const key = grade.toLowerCase().replace(/ /g, "-");
@@ -41,6 +49,8 @@ function PrajiedStripe({ grade }: { grade: string | null | undefined }) {
 }
 
 /** BJJ belt: colored body + black tip with degree stripes */
+// Renderiza a faixa de Jiu-Jitsu: corpo colorido + ponta preta com os graus
+// (até 4 listras brancas). Faixa branca recebe bordas mais claras para contraste.
 function JiuBelt({ color, degree }: { color: string | null | undefined; degree: number | null | undefined }) {
   if (!color) return null;
   const bg = JIU_BG[color] ?? "bg-muted";
@@ -61,6 +71,8 @@ function JiuBelt({ color, degree }: { color: string | null | undefined; degree: 
   );
 }
 
+// Selo de colocação: troféu/medalhas para o pódio (1º, 2º, 3º) e número simples
+// para as demais posições.
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <div className="w-7 h-7 rounded-full bg-yellow-500/20 border border-yellow-400 flex items-center justify-center"><Trophy size={12} className="text-yellow-400" /></div>;
   if (rank === 2) return <div className="w-7 h-7 rounded-full bg-gray-400/20 border border-gray-400 flex items-center justify-center"><Medal size={12} className="text-gray-400" /></div>;
@@ -68,6 +80,7 @@ function RankBadge({ rank }: { rank: number }) {
   return <div className="w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center text-xs font-bold text-muted-foreground">{rank}</div>;
 }
 
+// Tipo de uma entrada do ranking (um aluno com sua colocação e estatísticas).
 type RankingEntry = {
   rank: number;
   studentId: number;
@@ -84,6 +97,9 @@ type RankingEntry = {
   modality: string;
 };
 
+// Lista de ranking de uma modalidade. Recebe título, cor de destaque, as
+// entradas já ordenadas e showThai (define se mostra prajied de Thai ou faixa de
+// Jiu). Cada linha é um link para o perfil do aluno.
 function RankingList({
   title,
   color,
@@ -95,6 +111,7 @@ function RankingList({
   entries: RankingEntry[];
   showThai: boolean;
 }) {
+  // Define classes de cor (borda/badge/linha) conforme a modalidade.
   const accent = color === "red"
     ? { border: "border-red-500/30", badge: "bg-red-500/10 text-red-400 border-red-500/30", line: "bg-red-500" }
     : { border: "border-blue-500/30", badge: "bg-blue-500/10 text-blue-400 border-blue-500/30", line: "bg-blue-500" };
@@ -154,13 +171,17 @@ function RankingList({
 }
 
 export default function Rankings() {
+  // Período selecionado para o cálculo do ranking (geral, semana, mês ou ano).
   const [period, setPeriod] = useState<"all" | "week" | "month" | "year">("all");
 
+  // Busca o ranking de ambas as modalidades de uma vez (modality: "both"); a
+  // resposta traz as listas separadas de thai e jiu.
   const { data: bothData, isLoading } = useListRankings(
     { modality: "both", period },
     { query: { queryKey: getListRankingsQueryKey({ modality: "both", period }) } }
   );
 
+  // Opções do seletor de período exibidas como botões.
   const periodOptions: { value: "all" | "week" | "month" | "year"; label: string }[] = [
     { value: "all", label: "Geral" },
     { value: "year", label: "Ano" },
@@ -168,6 +189,7 @@ export default function Rankings() {
     { value: "week", label: "Semana" },
   ];
 
+  // Extrai as duas listas da resposta (cast para any porque o tipo gerado é genérico).
   const thaiRanking: RankingEntry[] = (bothData as any)?.thai ?? [];
   const jiuRanking: RankingEntry[] = (bothData as any)?.jiu ?? [];
 

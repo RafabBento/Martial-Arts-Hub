@@ -1,3 +1,5 @@
+// Botão de menu (hambúrguer) reutilizável que dispara a abertura da gaveta
+// lateral. Usado nos cabeçalhos das telas principais do app mobile.
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, TouchableOpacity } from "react-native";

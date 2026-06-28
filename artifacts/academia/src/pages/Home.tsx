@@ -1,7 +1,12 @@
+// Página inicial pública (landing page) da academia. Mostra o hero com chamadas
+// para cadastro/login e o cronograma fixo de aulas. Não consome dados da API —
+// é puramente estática e serve como porta de entrada para visitantes.
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { MapPin, Clock } from "lucide-react";
 
+// Cronograma fixo de aulas exibido na seção "Cronograma" (apenas conteúdo
+// estático para divulgação — não vem do banco de dados).
 const SCHEDULE = [
   {
     time: "19:00",
@@ -36,7 +41,8 @@ const SCHEDULE = [
 export default function Home() {
   return (
     <div className="bg-background dark text-foreground flex flex-col">
-      {/* Hero */}
+      {/* Hero: imagem de fundo + overlays de gradiente, título de impacto e
+          botões de Cadastro/Login que levam às rotas correspondentes */}
       <main className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('/bg-home.png')] bg-cover bg-center opacity-80"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-zinc-900/70 to-black"></div>
@@ -76,7 +82,8 @@ export default function Home() {
         </a>
       </main>
 
-      {/* Cronograma */}
+      {/* Cronograma: renderiza os cards de SCHEDULE com horário, modalidade,
+          dias e instrutor; cores variam conforme a modalidade (azul/vermelho) */}
       <section id="cronograma" className="bg-zinc-950 py-20 px-4">
         <div className="max-w-4xl mx-auto space-y-10">
           <div className="text-center space-y-2">

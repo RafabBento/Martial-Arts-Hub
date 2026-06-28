@@ -1,3 +1,7 @@
+// Modal de captura de foto pela webcam (getUserMedia).
+// Usado em fluxos como foto de perfil. Mostra o vídeo ao vivo, permite trocar
+// entre câmera frontal/traseira e captura um quadro como arquivo JPEG, que é
+// devolvido ao chamador via onCapture. Trata erros comuns de permissão/iframe.
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Camera, RefreshCw, X, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,14 +31,18 @@ export function CameraCaptureModal({
 }: CameraCaptureModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  // Monotonic token: every start/stop bumps it so a getUserMedia promise that
-  // resolves late (after close/unmount or a newer flip) can detect it is stale
-  // and stop its own tracks instead of attaching a ghost stream.
+  // Token monotônico: cada início/parada incrementa o valor para que uma
+  // promise de getUserMedia que resolve atrasada (após fechar/desmontar ou uma
+  // troca mais nova) perceba que está obsoleta e pare suas próprias tracks em
+  // vez de anexar um stream "fantasma".
   const requestIdRef = useRef(0);
+  // Câmera atual (frontal/traseira), mensagem de erro e flag de vídeo pronto.
   const [facingMode, setFacingMode] = useState<"user" | "environment">(facing);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Para o stream atual: invalida requisições pendentes, encerra as tracks da
+  // câmera e limpa o elemento de vídeo.
   const stopStream = useCallback(() => {
     requestIdRef.current += 1;
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -43,6 +51,9 @@ export function CameraCaptureModal({
     setReady(false);
   }, []);
 
+  // Inicia o stream da câmera no modo escolhido (frontal/traseira).
+  // Usa o token de requisição para descartar resultados obsoletos e mapeia
+  // os erros de getUserMedia para mensagens amigáveis ao usuário.
   const startStream = useCallback(async (mode: "user" | "environment") => {
     setError(null);
     setReady(false);
@@ -87,6 +98,8 @@ export function CameraCaptureModal({
     }
   }, [stopStream]);
 
+  // Liga a câmera ao abrir o modal e ao trocar de câmera; desliga ao fechar.
+  // O cleanup garante que o stream pare ao desmontar o componente.
   useEffect(() => {
     if (open) {
       void startStream(facingMode);
@@ -96,10 +109,14 @@ export function CameraCaptureModal({
     return () => stopStream();
   }, [open, facingMode, startStream, stopStream]);
 
+  // Alterna entre câmera frontal (selfie) e traseira.
   const flipCamera = () => {
     setFacingMode((prev) => (prev === "user" ? "environment" : "user"));
   };
 
+  // Captura o quadro atual do vídeo em um <canvas> e gera um arquivo JPEG.
+  // Espelha horizontalmente quando é a câmera frontal para que a foto salva
+  // corresponda ao que o usuário vê na tela.
   const handleShoot = () => {
     const video = videoRef.current;
     if (!video || !ready) return;
@@ -129,8 +146,11 @@ export function CameraCaptureModal({
     );
   };
 
+  // Modal fechado: não renderiza nada.
   if (!open) return null;
 
+  // UI: cabeçalho com título e botão fechar; área de vídeo (ou mensagem de erro)
+  // e os controles de trocar câmera/capturar na base.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl overflow-hidden shadow-2xl">

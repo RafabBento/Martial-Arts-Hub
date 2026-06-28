@@ -1,3 +1,5 @@
+// Página de listagem de alunos. Permite buscar por nome, filtrar por modalidade
+// e (apenas para professor/admin) por unidade. Cada cartão leva ao perfil do aluno.
 import { useState } from "react";
 import { useListStudents, getListStudentsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -6,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../contexts/AuthContext";
 
+// Rótulos amigáveis para cada unidade da academia.
 const UNIT_LABELS: Record<string, string> = {
   matriz:     "Front Matriz",
   panobianco: "Front Panobianco",
   upfitness:  "Front Up Fitness",
 };
 
+// Opções do filtro de unidade exibidas como botões.
 const UNIT_FILTER_OPTIONS = [
   { value: "",           label: "Todas" },
   { value: "matriz",     label: "Matriz" },
@@ -19,6 +23,7 @@ const UNIT_FILTER_OPTIONS = [
   { value: "upfitness",  label: "Up Fitness" },
 ];
 
+// Mapa de cor da faixa -> classes Tailwind usadas no selo de graduação.
 const PRIMARY_COLOR_MAP: Record<string, string> = {
   white: "bg-white text-black border-gray-300",
   blue: "bg-blue-600 text-white border-blue-700",
@@ -30,6 +35,7 @@ const PRIMARY_COLOR_MAP: Record<string, string> = {
   green: "bg-green-600 text-white border-green-700",
 };
 
+// Selo de graduação (faixa/prajied). Não renderiza nada se não houver graduação.
 function BeltBadge({ grade, color, label }: { grade: string | null | undefined; color: string | null | undefined; label: string }) {
   if (!grade) return null;
   const cls = PRIMARY_COLOR_MAP[color ?? ""] ?? "bg-muted text-foreground border-border";
@@ -42,23 +48,27 @@ function BeltBadge({ grade, color, label }: { grade: string | null | undefined; 
 
 export default function Students() {
   const { user } = useAuth();
+  // "Master" = professor ou admin; controla acesso ao filtro de unidade e dados extras.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
-  const [search, setSearch] = useState("");
-  const [modality, setModality] = useState<"" | "thai" | "jiu" | "both">("");
-  const [unit, setUnit] = useState<"" | "matriz" | "panobianco" | "upfitness">("");
+  const [search, setSearch] = useState("");                                       // texto de busca por nome
+  const [modality, setModality] = useState<"" | "thai" | "jiu" | "both">("");     // filtro de modalidade
+  const [unit, setUnit] = useState<"" | "matriz" | "panobianco" | "upfitness">(""); // filtro de unidade (só master)
 
+  // Parâmetros da consulta; o filtro de unidade só é aplicado para usuários master.
   const queryParams = {
     search: search || undefined,
     modality: modality || undefined,
     unit: (isMaster && unit) ? unit : undefined,
   };
 
+  // Busca a lista de alunos conforme os filtros atuais.
   const { data: students, isLoading } = useListStudents(
     queryParams,
     { query: { queryKey: getListStudentsQueryKey(queryParams) } }
   );
 
+  // Opções do filtro de modalidade.
   const modalityOptions = [
     { value: "", label: "Todos" },
     { value: "thai", label: "Muay Thai" },
@@ -75,6 +85,7 @@ export default function Students() {
         </div>
       </div>
 
+      {/* Barra de busca + botões de filtro por modalidade */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -118,6 +129,7 @@ export default function Students() {
         </div>
       )}
 
+      {/* Grade de cartões: skeletons no carregamento, alunos ou estado vazio */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (

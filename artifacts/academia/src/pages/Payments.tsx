@@ -1,3 +1,6 @@
+// Página de controle de mensalidades (uso de professor/admin). Lista os alunos do
+// mês/ano selecionado separando pagos e pendentes, permite alternar o status de
+// pagamento e navegar entre meses. Os dados vêm da API por mês/ano.
 import { useState } from "react";
 import { useListPayments, useMarkPayment, useUnmarkPayment, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -5,6 +8,7 @@ import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Users, AlertCircle, Lo
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
+// Nomes dos meses em pt-BR (índice 0 = Janeiro) usados no cabeçalho de navegação.
 const MONTHS = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
@@ -12,23 +16,30 @@ const MONTHS = [
 
 export default function Payments() {
   const now = new Date();
+  // Mês/ano atualmente visualizados (inicia no mês corrente). month é 1-12.
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  // Id do aluno cuja mutation está em andamento — usado para mostrar spinner e
+  // bloquear cliques simultâneos em outras linhas.
   const [pendingId, setPendingId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Lista de pagamentos do mês/ano selecionado.
   const { data: payments, isLoading } = useListPayments(
     { month, year },
     { query: { queryKey: getListPaymentsQueryKey({ month, year }) } }
   );
 
-  const markMutation = useMarkPayment();
-  const unmarkMutation = useUnmarkPayment();
+  const markMutation = useMarkPayment();     // marca mensalidade como paga
+  const unmarkMutation = useUnmarkPayment(); // remove a marcação de pago
 
+  // Revalida a lista do mês atual após uma alteração para refletir o novo status.
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey({ month, year }) });
 
+  // Alterna o status de pagamento de um aluno. Ignora cliques se já houver uma
+  // operação em andamento; escolhe marcar ou desmarcar conforme o estado atual.
   const handleToggle = (studentId: number, paid: boolean, name: string) => {
     if (pendingId !== null) return;
     setPendingId(studentId);
@@ -53,15 +64,20 @@ export default function Payments() {
     }
   };
 
+  // Navegação para o mês anterior; ao passar de Janeiro volta para Dezembro do
+  // ano anterior.
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(y => y - 1); }
     else setMonth(m => m - 1);
   };
+  // Navegação para o próximo mês; ao passar de Dezembro avança para Janeiro do
+  // ano seguinte.
   const nextMonth = () => {
     if (month === 12) { setMonth(1); setYear(y => y + 1); }
     else setMonth(m => m + 1);
   };
 
+  // Separa os pagamentos em duas listas: pagos e pendentes, para exibição em seções.
   const paid = payments?.filter(p => p.paid) ?? [];
   const pending = payments?.filter(p => !p.paid) ?? [];
 
@@ -158,6 +174,7 @@ export default function Payments() {
   );
 }
 
+// Tipo de uma entrada de pagamento (um aluno em determinado mês/ano).
 type PaymentEntry = {
   studentId: number;
   name: string;
@@ -170,6 +187,8 @@ type PaymentEntry = {
   year?: number;
 };
 
+// Linha de pagamento de um aluno: foto, nome, status/vencimento e botão para
+// alternar entre pago/pendente (com spinner durante a operação).
 function PaymentRow({ entry, month, onToggle, pending, disabled }: {
   entry: PaymentEntry;
   month: number;
@@ -177,10 +196,12 @@ function PaymentRow({ entry, month, onToggle, pending, disabled }: {
   pending: boolean;
   disabled: boolean;
 }) {
+  // Texto de vencimento (dia do mês) quando o aluno tem dia de pagamento definido.
   const vencimento = entry.paymentDay
     ? `Vence dia ${entry.paymentDay}`
     : null;
 
+  // Data formatada do pagamento já confirmado, quando existir.
   const paidDate = entry.paidAt
     ? new Date(entry.paidAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
     : null;

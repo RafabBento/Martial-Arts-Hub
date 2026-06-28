@@ -1,3 +1,6 @@
+// Componente da gaveta lateral de navegação do app mobile (espelha a sidebar
+// da versão web). Renderiza o menu de telas, destaca a rota atual e oferece
+// atalhos de Perfil/Sair. É montado pelo DrawerProvider e animado com Animated.
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";

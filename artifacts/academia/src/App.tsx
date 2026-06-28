@@ -1,3 +1,8 @@
+// Componente raiz da aplicação web.
+// Concentra a configuração global (TanStack Query, contexto de autenticação,
+// tooltips e toasts) e define o roteamento (wouter) com rotas públicas e
+// protegidas. Também monta utilitários globais como lembrete de pagamento e
+// o prompt de instalação do PWA.
 import React from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,6 +27,9 @@ import Rankings from "./pages/Rankings";
 import Profile from "./pages/Profile";
 import Payments from "./pages/Payments";
 
+// Cliente único do TanStack Query usado em toda a aplicação.
+// Padrões: tenta novamente apenas 1 vez em caso de falha e não refaz a busca
+// automaticamente quando a janela volta ao foco (evita requisições excessivas).
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -31,10 +39,14 @@ const queryClient = new QueryClient({
   },
 });
 
+// Rota protegida: exige usuário autenticado.
+// Enquanto o estado de auth carrega exibe um spinner; se não houver usuário
+// redireciona para /login; caso contrário renderiza o componente dentro do Layout.
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
+  // Após terminar o carregamento, se não houver usuário logado, manda para o login.
   React.useEffect(() => {
     if (!isLoading && !user) {
       setLocation("/login");
@@ -49,8 +61,10 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
     );
   }
 
+  // Sem usuário (e já redirecionando), não renderiza nada para evitar flash de conteúdo.
   if (!user) return null;
 
+  // Usuário autenticado: renderiza a página dentro do layout com sidebar/cabeçalho.
   return (
     <Layout>
       <Component />
@@ -58,10 +72,14 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
+// Rota pública: páginas acessíveis sem login (home, login, cadastro).
+// Se um usuário já autenticado tentar acessar essas rotas, é redirecionado
+// automaticamente para o painel (/dashboard).
 function PublicRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
 
+  // Usuário logado acessando home/login/register é levado direto ao painel.
   React.useEffect(() => {
     if (!isLoading && user && (location === "/login" || location === "/register" || location === "/")) {
       setLocation("/dashboard");
@@ -76,11 +94,16 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
     );
   }
 
+  // Evita renderizar a página pública por um instante antes do redirecionamento.
   if (user && (location === "/login" || location === "/register" || location === "/")) return null;
 
   return <Component />;
 }
 
+// Tabela de rotas da aplicação.
+// <Switch> renderiza apenas a primeira <Route> que casa com a URL atual.
+// As três primeiras são públicas; as demais exigem autenticação; a última
+// (sem path) funciona como fallback 404.
 function Router() {
   return (
     <Switch>
@@ -98,11 +121,19 @@ function Router() {
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
       
+      {/* Rota curinga: qualquer URL não reconhecida cai na página 404. */}
       <Route component={NotFound} />
     </Switch>
   );
 }
 
+// Composição dos provedores globais que envolvem toda a aplicação:
+// - QueryClientProvider: cache/estado de requisições (TanStack Query)
+// - AuthProvider: estado de autenticação do usuário
+// - TooltipProvider: suporte a tooltips (Radix)
+// - WouterRouter: roteamento, usando BASE_URL como base (sem a barra final)
+// Além do roteador, monta utilitários globais: lembrete de pagamento,
+// prompt de instalação do PWA e o container de toasts.
 function App() {
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,3 +1,8 @@
+// =============================================================================
+// routes/sessions.ts — Rotas de aulas/treinos (training sessions).
+// Lista, cria, obtém e remove sessões de treino, sempre juntando o nome do
+// professor e agregando a contagem de presenças por sessão.
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, trainingSessionsTable, usersTable, attendanceTable } from "@workspace/db";
@@ -10,6 +15,8 @@ import {
 
 const router: IRouter = Router();
 
+// GET /sessions — lista as sessões (opcionalmente filtradas por modalidade),
+// mais recentes primeiro, com a contagem de presenças de cada uma.
 router.get("/sessions", async (req, res): Promise<void> => {
   const query = ListSessionsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -17,11 +24,13 @@ router.get("/sessions", async (req, res): Promise<void> => {
     return;
   }
 
+  // Filtro opcional por modalidade.
   const conditions: ReturnType<typeof eq>[] = [];
   if (query.data.modality) {
     conditions.push(eq(trainingSessionsTable.modality, query.data.modality as "thai" | "jiu"));
   }
 
+  // Junta o professor para já trazer o nome dele junto da sessão.
   const sessions = await db
     .select({
       id: trainingSessionsTable.id,
@@ -37,6 +46,7 @@ router.get("/sessions", async (req, res): Promise<void> => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(sql`${trainingSessionsTable.sessionDate} DESC`);
 
+  // Conta presenças agrupadas por sessão numa única query (evita N+1).
   const attendanceCounts = await db
     .select({
       sessionId: attendanceTable.sessionId,
@@ -45,6 +55,7 @@ router.get("/sessions", async (req, res): Promise<void> => {
     .from(attendanceTable)
     .groupBy(attendanceTable.sessionId);
 
+  // Indexa as contagens por sessionId para combinar com a lista de sessões.
   const countMap = new Map(attendanceCounts.map(a => [a.sessionId, a.count]));
 
   res.json(sessions.map(s => ({
@@ -59,6 +70,7 @@ router.get("/sessions", async (req, res): Promise<void> => {
   })));
 });
 
+// POST /sessions — cria uma nova sessão de treino.
 router.post("/sessions", async (req, res): Promise<void> => {
   const body = CreateSessionBody.safeParse(req.body);
   if (!body.success) {
@@ -66,6 +78,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
     return;
   }
 
+  // Insere a sessão (a data vem como string ISO e é convertida para Date).
   const [session] = await db.insert(trainingSessionsTable).values({
     modality: body.data.modality as "thai" | "jiu",
     sessionDate: new Date(body.data.sessionDate),
@@ -73,6 +86,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
     teacherId: body.data.teacherId,
   }).returning();
 
+  // Busca o nome do professor para retornar a sessão já completa ao cliente.
   const [teacher] = await db.select().from(usersTable).where(eq(usersTable.id, session.teacherId));
 
   res.status(201).json({
@@ -87,6 +101,7 @@ router.post("/sessions", async (req, res): Promise<void> => {
   });
 });
 
+// GET /sessions/:id — detalhe de uma sessão com nome do professor e nº de presenças.
 router.get("/sessions/:id", async (req, res): Promise<void> => {
   const params = GetSessionParams.safeParse(req.params);
   if (!params.success) {
@@ -113,6 +128,7 @@ router.get("/sessions/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Conta as presenças apenas desta sessão.
   const [count] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(attendanceTable)
@@ -130,6 +146,7 @@ router.get("/sessions/:id", async (req, res): Promise<void> => {
   });
 });
 
+// DELETE /sessions/:id — remove uma sessão de treino pelo id.
 router.delete("/sessions/:id", async (req, res): Promise<void> => {
   const params = DeleteSessionParams.safeParse(req.params);
   if (!params.success) {
@@ -137,6 +154,7 @@ router.delete("/sessions/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Retorno vazio = id inexistente → 404.
   const [session] = await db
     .delete(trainingSessionsTable)
     .where(eq(trainingSessionsTable.id, params.data.id))

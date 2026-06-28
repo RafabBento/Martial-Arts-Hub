@@ -1,3 +1,10 @@
+// =============================================================================
+// routes/students.ts — Rotas de alunos (listar, obter, atualizar perfil).
+// Junta usersTable + studentProfilesTable e agrega contagem de presenças por
+// modalidade. Regras de negócio importantes: alunos só enxergam a própria
+// unidade; sábado de Muay Thai conta em dobro; alunos não podem alterar
+// graduações (campos de grade são removidos do update quando o requester é aluno).
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, or } from "drizzle-orm";
 import { db, usersTable, studentProfilesTable, attendanceTable, trainingSessionsTable } from "@workspace/db";
@@ -9,10 +16,13 @@ import {
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
 
+// Unidades (filiais) válidas da academia.
 type Unit = "matriz" | "panobianco" | "upfitness";
 
 const router: IRouter = Router();
 
+// GET /students — lista alunos com filtros por modalidade/unidade/busca e
+// presenças agregadas por modalidade.
 router.get("/students", async (req, res): Promise<void> => {
   const query = ListStudentsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -20,7 +30,8 @@ router.get("/students", async (req, res): Promise<void> => {
     return;
   }
 
-  // Determine requester role — students only see their own unit
+  // Descobre o papel/unidade de quem está pedindo — alunos só veem a própria
+  // unidade (regra de autorização aplicada mais abaixo nas conditions).
   const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
   let requesterUnit: Unit | null = null;
   let requesterRole: string | null = null;
@@ -30,8 +41,10 @@ router.get("/students", async (req, res): Promise<void> => {
     requesterUnit = (requester?.unit ?? null) as Unit | null;
   }
 
+  // Filtros acumulados do WHERE. Base: só usuários com papel "student".
   let conditions: ReturnType<typeof eq>[] = [eq(usersTable.role, "student")];
 
+  // Filtro por modalidade: thai, jiu ou "both" (precisa treinar ambas).
   if (query.data.modality === "thai") {
     conditions.push(eq(studentProfilesTable.modalityThai, true));
   } else if (query.data.modality === "jiu") {
@@ -48,6 +61,7 @@ router.get("/students", async (req, res): Promise<void> => {
     conditions.push(eq(usersTable.unit, query.data.unit as Unit));
   }
 
+  // Junta usuário + perfil de aluno e seleciona os campos expostos na listagem.
   let joinQuery = db
     .select({
       id: studentProfilesTable.id,
@@ -72,6 +86,7 @@ router.get("/students", async (req, res): Promise<void> => {
     .where(and(...conditions))
     .$dynamic();
 
+  // Busca textual opcional por nome ou email (case-insensitive).
   if (query.data.search) {
     const search = `%${query.data.search}%`;
     joinQuery = joinQuery.where(or(ilike(usersTable.name, search), ilike(usersTable.email, search)));
@@ -79,7 +94,8 @@ router.get("/students", async (req, res): Promise<void> => {
 
   const students = await joinQuery;
 
-  // Saturday Thai sessions count double
+  // Presenças de Muay Thai agregadas por aluno. Regra: sessões de sábado
+  // (EXTRACT(DOW)=6) contam em dobro; nas demais, conta 1.
   const thaiAttendance = await db
     .select({
       studentId: attendanceTable.studentId,
@@ -90,6 +106,7 @@ router.get("/students", async (req, res): Promise<void> => {
     .where(eq(trainingSessionsTable.modality, "thai"))
     .groupBy(attendanceTable.studentId);
 
+  // Presenças de Jiu-Jitsu: contagem simples (sem peso de sábado).
   const jiuAttendance = await db
     .select({
       studentId: attendanceTable.studentId,
@@ -100,9 +117,12 @@ router.get("/students", async (req, res): Promise<void> => {
     .where(eq(trainingSessionsTable.modality, "jiu"))
     .groupBy(attendanceTable.studentId);
 
+  // Indexa as contagens por userId para lookup O(1) ao montar a resposta.
   const thaiMap = new Map(thaiAttendance.map(a => [a.studentId, a.count]));
   const jiuMap = new Map(jiuAttendance.map(a => [a.studentId, a.count]));
 
+  // Serializa cada aluno; hasFaceDescriptor indica se já há rosto de referência
+  // cadastrado (sem expor o descritor em si).
   res.json(students.map(s => ({
     id: s.id,
     userId: s.userId,
@@ -125,6 +145,7 @@ router.get("/students", async (req, res): Promise<void> => {
   })));
 });
 
+// GET /students/:id — detalhe de um aluno com suas contagens de presença.
 router.get("/students/:id", async (req, res): Promise<void> => {
   const params = GetStudentParams.safeParse(req.params);
   if (!params.success) {
@@ -132,6 +153,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Busca o aluno (usuário + perfil) pelo id do usuário.
   const [student] = await db
     .select({
       id: studentProfilesTable.id,
@@ -160,7 +182,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Saturday Thai sessions count double
+  // Total de Muay Thai do aluno — sábado conta em dobro (mesma regra da lista).
   const thaiCount = await db
     .select({
       count: sql<number>`SUM(CASE WHEN EXTRACT(DOW FROM ${trainingSessionsTable.sessionDate}) = 6 THEN 2 ELSE 1 END)::int`,
@@ -169,6 +191,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     .innerJoin(trainingSessionsTable, eq(attendanceTable.sessionId, trainingSessionsTable.id))
     .where(and(eq(attendanceTable.studentId, student.userId), eq(trainingSessionsTable.modality, "thai")));
 
+  // Total de Jiu-Jitsu do aluno — contagem simples.
   const jiuCount = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(attendanceTable)
@@ -197,6 +220,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
   });
 });
 
+// PATCH /students/:id — atualiza o perfil de treino de um aluno.
 router.patch("/students/:id", async (req, res): Promise<void> => {
   const params = UpdateStudentParams.safeParse(req.params);
   if (!params.success) {
@@ -210,19 +234,21 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Lookup requester's role from session
+  // Descobre, pela sessão, se quem faz a alteração é um aluno (regra de authz).
   const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
   const requesterIsStudent = requesterId
     ? (await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, requesterId)))[0]?.role === "student"
     : false;
 
-  // Students cannot change grade fields — strip them from the update
+  // Authz: alunos NÃO podem alterar campos de graduação — eles são removidos do
+  // update quando o requester é aluno (apenas professor/admin gradua).
   const GRADE_FIELDS = ["thaiGrade", "thaiGradeColor", "jiuGrade", "jiuGradeColor", "jiuDegree"] as const;
   const updateData = requesterIsStudent
     ? Object.fromEntries(Object.entries(body.data).filter(([k]) => !GRADE_FIELDS.includes(k as typeof GRADE_FIELDS[number])))
     : body.data;
 
-  // If nothing left to update (student sent only grade fields), just return current data
+  // Se sobrou algo para atualizar, executa o UPDATE; caso contrário (aluno
+  // enviou só campos de graduação, todos filtrados), apenas lê o perfil atual.
   const [profile] = Object.keys(updateData).length > 0
     ? await db.update(studentProfilesTable).set(updateData).where(eq(studentProfilesTable.userId, params.data.id)).returning()
     : await db.select().from(studentProfilesTable).where(eq(studentProfilesTable.userId, params.data.id));

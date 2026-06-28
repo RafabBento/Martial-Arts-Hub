@@ -1,3 +1,6 @@
+// Tela de login. Autentica o usuário (email + senha), salva a sessão via
+// AuthContext e redireciona para a área logada (abas). Exibe a imagem de fundo
+// da "arena" com um overlay escuro e o formulário sobreposto.
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -23,14 +26,19 @@ export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // login: persiste usuário + token no contexto de autenticação.
   const { login } = useAuth();
+  // Mutação gerada pela API que faz a chamada de login no servidor.
   const loginMutation = useLogin();
 
+  // Estado controlado dos campos do formulário e mensagem de erro.
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
+  // Valida os campos, chama a API de login e, em caso de sucesso, salva a sessão
+  // e navega para as abas. Em erro, mostra mensagem e feedback háptico.
   const handleLogin = async () => {
     if (!email || !password) {
       setError("Preencha e-mail e senha.");
@@ -48,6 +56,7 @@ export default function LoginScreen() {
     }
   };
 
+  // Padding inferior: valor fixo no web, área segura (notch/gestos) no celular.
   const botPad = Platform.OS === "web" ? 32 : insets.bottom + 16;
 
   return (

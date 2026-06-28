@@ -1,3 +1,10 @@
+// =============================================================================
+// routes/storage.ts — Upload e leitura de arquivos no Object Storage.
+// Fluxo: o cliente pede uma URL pré-assinada (presigned) e envia o arquivo
+// direto ao bucket; a leitura passa por esta API, que aplica autenticação e ACL.
+// SEGURANÇA (anti-IDOR): objetos privados (fotos de perfil/equipe) só são
+// servidos a usuários autenticados e respeitam a política de ACL de cada objeto.
+// =============================================================================
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import {
@@ -21,6 +28,7 @@ const ALLOWED_UPLOAD_TYPES = new Set([
 ]);
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
 
+// Lê o id do usuário autenticado da sessão (preenchida por cookie ou Bearer).
 function sessionUserId(req: Request): number | undefined {
   return (req.session as unknown as Record<string, unknown> | undefined)?.userId as
     | number
@@ -38,11 +46,13 @@ function sessionUserId(req: Request): number | undefined {
  * allowed so the presigned URL cannot be abused to dump arbitrary content.
  */
 router.post("/storage/uploads/request-url", async (req: Request, res: Response) => {
+  // Autorização: somente usuários autenticados podem solicitar URL de upload.
   if (!sessionUserId(req)) {
     res.status(401).json({ error: "Não autenticado" });
     return;
   }
 
+  // Valida os metadados enviados (nome, tamanho, tipo) — o arquivo NÃO vem aqui.
   const parsed = RequestUploadUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Missing or invalid required fields" });
@@ -52,15 +62,18 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   try {
     const { name, size, contentType } = parsed.data;
 
+    // Restringe a imagens permitidas (evita abuso do bucket via presigned URL).
     if (!ALLOWED_UPLOAD_TYPES.has(contentType.toLowerCase())) {
       res.status(400).json({ error: "Tipo de arquivo não permitido (apenas imagens)" });
       return;
     }
+    // Limita o tamanho máximo do arquivo.
     if (typeof size === "number" && size > MAX_UPLOAD_BYTES) {
       res.status(400).json({ error: "Arquivo muito grande" });
       return;
     }
 
+    // Gera a URL pré-assinada e normaliza o caminho do objeto para uso interno.
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
@@ -86,6 +99,7 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
  */
 router.get("/storage/public-objects/*filePath", async (req: Request, res: Response) => {
   try {
+    // Resolve o caminho do arquivo (curinga) e procura no diretório público.
     const raw = req.params.filePath;
     const filePath = Array.isArray(raw) ? raw.join("/") : raw;
     const file = await objectStorageService.searchPublicObject(filePath);
@@ -94,6 +108,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
       return;
     }
 
+    // Faz streaming do conteúdo do objeto público diretamente para a resposta.
     const response = await objectStorageService.downloadObject(file);
 
     res.status(response.status);
@@ -129,6 +144,7 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   }
 
   try {
+    // Monta o caminho /objects/... e localiza o objeto privado correspondente.
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
@@ -139,6 +155,9 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     // Legacy objects predating ACLs have no policy; since the only such objects
     // are profile avatars (intentionally shared) and team photos always receive a
     // private policy at creation, a missing policy falls back to authenticated read.
+    // ACL por objeto (anti-IDOR): se há política, verifica se o usuário atual tem
+    // permissão de leitura; foto de equipe é privada (somente dono). Sem política,
+    // cai no acesso autenticado (somente avatares legados, intencionalmente compartilhados).
     const policy = await getObjectAclPolicy(objectFile);
     if (policy) {
       const allowed = await objectStorageService.canAccessObjectEntity({
@@ -146,12 +165,14 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
         objectFile,
         requestedPermission: ObjectPermission.READ,
       });
+      // Sem permissão → 403 (impede acesso indevido a arquivo de outro usuário).
       if (!allowed) {
         res.status(403).json({ error: "Sem permissão para acessar este arquivo" });
         return;
       }
     }
 
+    // Autorizado: faz streaming do objeto privado para a resposta.
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);

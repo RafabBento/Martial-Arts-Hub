@@ -28,12 +28,14 @@ import { MenuButton } from "@/components/MenuButton";
 import { SessionCard } from "@/components/SessionCard";
 import * as Haptics from "expo-haptics";
 
+// Filtros de modalidade exibidos como "chips" no topo da lista.
 const FILTERS = [
   { label: "Todos", value: undefined as undefined | "thai" | "jiu" },
   { label: "Thai", value: "thai" as const },
   { label: "Jiu", value: "jiu" as const },
 ];
 
+// Cronograma semanal fixo (informativo) mostrado no cabeçalho da lista.
 const SCHEDULE = [
   { time: "19:00", modality: "jiu" as const, days: "Seg – Sex", instructor: "Instrutor Ewerton" },
   { time: "20:30", modality: "thai" as const, days: "Seg, Qua e Sex", instructor: "Mestre Ewerton" },
@@ -41,10 +43,13 @@ const SCHEDULE = [
   { time: "10:30", modality: "thai" as const, days: "Sábado", instructor: "Instrutor Nilberto" },
 ];
 
+// Tela de sessões (aulas) de treino. Lista as sessões registradas com filtro por
+// modalidade e, para mestres/admins, permite criar novas sessões.
 export default function SessionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Filtro de modalidade ativo, controle do modal de criação e do formulário.
   const [modality, setModality] = useState<undefined | "thai" | "jiu">(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ modality: "thai" as "thai" | "jiu", date: "", time: "", description: "", teacherId: "" });
@@ -52,17 +57,23 @@ export default function SessionsScreen() {
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
+  // Queries: lista de sessões (filtrada) e lista de professores para o seletor.
   const { data, isLoading, refetch } = useListSessions({ modality });
   const { data: teachers } = useListUsers({ role: "teacher" });
+  // Mutação para criar uma nova sessão.
   const createMutation = useCreateSession();
 
+  // Mestres (professores) e admins têm permissão para criar sessões.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Valida o formulário, monta a data/hora ISO e cria a sessão; em sucesso,
+  // invalida o cache, fecha o modal e limpa o formulário.
   const handleCreate = () => {
     if (!form.date || !form.time || !form.teacherId) {
       showToast("Preencha data, hora e professor");
@@ -92,8 +103,10 @@ export default function SessionsScreen() {
     );
   };
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 

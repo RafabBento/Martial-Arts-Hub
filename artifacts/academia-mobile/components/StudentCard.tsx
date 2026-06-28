@@ -1,3 +1,5 @@
+// Cartão de aluno usado na listagem de alunos: foto/iniciais, nome, e-mail,
+// selos de modalidade, graduações (faixas) e totais de presença por modalidade.
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -21,11 +23,14 @@ interface StudentCardProps {
   onPress: () => void;
 }
 
+// Mapa de nomes de cor (em inglês) para o hexadecimal correspondente, usado
+// para converter cores de graduação salvas como texto.
 const COLOR_NAME_HEX: Record<string, string> = {
   white: "#f5f5f5", red: "#dc2626", yellow: "#facc15", green: "#16a34a",
   blue: "#2563eb", purple: "#7c3aed", brown: "#92400e", black: "#111827",
 };
 
+// Mapa das faixas de Muay Thai (rótulo em pt-BR) para a cor exibida no badge.
 const THAI_LABEL_HEX: Record<string, string> = {
   "Branco": "#f5f5f5", "Branco ponta vermelha": "#f5f5f5",
   "Vermelha": "#dc2626", "Vermelha ponta amarela": "#dc2626",
@@ -35,11 +40,14 @@ const THAI_LABEL_HEX: Record<string, string> = {
   "Preta": "#111827",
 };
 
+// Mapa das faixas de Jiu-Jitsu (rótulo em pt-BR) para a cor exibida no badge.
 const JIU_LABEL_HEX: Record<string, string> = {
   "Branca": "#f5f5f5", "Azul": "#2563eb", "Roxa": "#7c3aed",
   "Marrom": "#92400e", "Preta": "#111827",
 };
 
+// Resolve uma cor crua (hex direto ou nome em inglês) para um hexadecimal, ou
+// null quando não for possível identificar.
 function resolveHex(raw?: string | null): string | null {
   if (!raw) return null;
   const v = raw.trim();
@@ -47,6 +55,8 @@ function resolveHex(raw?: string | null): string | null {
   return COLOR_NAME_HEX[v.toLowerCase()] ?? null;
 }
 
+// Badge de graduação: ponto colorido (cor da faixa) + rótulo e grau. Faixas
+// claras ganham borda escura no ponto para manter contraste, e vice-versa.
 function GradeBadge({ label, grade, hex }: { label: string; grade: string; hex: string }) {
   const colors = useColors();
   const isLight = hex === "#f5f5f5" || hex === "#facc15";
@@ -72,11 +82,16 @@ export function StudentCard({
   totalAttendanceThai, totalAttendanceJiu, onPress,
 }: StudentCardProps) {
   const colors = useColors();
+  // Iniciais para o avatar quando não há foto de perfil.
   const initials = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
 
+  // Resolve as cores das faixas: usa a cor salva; senão deduz pela faixa; por
+  // fim cai num cinza neutro.
   const thaiHex = resolveHex(thaiGradeColor) ?? (thaiGrade ? THAI_LABEL_HEX[thaiGrade] : null) ?? "#6b7280";
   const jiuHex = resolveHex(jiuGradeColor) ?? (jiuGrade ? JIU_LABEL_HEX[jiuGrade] : null) ?? "#6b7280";
+  // No Jiu-Jitsu, anexa o grau (ex.: "Azul 2º") quando houver graus na faixa.
   const jiuLabel = jiuGrade ? (jiuDegree && jiuDegree > 0 ? `${jiuGrade} ${jiuDegree}º` : jiuGrade) : null;
+  // Só exibe a seção de graduações se houver pelo menos uma faixa cadastrada.
   const hasGrades = Boolean(thaiGrade) || Boolean(jiuGrade);
 
   return (

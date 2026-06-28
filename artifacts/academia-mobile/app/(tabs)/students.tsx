@@ -18,6 +18,7 @@ import { useColors } from "@/hooks/useColors";
 import { MenuButton } from "@/components/MenuButton";
 import { StudentCard } from "@/components/StudentCard";
 
+// Opções do filtro de modalidade (chips).
 const MODALITY_FILTERS = [
   { label: "Todos", value: undefined as undefined | "thai" | "jiu" | "both" },
   { label: "Thai", value: "thai" as const },
@@ -25,29 +26,38 @@ const MODALITY_FILTERS = [
   { label: "Ambos", value: "both" as const },
 ];
 
+// Rótulos amigáveis para cada unidade (usado no filtro de unidade).
 const UNIT_LABELS: Record<string, string> = {
   matriz: "Matriz",
   panobianco: "Panobianco",
   upfitness: "Up Fitness",
 };
 
+// Tela de listagem de alunos. Permite buscar por nome e filtrar por modalidade;
+// professores/admins têm também o filtro por unidade. Cada item leva ao detalhe.
 export default function StudentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Texto de busca e filtros selecionados.
   const [search, setSearch] = useState("");
   const [modalityFilter, setModalityFilter] = useState<undefined | "thai" | "jiu" | "both">(undefined);
   const [unitFilter, setUnitFilter] = useState<undefined | "matriz" | "panobianco" | "upfitness">(undefined);
   const { user, isLoading: authLoading } = useAuth();
 
+  // Mestres (professores) e admins veem o filtro por unidade.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Busca os alunos no servidor (a busca por texto é feita server-side).
   const { data: allStudents, isLoading, refetch } = useListStudents({ search: search || undefined });
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Padding superior: fixo no web, área segura no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  // Filtragem local por modalidade e unidade aplicada sobre a lista retornada.
   const filtered = (allStudents ?? []).filter(s => {
     if (modalityFilter === "thai" && !s.modalityThai) return false;
     if (modalityFilter === "jiu" && !s.modalityJiu) return false;

@@ -1,3 +1,13 @@
+// =============================================================================
+// routes/face.ts — Reconhecimento facial (cadastro e identificação em equipe).
+// Três fluxos: (1) foto de perfil que também gera o descritor de referência;
+// (2) cadastro multiângulo (vários descritores por aluno); (3) reconhecimento
+// da foto da equipe, casando cada rosto com os descritores cadastrados para
+// marcar presença. Descritores são vetores de 128 floats; a comparação usa
+// distância euclidiana contra um limiar (threshold).
+// SEGURANÇA: várias proteções anti-IDOR garantem que um objeto enviado só pode
+// ser reivindicado/processado pelo dono; reconhecimento de equipe é só mestre.
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, usersTable, studentProfilesTable, studentFaceDescriptorsTable } from "@workspace/db";
@@ -20,20 +30,25 @@ const objectStorageService = new ObjectStorageService();
 // Strict by default: a detected face matches a student only when its descriptor
 // is within this euclidean distance. Lower = fewer false positives (safer);
 // override with FACE_MATCH_THRESHOLD if needed.
+// (Limiar de correspondência: um rosto só casa se a distância for <= este valor.
+// Menor = menos falsos positivos. Pode ser ajustado por FACE_MATCH_THRESHOLD.)
 const MATCH_THRESHOLD = (() => {
   const raw = process.env["FACE_MATCH_THRESHOLD"];
   const n = raw === undefined ? NaN : Number(raw);
   return Number.isFinite(n) ? n : 0.5;
 })();
 
+// Converte um caminho de objeto na URL servida pela API (rota /api/storage).
 function servingUrl(objectPath: string): string {
   return `/api/storage${objectPath}`;
 }
 
+// Lê o id do usuário autenticado a partir da sessão.
 function getSessionUserId(req: { session: unknown }): number | undefined {
   return (req.session as Record<string, unknown>).userId as number | undefined;
 }
 
+// Busca o solicitante (id + role) no banco; usado para checagens de autorização.
 async function getRequester(
   userId: number | undefined,
 ): Promise<{ id: number; role: string } | null> {
@@ -45,6 +60,7 @@ async function getRequester(
   return user ?? null;
 }
 
+// Baixa os bytes de um objeto do storage para processamento facial.
 async function downloadObjectBytes(objectPath: string): Promise<Buffer> {
   const file = await objectStorageService.getObjectEntityFile(objectPath);
   const [buffer] = await file.download();

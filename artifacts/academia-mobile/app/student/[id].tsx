@@ -38,6 +38,7 @@ const logoThai = require("@/assets/images/logo-thai.png");
 const logoJiu = require("@/assets/images/logo-jiu.png");
 
 /* ─── Grade data ─────────────────────────────────────────────────────── */
+// Lista de prajieds (graduações do Muay Thai) com cores primária/secundária.
 const PRAJIED_GRADES = [
   { value: "branco",                 label: "Branco",                 primary: "#f5f5f5", secondary: null },
   { value: "branco-ponta-vermelha",  label: "Branco ponta vermelha",  primary: "#f5f5f5", secondary: "#dc2626" },
@@ -52,6 +53,7 @@ const PRAJIED_GRADES = [
   { value: "preta",                  label: "Preta",                  primary: "#111827", secondary: null },
 ];
 
+// Cores das faixas de Jiu-Jitsu (valor interno, rótulo pt-BR e hex).
 const JIU_COLORS = [
   { value: "white",  label: "Branca",  hex: "#f5f5f5" },
   { value: "blue",   label: "Azul",    hex: "#2563eb" },
@@ -60,9 +62,11 @@ const JIU_COLORS = [
   { value: "black",  label: "Preta",   hex: "#111827" },
 ];
 
+// Nomes das faixas de Jiu-Jitsu (para o seletor de faixa).
 const JIU_GRADES = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
 
 /* ─── Visual components ──────────────────────────────────────────────── */
+// Desenha a faixinha (prajied) do Muay Thai conforme a graduação informada.
 function PrajiedStripe({ thaiGrade }: { thaiGrade: string }) {
   const entry = PRAJIED_GRADES.find(
     p => p.label === thaiGrade || p.value === thaiGrade
@@ -84,6 +88,7 @@ const stripStyles = StyleSheet.create({
   tip: { width: 22, position: "absolute", right: 0, top: 0, bottom: 0 },
 });
 
+// Desenha a faixa de Jiu-Jitsu com a cor e o número de graus (0–4).
 function BeltStripe({ color, degree }: { color: string; degree?: number | null }) {
   const hex = JIU_COLORS.find(c => c.value === color)?.hex ?? "#555";
   const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
@@ -105,16 +110,22 @@ const beltStyles = StyleSheet.create({
 });
 
 /* ─── Main screen ────────────────────────────────────────────────────── */
+// Tela de detalhe/perfil de um aluno (rota dinâmica /student/[id]). Exibe dados,
+// graduações, histórico de presenças e o cadastro facial; mestres podem editar
+// graduações e cadastrar a foto/rosto do aluno.
 export default function StudentDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  // Lê o id do aluno da URL e converte para número.
   const { id } = useLocalSearchParams<{ id: string }>();
   const studentId = Number(id);
   const queryClient = useQueryClient();
+  // Mestres (professores) e admins podem editar graduações e cadastrar rosto.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Estados locais: modalidade ativa, abertura dos seletores, toast e uploads.
   const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai");
   const [thaiPickerOpen, setThaiPickerOpen] = useState(false);
   const [jiuGradePickerOpen, setJiuGradePickerOpen] = useState(false);
@@ -123,22 +134,28 @@ export default function StudentDetailScreen() {
   const [faceUploading, setFaceUploading] = useState(false);
   const [enrollOpen, setEnrollOpen] = useState(false);
 
+  // Query: dados do aluno.
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) },
   });
 
+  // Query: histórico de presenças do aluno filtrado pela modalidade ativa.
   const { data: attendance } = useListAttendance(
     { studentId, modality: activeModality },
     { query: { enabled: !!studentId, queryKey: getListAttendanceQueryKey({ studentId, modality: activeModality }) } }
   );
 
+  // Mutação para atualizar os dados/graduações do aluno.
   const updateMutation = useUpdateStudent();
 
+  // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Tira/seleciona uma foto (câmera ou galeria), envia ao storage e registra o
+  // rosto do aluno; atualiza os caches e avisa se um rosto foi detectado.
   const handlePickFace = async (source: "camera" | "gallery") => {
     try {
       const perm = source === "camera"
@@ -182,6 +199,7 @@ export default function StudentDetailScreen() {
     }
   };
 
+  // Atualiza um campo de graduação do aluno (faixa, cor ou grau) e atualiza caches.
   const handleGradeUpdate = (field: string, value: string | number | null) => {
     updateMutation.mutate(
       { id: studentId, data: { [field]: value } as any },
@@ -197,6 +215,7 @@ export default function StudentDetailScreen() {
     );
   };
 
+  // Define o prajied (graduação Thai) do aluno e fecha o seletor em caso de sucesso.
   const handleThaiPrajied = (grade: typeof PRAJIED_GRADES[number]) => {
     updateMutation.mutate(
       { id: studentId, data: { thaiGrade: grade.label, thaiGradeColor: grade.primary } },
@@ -213,9 +232,11 @@ export default function StudentDetailScreen() {
     );
   };
 
+  // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // Enquanto o aluno carrega, exibe apenas o cabeçalho e um spinner.
   if (isLoading) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -233,6 +254,8 @@ export default function StudentDetailScreen() {
 
   if (!student) return null;
 
+  // Valores derivados para a renderização: iniciais do avatar, exibição do
+  // alternador de modalidade, logo de Jiu (apenas bollacha) e prajied atual.
   const initials = student.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
   const showToggle = student.modalityThai && student.modalityJiu;
   const isBollacha = student.bollacha === true;

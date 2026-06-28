@@ -1,3 +1,7 @@
+// Modal de cadastro facial guiado (mobile). Conduz o usuário por vários ângulos
+// (frente, esquerda, direita, cima, baixo), captura várias fotos por ângulo,
+// envia tudo ao object storage e chama o endpoint enrollFace para extrair os
+// descritores faciais no servidor. Todo o reconhecimento roda 100% server-side.
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { CameraView, useCameraPermissions, type CameraCapturedPicture } from "expo-camera";
@@ -18,6 +22,8 @@ import { uploadImageToStorage } from "@/lib/uploadImage";
 
 type StepKey = "front" | "left" | "right" | "up" | "down";
 
+// Sequência de etapas (ângulos) que o usuário deve seguir durante a captura.
+// Cada etapa tem rótulo, dica de instrução e ícone direcional.
 const STEPS: { key: StepKey; label: string; hint: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "front", label: "Olhe para frente", hint: "Centralize seu rosto no círculo", icon: "happy-outline" },
   { key: "left", label: "Vire o rosto para a esquerda", hint: "Devagar, mantendo o rosto visível", icon: "arrow-back-outline" },
@@ -26,10 +32,15 @@ const STEPS: { key: StepKey; label: string; hint: string; icon: keyof typeof Ion
   { key: "down", label: "Incline o rosto para baixo", hint: "Abaixe o queixo levemente", icon: "arrow-down-outline" },
 ];
 
+// Parâmetros da captura em rajada: quantas fotos por etapa, o intervalo entre
+// cada foto e o tempo de "acomodação" antes de começar a fotografar a etapa
+// (dá tempo do usuário posicionar o rosto no novo ângulo).
 const FRAMES_PER_STEP = 3;
 const FRAME_INTERVAL_MS = 450;
 const STEP_SETTLE_MS = 900;
 
+// Fases da máquina de estados do modal: introdução, capturando, enviando,
+// concluído e erro.
 type Phase = "intro" | "capturing" | "uploading" | "done" | "error";
 
 export function FaceEnrollModal({
@@ -46,17 +57,23 @@ export function FaceEnrollModal({
   onDone?: (result: EnrollFaceResult) => void;
 }) {
   const colors = useColors();
+  // Permissão da câmera (e função para solicitá-la quando ainda não concedida).
   const [permission, requestPermission] = useCameraPermissions();
+  // Referência à CameraView para tirar fotos programaticamente.
   const cameraRef = useRef<CameraView>(null);
+  // Flag (via ref, para ser lida dentro de loops assíncronos) que indica que o
+  // usuário fechou o modal, abortando a captura/envio em andamento.
   const cancelled = useRef(false);
 
+  // Estado da máquina: fase atual, etapa atual, progresso do upload, resultado
+  // do servidor e mensagem de erro a exibir.
   const [phase, setPhase] = useState<Phase>("intro");
   const [stepIndex, setStepIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [result, setResult] = useState<EnrollFaceResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Reset everything whenever the modal is (re)opened.
+  // Reseta tudo sempre que o modal é (re)aberto; ao fechar, marca cancelado.
   useEffect(() => {
     if (visible) {
       cancelled.current = false;
@@ -70,9 +87,13 @@ export function FaceEnrollModal({
     }
   }, [visible]);
 
+  // Pequeno utilitário de espera assíncrona usado entre fotos/etapas.
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  // Fluxo principal: garante permissão, captura as fotos por ângulo, envia ao
+  // storage e dispara o processamento facial no servidor.
   const runCapture = async () => {
+    // Garante permissão de câmera (solicita se ainda não foi concedida).
     const granted = permission?.granted ? true : (await requestPermission()).granted;
     if (!granted) {
       setErrorMsg("Permissão da câmera negada. Ative em Ajustes › Expo Go › Câmera.");
@@ -83,6 +104,8 @@ export function FaceEnrollModal({
     setPhase("capturing");
     const frames: CameraCapturedPicture[] = [];
 
+    // Percorre cada etapa/ângulo, aguardando o usuário se posicionar e então
+    // tirando uma rajada de fotos.
     for (let i = 0; i < STEPS.length; i++) {
       if (cancelled.current) return;
       setStepIndex(i);
@@ -96,15 +119,17 @@ export function FaceEnrollModal({
           });
           if (pic?.uri) {
             frames.push(pic);
+            // Feedback tátil leve a cada foto capturada.
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
         } catch {
-          // Ignore a single failed frame; the burst has redundancy.
+          // Ignora uma foto que falhou; a rajada tem redundância suficiente.
         }
         await sleep(FRAME_INTERVAL_MS);
       }
     }
 
+    // Aborta se o usuário fechou o modal durante a captura.
     if (cancelled.current) return;
     if (frames.length === 0) {
       setErrorMsg("Não foi possível capturar fotos. Tente novamente.");
@@ -112,6 +137,8 @@ export function FaceEnrollModal({
       return;
     }
 
+    // Envia cada foto ao object storage, acumulando os caminhos e atualizando
+    // a barra de progresso.
     setPhase("uploading");
     const objectPaths: string[] = [];
     for (let i = 0; i < frames.length; i++) {
@@ -123,7 +150,7 @@ export function FaceEnrollModal({
         });
         objectPaths.push(path);
       } catch {
-        // Skip a failed upload; keep the rest.
+        // Pula um upload que falhou; mantém os demais.
       }
       setUploadProgress(Math.round(((i + 1) / frames.length) * 100));
     }
@@ -135,6 +162,9 @@ export function FaceEnrollModal({
       return;
     }
 
+    // Chama o endpoint que extrai os descritores faciais no servidor. Se ao
+    // menos um ângulo foi armazenado, dá sucesso; caso contrário, avisa que
+    // nenhum rosto foi detectado.
     try {
       const res = await enrollFace({ userId, objectPaths });
       if (cancelled.current) return;
@@ -153,17 +183,22 @@ export function FaceEnrollModal({
     }
   };
 
+  // Fecha o modal e cancela qualquer captura/envio em andamento.
   const handleClose = () => {
     cancelled.current = true;
     onClose();
   };
 
+  // Etapa atual e progresso geral (em %) das etapas concluídas.
   const step = STEPS[stepIndex];
   const stepProgress = phase === "capturing" ? Math.round(((stepIndex + 1) / STEPS.length) * 100) : 0;
 
+  // A interface é renderizada conforme a fase atual (intro/capturing/uploading/
+  // done/error), cada uma exibindo um conteúdo diferente dentro do mesmo modal.
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <View style={[styles.root, { backgroundColor: colors.background }]}>
+        {/* Cabeçalho fixo com título e botão de fechar. */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{title}</Text>
           <TouchableOpacity onPress={handleClose} hitSlop={10} accessibilityLabel="Fechar">
@@ -171,6 +206,7 @@ export function FaceEnrollModal({
           </TouchableOpacity>
         </View>
 
+        {/* Fase de introdução: explica o processo e oferece o botão "Começar". */}
         {phase === "intro" && (
           <View style={styles.body}>
             <View style={[styles.iconCircle, { backgroundColor: colors.primary + "22" }]}>
@@ -193,6 +229,7 @@ export function FaceEnrollModal({
           </View>
         )}
 
+        {/* Fase de captura: câmera frontal com anel-guia e card de instruções. */}
         {phase === "capturing" && (
           <View style={styles.cameraWrap}>
             <CameraView ref={cameraRef} style={styles.camera} facing="front" />
@@ -215,6 +252,7 @@ export function FaceEnrollModal({
           </View>
         )}
 
+        {/* Fase de envio: indicador de progresso enquanto sobe as fotos. */}
         {phase === "uploading" && (
           <View style={styles.body}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -227,6 +265,7 @@ export function FaceEnrollModal({
           </View>
         )}
 
+        {/* Fase concluída: mostra sucesso ou aviso de "nenhum rosto detectado". */}
         {phase === "done" && result && (
           <View style={styles.body}>
             <View style={[styles.iconCircle, { backgroundColor: (result.anglesStored > 0 ? colors.success : colors.warning) + "22" }]}>
@@ -255,6 +294,7 @@ export function FaceEnrollModal({
           </View>
         )}
 
+        {/* Fase de erro: mensagem amigável e botão para tentar de novo. */}
         {phase === "error" && (
           <View style={styles.body}>
             <View style={[styles.iconCircle, { backgroundColor: colors.destructive + "22" }]}>

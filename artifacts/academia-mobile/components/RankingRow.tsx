@@ -1,3 +1,5 @@
+// Linha de um ranking de frequência: posição, avatar/iniciais, nome, barra de
+// porcentagem de presença e contagem de aulas. Usada nas telas de Rankings.
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -17,9 +19,12 @@ export function RankingRow({
   rank, name, profilePhotoUrl, percentage, presentCount, totalSessions, modality,
 }: RankingRowProps) {
   const colors = useColors();
+  // Iniciais usadas no avatar quando não há foto de perfil.
   const initials = name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   const isThai = modality === "thai";
+  // Cores especiais de pódio para 1º (ouro), 2º (prata) e 3º (bronze) lugar.
   const rankColor = rank === 1 ? "#FFD700" : rank === 2 ? "#C0C0C0" : rank === 3 ? "#CD7F32" : colors.mutedForeground;
+  // Cor da barra de progresso conforme a modalidade do ranking.
   const barColor = isThai ? colors.thai : modality === "jiu" ? colors.jiu : colors.primary;
 
   return (

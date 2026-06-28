@@ -1,3 +1,10 @@
+// =============================================================================
+// routes/attendance.ts — Rotas de presença (attendance).
+// Lista presenças com filtros, cria registros avulsos, remove registros e
+// expõe o endpoint de presença em massa (/attendance/bulk) usado pelo
+// reconhecimento facial. O bulk é restrito a professores/admin e deriva as
+// modalidades do perfil de cada aluno (nunca do payload do cliente).
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
 import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
@@ -10,6 +17,8 @@ import {
 
 const router: IRouter = Router();
 
+// GET /attendance — lista registros de presença com filtros opcionais
+// (sessão, aluno, modalidade), mais recentes primeiro, já com dados do aluno.
 router.get("/attendance", async (req, res): Promise<void> => {
   const query = ListAttendanceQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -17,6 +26,7 @@ router.get("/attendance", async (req, res): Promise<void> => {
     return;
   }
 
+  // Monta os filtros opcionais (sessão, aluno e modalidade da sessão).
   const conditions: ReturnType<typeof eq>[] = [];
   if (query.data.sessionId) {
     conditions.push(eq(attendanceTable.sessionId, query.data.sessionId));
@@ -28,6 +38,7 @@ router.get("/attendance", async (req, res): Promise<void> => {
     conditions.push(eq(trainingSessionsTable.modality, query.data.modality as "thai" | "jiu"));
   }
 
+  // Junta usuário (nome/foto) e sessão (modalidade) ao registro de presença.
   const records = await db
     .select({
       id: attendanceTable.id,
@@ -59,6 +70,7 @@ router.get("/attendance", async (req, res): Promise<void> => {
   })));
 });
 
+// POST /attendance — cria um registro de presença avulso (1 aluno em 1 sessão).
 router.post("/attendance", async (req, res): Promise<void> => {
   const body = CreateAttendanceBody.safeParse(req.body);
   if (!body.success) {
@@ -66,6 +78,7 @@ router.post("/attendance", async (req, res): Promise<void> => {
     return;
   }
 
+  // Insere a presença; faceRecognized indica se veio do reconhecimento facial.
   const [record] = await db.insert(attendanceTable).values({
     sessionId: body.data.sessionId,
     studentId: body.data.studentId,
@@ -73,6 +86,7 @@ router.post("/attendance", async (req, res): Promise<void> => {
     faceRecognized: body.data.faceRecognized ?? false,
   }).returning();
 
+  // Busca dados do aluno e da sessão para devolver a presença já enriquecida.
   const [student] = await db.select().from(usersTable).where(eq(usersTable.id, body.data.studentId));
   const [session] = await db.select().from(trainingSessionsTable).where(eq(trainingSessionsTable.id, body.data.sessionId));
 
@@ -89,8 +103,12 @@ router.post("/attendance", async (req, res): Promise<void> => {
   });
 });
 
+// POST /attendance/bulk — registra presença de vários alunos de uma vez,
+// tipicamente após o reconhecimento facial da foto da equipe. Cria/reaproveita
+// a sessão do dia por modalidade e evita marcações duplicadas.
 router.post("/attendance/bulk", async (req, res): Promise<void> => {
   // Authz: bulk attendance (facial recognition) is restricted to teachers/admins.
+  // (Authz: presença em massa é restrita a professores/admin.)
   const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
   const requester = requesterId
     ? (await db.select({ id: usersTable.id, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, requesterId)))[0]
@@ -112,15 +130,20 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
 
   const { photoUrl, students } = body.data;
   // Trust the authenticated requester as the session owner, not the client payload.
+  // (O dono da sessão é o professor autenticado — nunca um id vindo do cliente.)
   const teacherId = requester.id;
 
+  // Janela do dia de hoje (00:00 até 23:59:59.999), usada para achar/criar a
+  // sessão "de hoje" de cada modalidade.
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-  // Cache of today's sessions per modality, created lazily.
+  // Cache das sessões de hoje por modalidade, criadas sob demanda (lazy).
   const sessionByModality = new Map<"thai" | "jiu", { id: number; ids: number[] }>();
 
+  // Garante uma sessão de hoje para a modalidade: reaproveita as existentes do
+  // dia (guardando todos os ids para o dedupe) ou cria uma nova se não houver.
   async function ensureSession(modality: "thai" | "jiu"): Promise<{ id: number; ids: number[] }> {
     const cached = sessionByModality.get(modality);
     if (cached) return cached;
@@ -160,12 +183,14 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
     return entry;
   }
 
+  // Contadores do resultado: quantas presenças foram criadas e quantas puladas.
   let created = 0;
   let skipped = 0;
 
   for (const student of students) {
     // Derive modalities from the student's registration, never from the client
     // payload — attendance must follow each student's registered modalities.
+    // (As modalidades vêm SEMPRE do cadastro do aluno, nunca do payload.)
     const [profile] = await db
       .select({ thai: studentProfilesTable.modalityThai, jiu: studentProfilesTable.modalityJiu })
       .from(studentProfilesTable)
@@ -174,6 +199,7 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
       skipped += 1;
       continue;
     }
+    // Constrói a lista de modalidades em que o aluno está inscrito.
     const modalities: ("thai" | "jiu")[] = [];
     if (profile.thai) modalities.push("thai");
     if (profile.jiu) modalities.push("jiu");
@@ -181,6 +207,7 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
       const session = await ensureSession(modality);
 
       // Dedupe: a student should not be marked twice in the same modality today.
+      // (Evita marcar o mesmo aluno duas vezes na mesma modalidade no dia.)
       const existing = await db
         .select({ id: attendanceTable.id })
         .from(attendanceTable)
@@ -192,11 +219,13 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
         )
         .limit(1);
 
+      // Já marcado hoje nessa modalidade → pula (incrementa skipped).
       if (existing.length > 0) {
         skipped += 1;
         continue;
       }
 
+      // Registra a presença na sessão do dia, marcando faceRecognized=true.
       await db.insert(attendanceTable).values({
         sessionId: session.id,
         studentId: student.studentId,
@@ -210,6 +239,7 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
   res.json({ created, skipped });
 });
 
+// DELETE /attendance/:id — remove um registro de presença pelo id.
 router.delete("/attendance/:id", async (req, res): Promise<void> => {
   const params = DeleteAttendanceParams.safeParse(req.params);
   if (!params.success) {
@@ -217,6 +247,7 @@ router.delete("/attendance/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Retorno vazio = id inexistente → 404.
   const [record] = await db.delete(attendanceTable).where(eq(attendanceTable.id, params.data.id)).returning();
   if (!record) {
     res.status(404).json({ error: "Attendance record not found" });

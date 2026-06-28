@@ -1,3 +1,9 @@
+// =============================================================================
+// routes/index.ts — Roteador agregador da API.
+// Importa todos os sub-roteadores por domínio (health, auth, users, students,
+// sessions, attendance, rankings, stats, payments, storage, face) e os monta em
+// um único Router que o app.ts expõe sob o prefixo "/api".
+// =============================================================================
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
@@ -13,6 +19,8 @@ import faceRouter from "./face";
 
 const router: IRouter = Router();
 
+// A ordem de montagem importa pouco aqui porque cada sub-roteador usa caminhos
+// distintos; todos são compostos sob o mesmo prefixo "/api" definido no app.ts.
 router.use(healthRouter);
 router.use(authRouter);
 router.use(usersRouter);

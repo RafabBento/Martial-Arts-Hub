@@ -1,7 +1,12 @@
+// Painel principal (Dashboard) da academia. Mostra cartões com estatísticas
+// gerais (alunos, professores, sessões, presenças), a atividade recente e atalhos
+// rápidos para as principais áreas do sistema. Os dados vêm de duas queries da API.
 import { useGetDashboardStats, useGetRecentActivity, getGetDashboardStatsQueryKey, getGetRecentActivityQueryKey } from "@workspace/api-client-react";
 import { Users, CalendarDays, Camera, TrendingUp, Dumbbell, Shield } from "lucide-react";
 import { Link } from "wouter";
 
+// Cartão reutilizável de estatística: ícone + valor numérico + rótulo. Exibe "—"
+// enquanto o valor ainda não chegou (undefined).
 function StatCard({ label, value, icon: Icon, accent }: { label: string; value: number | undefined; icon: React.ElementType; accent: string }) {
   return (
     <div className="bg-card border border-border rounded-lg p-6 flex items-center gap-4 hover:border-primary/40 transition-colors">
@@ -16,6 +21,8 @@ function StatCard({ label, value, icon: Icon, accent }: { label: string; value: 
   );
 }
 
+// Selo colorido que indica a modalidade (Muay Thai em vermelho, Jiu-Jitsu em
+// azul). Não renderiza nada quando a modalidade é desconhecida/nula.
 function ModalityBadge({ modality }: { modality: string | null | undefined }) {
   if (modality === "thai") return <span className="px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">MUAY THAI</span>;
   if (modality === "jiu") return <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">JIU-JITSU</span>;
@@ -23,9 +30,11 @@ function ModalityBadge({ modality }: { modality: string | null | undefined }) {
 }
 
 export default function Dashboard() {
+  // Query das estatísticas agregadas exibidas nos cartões do topo.
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats({
     query: { queryKey: getGetDashboardStatsQueryKey() }
   });
+  // Query da lista de atividades recentes (presenças/eventos) exibida na coluna principal.
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity({
     query: { queryKey: getGetRecentActivityQueryKey() }
   });
@@ -37,6 +46,8 @@ export default function Dashboard() {
         <p className="text-muted-foreground mt-1">Visao geral da academia</p>
       </div>
 
+      {/* Grade de estatísticas: enquanto carrega mostra esqueletos (placeholders
+          pulsantes); depois exibe os cartões com os números reais */}
       {statsLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
@@ -57,6 +68,8 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Coluna principal: lista de atividade recente (até 10 itens), com foto,
+            descrição, data formatada em pt-BR e o selo de modalidade */}
         <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
           <h2 className="text-lg font-bold uppercase tracking-wide mb-4">Atividade Recente</h2>
           {activityLoading ? (
@@ -85,6 +98,8 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Coluna lateral: atalhos rápidos para as áreas principais e, ao final,
+            o resumo da distribuição de alunos por modalidade */}
         <div className="bg-card border border-border rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-bold uppercase tracking-wide mb-4">Acoes Rapidas</h2>
           <Link href="/attendance" data-testid="link-quick-attendance">

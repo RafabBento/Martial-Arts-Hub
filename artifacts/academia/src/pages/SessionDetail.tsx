@@ -1,3 +1,6 @@
+// Página de detalhes de uma sessão. Mostra os dados da sessão e a lista de
+// presenças registradas. Professores/admins podem remover presenças individuais
+// ou excluir a sessão inteira.
 import { useRoute, useLocation } from "wouter";
 import {
   useGetSession, getGetSessionQueryKey,
@@ -13,25 +16,29 @@ import { useAuth } from "../contexts/AuthContext";
 import { Link } from "wouter";
 
 export default function SessionDetail() {
-  const [, params] = useRoute("/sessions/:id");
-  const [, setLocation] = useLocation();
-  const sessionId = params ? parseInt(params.id, 10) : 0;
+  const [, params] = useRoute("/sessions/:id");   // captura o :id da rota
+  const [, setLocation] = useLocation();          // navegação programática
+  const sessionId = params ? parseInt(params.id, 10) : 0;  // id numérico da sessão
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Busca os dados da sessão (habilitada apenas com id válido).
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) }
   });
 
+  // Busca a lista de presenças desta sessão.
   const { data: attendance, isLoading: attLoading } = useListAttendance(
     { sessionId },
     { query: { enabled: !!sessionId, queryKey: getListAttendanceQueryKey({ sessionId }) } }
   );
 
-  const deleteAttMutation = useDeleteAttendance();
-  const deleteSessionMutation = useDeleteSession();
+  const deleteAttMutation = useDeleteAttendance();      // remove uma presença
+  const deleteSessionMutation = useDeleteSession();     // exclui a sessão inteira
 
+  // Remove uma presença e revalida tanto a lista quanto o resumo da sessão
+  // (para atualizar o contador de alunos).
   const handleDeleteAttendance = (id: number) => {
     deleteAttMutation.mutate({ id }, {
       onSuccess: () => {
@@ -43,6 +50,7 @@ export default function SessionDetail() {
     });
   };
 
+  // Exclui a sessão após confirmação do usuário; ao concluir, volta para a lista.
   const handleDeleteSession = () => {
     if (!confirm("Tem certeza que deseja excluir esta sessao?")) return;
     deleteSessionMutation.mutate({ id: sessionId }, {
@@ -54,10 +62,12 @@ export default function SessionDetail() {
     });
   };
 
+  // Spinner enquanto carrega os dados da sessão.
   if (sessionLoading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
 
+  // Mensagem de erro caso a sessão não exista.
   if (!session) {
     return <div className="text-center py-20 text-muted-foreground">Sessao nao encontrada</div>;
   }
@@ -71,6 +81,7 @@ export default function SessionDetail() {
         <h1 className="text-2xl font-black uppercase">Detalhes da Sessao</h1>
       </div>
 
+      {/* Cartão com informações da sessão e botão de exclusão (apenas master) */}
       <div className="bg-card border border-border rounded-lg p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div className="space-y-2">
@@ -98,6 +109,7 @@ export default function SessionDetail() {
         </div>
       </div>
 
+      {/* Lista de presenças da sessão */}
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-2 mb-4">
           <Users size={18} className="text-primary" />
@@ -105,6 +117,7 @@ export default function SessionDetail() {
           <span className="ml-auto text-sm text-muted-foreground">{attendance?.length ?? 0} alunos</span>
         </div>
 
+        {/* Skeleton durante o carregamento, lista de alunos ou estado vazio */}
         {attLoading ? (
           <div className="space-y-2">
             {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}

@@ -1,3 +1,6 @@
+// Página de sessões de treino. Lista as sessões (com filtro por modalidade),
+// mostra o cronograma fixo e permite que professores/admins criem novas sessões
+// via diálogo. Cada item leva à página de detalhes da sessão.
 import { useState } from "react";
 import {
   useListSessions, getListSessionsQueryKey,
@@ -15,18 +18,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Sessions() {
-  const [modality, setModality] = useState<"" | "thai" | "jiu">("");
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ modality: "thai", sessionDate: "", description: "", teacherId: "" });
+  const [modality, setModality] = useState<"" | "thai" | "jiu">("");  // filtro de modalidade ("" = todas)
+  const [open, setOpen] = useState(false);                            // controla a abertura do diálogo de nova sessão
+  const [form, setForm] = useState({ modality: "thai", sessionDate: "", description: "", teacherId: "" }); // estado do formulário de criação
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Lista as sessões aplicando o filtro de modalidade atual.
   const { data: sessions, isLoading } = useListSessions(
     { modality: modality || undefined },
     { query: { queryKey: getListSessionsQueryKey({ modality: modality || undefined }) } }
   );
 
+  // Lista os professores para popular o seletor "Professor" do diálogo.
   const { data: teachers } = useListUsers(
     { role: "teacher" },
     { query: { queryKey: getListUsersQueryKey({ role: "teacher" }) } }
@@ -34,6 +39,8 @@ export default function Sessions() {
 
   const createMutation = useCreateSession();
 
+  // Cria uma nova sessão validando os campos obrigatórios (data e professor).
+  // Em caso de sucesso, recarrega a lista, fecha o diálogo e limpa o formulário.
   const handleCreate = () => {
     if (!form.sessionDate || !form.teacherId) {
       toast({ title: "Preencha todos os campos obrigatorios", variant: "destructive" });
@@ -53,6 +60,7 @@ export default function Sessions() {
     );
   };
 
+  // Cronograma semanal fixo exibido como referência (não vem do banco).
   const SCHEDULE = [
     { time: "19:00", modality: "jiu" as const, days: "Seg – Sex", instructor: "Instrutor Ewerton" },
     { time: "20:30", modality: "thai" as const, days: "Seg, Qua e Sex", instructor: "Mestre Ewerton" },
@@ -67,6 +75,7 @@ export default function Sessions() {
           <h1 className="text-3xl font-black tracking-tight uppercase">Sessões</h1>
           <p className="text-muted-foreground mt-1">{sessions?.length ?? 0} sessões registradas</p>
         </div>
+        {/* Apenas professores e admins podem criar novas sessões */}
         {(user?.role === "teacher" || user?.role === "admin") && (
           <Button data-testid="button-new-session" onClick={() => setOpen(true)}>
             <Plus size={16} className="mr-2" /> Nova Sessão
@@ -101,6 +110,7 @@ export default function Sessions() {
         </div>
       </div>
 
+      {/* Botões de filtro por modalidade */}
       <div className="flex gap-2">
         {["", "thai", "jiu"].map((m) => (
           <Button
@@ -115,6 +125,7 @@ export default function Sessions() {
         ))}
       </div>
 
+      {/* Lista de sessões: skeleton durante carregamento, lista clicável ou estado vazio */}
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => <div key={i} className="bg-card border border-border rounded-lg p-4 h-20 animate-pulse" />)}
@@ -148,6 +159,7 @@ export default function Sessions() {
         </div>
       )}
 
+      {/* Diálogo de criação de sessão (modalidade, data/hora, professor e descrição) */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>

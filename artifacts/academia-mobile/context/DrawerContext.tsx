@@ -1,3 +1,5 @@
+// Contexto que controla o estado (aberta/fechada) da gaveta lateral e expõe as
+// ações open()/close() para qualquer tela. Também monta a AppDrawer sobre o app.
 import React, { createContext, useCallback, useContext, useState } from "react";
 import { AppDrawer } from "@/components/AppDrawer";
 

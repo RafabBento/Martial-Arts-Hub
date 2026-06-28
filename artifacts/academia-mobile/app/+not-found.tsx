@@ -1,3 +1,6 @@
+// Tela de rota não encontrada (404). O expo-router exibe esta tela quando o
+// usuário acessa um caminho que não existe, oferecendo um link para voltar ao
+// início.
 import { Link, Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 

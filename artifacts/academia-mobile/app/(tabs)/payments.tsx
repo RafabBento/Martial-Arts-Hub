@@ -25,42 +25,56 @@ import { MenuButton } from "@/components/MenuButton";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 
+// Nomes dos meses em pt-BR usados no navegador de mês.
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+// Tela de mensalidades. Para mestres/admins, mostra o controle de pagamentos do
+// mês (marcar/desmarcar pago); para alunos, exibe a própria situação e os dados
+// de PIX para pagamento.
 export default function PaymentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  // Mês/ano selecionados (iniciam no mês atual) e estados de UI auxiliares.
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type?: "ok" | "err" } | null>(null);
 
+  // Mestres (professores) e admins podem marcar/desmarcar pagamentos.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Query da lista de pagamentos do mês/ano selecionados (queryKey reutilizada
+  // depois para invalidar o cache após as mutações).
   const queryKey = getListPaymentsQueryKey({ month, year });
   const { data: payments, isLoading, refetch } = useListPayments(
     { month, year },
     { query: { queryKey } }
   );
 
+  // Mutações para marcar e desmarcar um pagamento como pago.
   const markMutation = useMarkPayment();
   const unmarkMutation = useUnmarkPayment();
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Invalida o cache da lista do mês atual para forçar nova busca.
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
 
+  // Exibe um toast temporário (ok ou erro), some sozinho após 2,5s.
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Alterna o status de pagamento de um aluno: se já está pago, desmarca; caso
+  // contrário, marca como pago. Evita ações concorrentes via pendingId.
   const handleToggle = (studentId: number, paid: boolean, name: string) => {
     if (pendingId !== null) return;
     setPendingId(studentId);
@@ -95,12 +109,14 @@ export default function PaymentsScreen() {
     }
   };
 
+  // Copia a chave PIX (e-mail) para a área de transferência.
   const copyPix = async () => {
     await Clipboard.setStringAsync("frontartesmarciais@gmail.com");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Chave PIX copiada!");
   };
 
+  // Navegação entre meses, ajustando o ano ao cruzar dezembro/janeiro.
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(y => y - 1); }
     else setMonth(m => m - 1);
@@ -110,10 +126,13 @@ export default function PaymentsScreen() {
     else setMonth(m => m + 1);
   };
 
+  // Separa pagos e pendentes (visão do mestre) e localiza o pagamento do próprio
+  // usuário (visão do aluno).
   const paidList = payments?.filter(p => p.paid) ?? [];
   const pendingList = payments?.filter(p => !p.paid) ?? [];
   const myPayment = payments?.find(p => p.studentId === user?.id);
 
+  // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -310,6 +329,9 @@ export default function PaymentsScreen() {
   );
 }
 
+// Linha de um aluno na lista de pagamentos: mostra avatar (iniciais), nome e
+// data de pagamento. Para mestres, o botão alterna o status; para alunos, apenas
+// exibe um ícone de situação.
 function PaymentRow({
   entry,
   isMaster,
@@ -323,6 +345,7 @@ function PaymentRow({
   onToggle: (id: number, paid: boolean, name: string) => void;
   colors: ReturnType<typeof import("@/hooks/useColors").useColors>;
 }) {
+  // Iniciais do nome (até 2 letras) usadas no avatar.
   const initials = entry.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
   return (
     <View style={[styles.payRow, { backgroundColor: colors.card, borderColor: colors.border }]}>

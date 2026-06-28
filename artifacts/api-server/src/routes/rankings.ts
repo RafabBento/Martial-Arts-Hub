@@ -1,3 +1,10 @@
+// =============================================================================
+// routes/rankings.ts — Ranking de frequência (presenças) dos alunos.
+// Constrói um ranking por modalidade e período, calculando presenças e o total
+// de sessões. Regra de negócio central: aulas de Muay Thai no SÁBADO contam em
+// dobro tanto no total de sessões quanto na presença do aluno; Jiu-Jitsu conta
+// de forma simples. O percentual é presenças/total.
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
@@ -5,7 +12,9 @@ import { ListRankingsQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+// Monta a lista de ranking de uma modalidade dentro de um período.
 async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "month" | "year") {
+  // Converte o período em uma data-corte (dateFilter). "all" não filtra por data.
   let dateFilter: Date | null = null;
   const now = new Date();
   if (period === "week") {
@@ -17,8 +26,11 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
   }
 
   // Saturday (DOW=6) Thai sessions count double
+  // (Sábado de Muay Thai conta em dobro — isThai habilita esse peso.)
   const isThai = modality === "thai";
 
+  // Total de sessões da modalidade no período (com peso de sábado p/ Thai). Esse
+  // total é o denominador do percentual de frequência de cada aluno.
   const [{ count: totalSessions }] = await db
     .select({
       count: isThai
@@ -33,11 +45,14 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       )
     );
 
+  // Coluna do perfil que indica se o aluno treina a modalidade em questão.
   const modalityCol = isThai
     ? studentProfilesTable.modalityThai
     : studentProfilesTable.modalityJiu;
 
   // For Thai: correlated subquery with Saturday double-weight; for Jiu: normal count via LEFT JOIN
+  // Expressão das presenças do aluno: para Thai, subconsulta correlacionada com
+  // peso de sábado; para Jiu, contagem simples via LEFT JOIN (montado adiante).
   const presentCountExpr = isThai
     ? sql<number>`COALESCE((
         SELECT SUM(CASE WHEN EXTRACT(DOW FROM ts.session_date) = 6 THEN 2 ELSE 1 END)::int
@@ -49,6 +64,8 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       ), 0)`
     : sql<number>`count(${attendanceTable.id})::int`;
 
+  // Expressão de ordenação: mais presenças primeiro e, em empate, nome A→Z.
+  // Para Thai repete a subconsulta ponderada; para Jiu ordena pela contagem.
   const orderExpr = isThai
     ? sql`COALESCE((
         SELECT SUM(CASE WHEN EXTRACT(DOW FROM ts.session_date) = 6 THEN 2 ELSE 1 END)
@@ -60,6 +77,8 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
       ), 0) DESC, ${usersTable.name} ASC`
     : sql`count(${attendanceTable.id}) DESC, ${usersTable.name} ASC`;
 
+  // Query base do ranking Thai: alunos/professores que treinam a modalidade,
+  // com a contagem ponderada de presenças por aluno.
   const query = db
     .select({
       userId: usersTable.id,
@@ -91,6 +110,8 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
     .orderBy(orderExpr);
 
   // For Jiu we still need the LEFT JOIN to count via GROUP BY
+  // Thai usa a query acima (subconsulta). Jiu precisa de um LEFT JOIN com
+  // attendance + EXISTS de sessão da modalidade no período, contando via GROUP BY.
   const rows = isThai
     ? await query
     : await db
@@ -132,6 +153,8 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
         )
         .orderBy(sql`count(${attendanceTable.id}) DESC, ${usersTable.name} ASC`);
 
+  // Mapeia para o formato de saída: posição (rank) pela ordem já calculada e
+  // percentual = presenças/total (0 quando não há sessões no período).
   return rows.map((s, index) => ({
     rank: index + 1,
     studentId: s.userId,
@@ -149,6 +172,7 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
   }));
 }
 
+// GET /rankings — endpoint público da rota: aceita modality e period.
 router.get("/rankings", async (req, res): Promise<void> => {
   const query = ListRankingsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -156,9 +180,11 @@ router.get("/rankings", async (req, res): Promise<void> => {
     return;
   }
 
+  // Valores padrão: ambas as modalidades e período "all" (sem corte de data).
   const modality = (query.data.modality ?? "both") as "both" | "thai" | "jiu";
   const period = (query.data.period ?? "all") as "all" | "week" | "month" | "year";
 
+  // "both": calcula os dois rankings em paralelo e devolve { thai, jiu }.
   if (modality === "both") {
     const [thai, jiu] = await Promise.all([
       buildRanking("thai", period),

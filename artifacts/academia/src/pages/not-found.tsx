@@ -1,3 +1,5 @@
+// Página 404 (rota não encontrada) — renderizada pelo roteador quando nenhuma
+// rota corresponde à URL atual. Apenas exibe uma mensagem estática de erro.
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 

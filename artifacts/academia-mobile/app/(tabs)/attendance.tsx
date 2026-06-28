@@ -39,9 +39,15 @@ import { uploadImageToStorage } from "@/lib/uploadImage";
 import { AuthImage } from "@/components/AuthImage";
 import * as Haptics from "expo-haptics";
 
+// Tela de controle de presença (somente mestres). Permite registrar presença
+// por foto da equipe (reconhecimento facial no servidor) ou manualmente, abrir
+// a sessão do horário atual e ver os presentes de hoje e o histórico por dia.
+
+// Estados do fluxo de escaneamento facial e modos de marcação de presença.
 type ScanStatus = "idle" | "uploading" | "recognizing" | "found" | "notfound";
 type AttendMode = "team" | "manual";
 
+// Cronograma semanal fixo de aulas (dia da semana, horário, modalidade e instrutor).
 const WEEKLY_SCHEDULE = [
   { days: [1, 2, 3, 4, 5], hour: 19, minute: 0, modality: "jiu" as const, instructorKey: "Ewerton" },
   { days: [1, 3, 5], hour: 20, minute: 30, modality: "thai" as const, instructorKey: "Ewerton" },
@@ -49,6 +55,8 @@ const WEEKLY_SCHEDULE = [
   { days: [6], hour: 10, minute: 30, modality: "thai" as const, instructorKey: "Nilberto" },
 ];
 
+// Detecta a aula do cronograma correspondente ao momento atual (janela de
+// 30 min antes a 90 min depois do início); retorna null se não houver.
 function detectCurrentClass(now = new Date()) {
   const day = now.getDay();
   const total = now.getHours() * 60 + now.getMinutes();
@@ -61,6 +69,7 @@ function detectCurrentClass(now = new Date()) {
   return null;
 }
 
+// Verifica se a data informada é do dia de hoje.
 function isToday(date: Date) {
   const t = new Date();
   return (
@@ -70,19 +79,23 @@ function isToday(date: Date) {
   );
 }
 
+// Formata horas e minutos no padrão HH:MM.
 function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+// Gera uma chave de agrupamento por dia (AAAA-MM-DD).
 function dayKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Gera o rótulo do dia em pt-BR (ex.: "Segunda-feira, 05 de maio") capitalizado.
 function dayLabel(d: Date) {
   const label = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+// Converte os flags de modalidade de um match na lista de modalidades ("thai"/"jiu").
 function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
   const list: ("thai" | "jiu")[] = [];
   if (m.modalityThai) list.push("thai");
@@ -90,6 +103,7 @@ function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
   return list;
 }
 
+// Converte um aluno (da lista) no formato TeamMatch usado na marcação por foto.
 function studentToMatch(s: {
   userId: number;
   name: string;
@@ -114,6 +128,7 @@ export default function AttendanceScreen() {
   const { user, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
+  // Estados de UI: modo de marcação, sessão selecionada, seletores e toast.
   const [mode, setMode] = useState<AttendMode>("team");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
@@ -133,8 +148,10 @@ export default function AttendanceScreen() {
   const [manualAdds, setManualAdds] = useState<TeamMatch[]>([]);
   const [pickerMode, setPickerMode] = useState<"manual" | "team">("manual");
 
+  // Mestres (professores) e admins têm acesso a esta tela.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Queries base: sessões, alunos, professores e presenças da sessão selecionada.
   const { data: sessions, isLoading: sessionsLoading, refetch: refetchSessions } = useListSessions({});
   const { data: students } = useListStudents({});
   const { data: teachers } = useListUsers({ role: "teacher" });
@@ -150,6 +167,7 @@ export default function AttendanceScreen() {
     { query: { queryKey: getListAttendanceQueryKey() } }
   );
 
+  // Mutações para registrar presença e criar sessões.
   const createAttMutation = useCreateAttendance();
   const createSessionMutation = useCreateSession();
 
@@ -173,6 +191,7 @@ export default function AttendanceScreen() {
     return () => clearTimeout(timer);
   }, [queryClient, refetchAllAttendance]);
 
+  // Aula do horário atual (cronograma), professor correspondente e sessão de hoje.
   const currentClass = detectCurrentClass();
   const currentTeacher = currentClass && teachers
     ? teachers.find(t => t.name.toLowerCase().includes(currentClass.instructorKey.toLowerCase()))
@@ -181,6 +200,7 @@ export default function AttendanceScreen() {
     ? sessions.find(s => s.modality === currentClass.modality && isToday(new Date(s.sessionDate)))
     : null;
 
+  // Sessão selecionada e conjunto de ids já presentes nela.
   const selectedSession = sessions?.find(s => s.id === selectedSessionId);
   const attendedIds = useMemo(() => new Set(attendance?.map(a => a.studentId) ?? []), [attendance]);
 
@@ -242,11 +262,14 @@ export default function AttendanceScreen() {
       .map(g => ({ label: g.label, ts: g.ts, students: [...g.students.values()] }));
   }, [allAttendance, students]);
 
+  // Exibe um toast temporário (sucesso ou erro), some após 2,5s.
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Seleciona a sessão de hoje (se existir) ou cria automaticamente a sessão da
+  // aula atual com o instrutor do cronograma.
   const handleAutoSession = async () => {
     if (!currentClass) return;
     if (todaySession) {
@@ -276,6 +299,7 @@ export default function AttendanceScreen() {
     );
   };
 
+  // Registra a presença de um único aluno na sessão selecionada (manual ou facial).
   const confirmAttendance = (studentId: number, faceRecognized = false) => {
     if (!selectedSessionId) { showToast("Selecione uma sessão primeiro", "err"); return; }
     if (attendedIds.has(studentId) || confirmedIds.has(studentId)) {
@@ -299,6 +323,9 @@ export default function AttendanceScreen() {
   };
 
   // ---------------- Reconhecimento 100% no servidor ----------------
+  // Tira/seleciona a foto da equipe, envia ao storage e pede o reconhecimento
+  // dos rostos ao servidor; guarda os matches encontrados e a contagem de não
+  // reconhecidos para exibir o resultado.
   const pickAndRecognize = async (source: "camera" | "gallery") => {
     try {
       let perm;
@@ -352,6 +379,7 @@ export default function AttendanceScreen() {
     }
   };
 
+  // Adiciona/remove um aluno escolhido manualmente à lista de presentes da foto.
   const toggleTeamAdd = (s: {
     userId: number;
     name: string;
@@ -366,6 +394,8 @@ export default function AttendanceScreen() {
     );
   };
 
+  // Registra de uma vez todas as presenças reconhecidas/adicionadas (bulk),
+  // pulando quem já está confirmado, e atualiza as listas.
   const handleRegisterAll = async () => {
     if (!user) return;
     const toRegister = [...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId));
@@ -398,11 +428,13 @@ export default function AttendanceScreen() {
     }
   };
 
+  // Alterna entre os modos de marcação (foto da equipe / manual).
   const switchMode = (next: AttendMode) => {
     if (next === mode) return;
     setMode(next);
   };
 
+  // Alunos disponíveis para marcação manual (exclui já presentes e aplica a busca).
   const filteredStudents = useMemo(() => {
     if (!students) return [];
     return students.filter(s =>
@@ -411,6 +443,7 @@ export default function AttendanceScreen() {
     );
   }, [students, attendedIds, confirmedIds, studentSearch]);
 
+  // Alunos candidatos a serem adicionados manualmente à foto (exclui já reconhecidos/confirmados).
   const teamAddCandidates = useMemo(() => {
     if (!students) return [];
     const recognized = new Set(matches.map(m => m.studentId));
@@ -420,11 +453,14 @@ export default function AttendanceScreen() {
     );
   }, [students, matches, confirmedIds, studentSearch]);
 
+  // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
+  // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // Alunos comuns não têm acesso: exibe a tela de acesso restrito.
   if (!isMaster) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -457,6 +493,7 @@ export default function AttendanceScreen() {
     );
   }
 
+  // Indica que há uma operação de foto/reconhecimento em andamento.
   const busy = scanStatus === "uploading" || scanStatus === "recognizing";
 
   return (

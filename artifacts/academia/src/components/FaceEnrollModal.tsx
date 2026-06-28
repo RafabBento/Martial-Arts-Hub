@@ -1,3 +1,8 @@
+// Modal de cadastro facial guiado (multiângulo).
+// Conduz o usuário por uma sequência de poses (frente, esquerda, direita, cima,
+// baixo), captura vários quadros automaticamente pela webcam, envia as imagens
+// para o object storage (upload presigned) e chama o endpoint de cadastro facial
+// (enrollFace), que processa os descritores faciais 100% no servidor.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ScanFace,
@@ -19,8 +24,10 @@ import { enrollFace, type EnrollFaceResult } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { uploadImageToStorage } from "@/lib/uploadImage";
 
+// Chaves das poses/etapas do cadastro facial guiado.
 type StepKey = "front" | "left" | "right" | "up" | "down";
 
+// Definição de cada etapa exibida ao usuário: rótulo, dica e ícone de orientação.
 const STEPS: { key: StepKey; label: string; hint: string; Icon: LucideIcon }[] = [
   { key: "front", label: "Olhe para frente", hint: "Centralize seu rosto no círculo", Icon: Smile },
   { key: "left", label: "Vire o rosto para a esquerda", hint: "Devagar, mantendo o rosto visível", Icon: ArrowLeft },
@@ -29,12 +36,16 @@ const STEPS: { key: StepKey; label: string; hint: string; Icon: LucideIcon }[] =
   { key: "down", label: "Incline o rosto para baixo", hint: "Abaixe o queixo levemente", Icon: ArrowDown },
 ];
 
+// Parâmetros de captura: quantos quadros por etapa, intervalo entre quadros e
+// tempo de "acomodação" no início de cada etapa para o usuário se posicionar.
 const FRAMES_PER_STEP = 3;
 const FRAME_INTERVAL_MS = 450;
 const STEP_SETTLE_MS = 900;
 
+// Fases do fluxo do modal, do convite inicial até concluído/erro.
 type Phase = "intro" | "capturing" | "uploading" | "done" | "error";
 
+// Utilitário simples de espera assíncrona (usado entre quadros/etapas).
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function FaceEnrollModal({
@@ -52,25 +63,29 @@ export function FaceEnrollModal({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  // Monotonic session token: every open/close/reopen bumps it so a long async
-  // capture chain from a previous session can detect it is stale and bail out
-  // instead of mutating state or attaching a ghost stream.
+  // Token de sessão monotônico: cada abrir/fechar/reabrir incrementa o valor
+  // para que uma cadeia assíncrona de captura de uma sessão anterior perceba
+  // que está obsoleta e aborte, em vez de mexer no estado ou anexar um stream
+  // "fantasma".
   const sessionRef = useRef(0);
 
+  // Estado do fluxo: fase atual, índice da etapa, progresso de upload,
+  // resultado do cadastro e mensagem de erro.
   const [phase, setPhase] = useState<Phase>("intro");
   const [stepIndex, setStepIndex] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [result, setResult] = useState<EnrollFaceResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Encerra o stream da câmera e limpa o elemento de vídeo.
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  // Reset whenever (re)opened; stop the camera when closed/unmounted. Bumping
-  // the session token invalidates any capture chain still running.
+  // Reinicia o estado sempre que (re)aberto; para a câmera ao fechar/desmontar.
+  // Incrementar o token de sessão invalida qualquer captura ainda em execução.
   useEffect(() => {
     sessionRef.current += 1;
     if (open) {
@@ -88,6 +103,9 @@ export function FaceEnrollModal({
     };
   }, [open, stopStream]);
 
+  // Inicia o stream da câmera frontal. Recebe o token de sessão "my" para
+  // descartar resultados obsoletos. Retorna true se conseguiu iniciar; em caso
+  // de erro, define a mensagem apropriada e muda para a fase de erro.
   const startStream = async (my: number): Promise<boolean> => {
     stopStream();
     try {
@@ -129,6 +147,10 @@ export function FaceEnrollModal({
     }
   };
 
+  // Captura um único quadro do vídeo em um <canvas> e o devolve como arquivo
+  // JPEG (qualidade 0.7 para reduzir o tamanho do upload). Espelha a imagem por
+  // ser câmera frontal, casando com a pré-visualização. Resolve null se o vídeo
+  // ainda não tem dimensões válidas ou se o canvas não pôde ser criado.
   const captureFrame = (): Promise<File | null> =>
     new Promise((resolve) => {
       const video = videoRef.current;
@@ -163,6 +185,10 @@ export function FaceEnrollModal({
       );
     });
 
+  // Orquestra todo o fluxo de captura: liga a câmera, percorre cada etapa/pose
+  // capturando vários quadros, envia tudo ao storage e chama o cadastro facial.
+  // A função "stale" verifica, em cada ponto de await, se a sessão ainda é a
+  // atual — abortando silenciosamente se o modal foi fechado/reaberto.
   const runCapture = async () => {
     const my = sessionRef.current;
     const stale = () => my !== sessionRef.current;
@@ -171,13 +197,14 @@ export function FaceEnrollModal({
     setResult(null);
     setStepIndex(0);
     setPhase("capturing");
-    // Let React mount the <video> element before attaching the stream.
+    // Deixa o React montar o elemento <video> antes de anexar o stream.
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     const started = await startStream(my);
     if (!started || stale()) return;
-    // Give the camera a moment to deliver real frames.
+    // Dá um momento para a câmera entregar quadros reais (não pretos/vazios).
     await sleep(500);
 
+    // Para cada etapa: aguarda a acomodação e captura FRAMES_PER_STEP quadros.
     const frames: File[] = [];
     for (let i = 0; i < STEPS.length; i++) {
       if (stale()) return;
@@ -193,12 +220,14 @@ export function FaceEnrollModal({
 
     if (stale()) return;
     stopStream();
+    // Nenhum quadro capturado: aborta com erro.
     if (frames.length === 0) {
       setErrorMsg("Não foi possível capturar fotos. Tente novamente.");
       setPhase("error");
       return;
     }
 
+    // Fase de upload: envia cada quadro ao storage acumulando os caminhos.
     setPhase("uploading");
     setUploadProgress(0);
     const objectPaths: string[] = [];
@@ -208,18 +237,21 @@ export function FaceEnrollModal({
         const path = await uploadImageToStorage(frames[i]);
         objectPaths.push(path);
       } catch {
-        // Skip a failed upload; keep the rest.
+        // Ignora um upload que falhou; mantém os demais.
       }
       setUploadProgress(Math.round(((i + 1) / frames.length) * 100));
     }
 
     if (stale()) return;
+    // Se nenhum upload deu certo, não há o que cadastrar.
     if (objectPaths.length === 0) {
       setErrorMsg("Falha ao enviar as fotos. Verifique sua conexão e tente novamente.");
       setPhase("error");
       return;
     }
 
+    // Chama o cadastro facial no servidor com os caminhos enviados. O servidor
+    // extrai os descritores; anglesStored indica quantos ângulos foram aceitos.
     try {
       const res = await enrollFace({ userId, objectPaths });
       if (stale()) return;
@@ -233,19 +265,26 @@ export function FaceEnrollModal({
     }
   };
 
+  // Fecha o modal: invalida a sessão (aborta capturas) e para a câmera.
   const handleClose = () => {
     sessionRef.current += 1;
     stopStream();
     onClose();
   };
 
+  // Modal fechado: não renderiza nada.
   if (!open) return null;
 
+  // Dados derivados para a UI: etapa atual, seu ícone, progresso geral das
+  // etapas e se estamos rodando dentro de um iframe (câmera pode ser bloqueada).
   const step = STEPS[stepIndex];
   const StepIcon = step.Icon;
   const stepProgress = phase === "capturing" ? Math.round(((stepIndex + 1) / STEPS.length) * 100) : 0;
   const isFrameBlocked = window.self !== window.top;
 
+  // UI do modal: o conteúdo central muda conforme a "phase" — intro (convite),
+  // capturing (vídeo + guia de pose), uploading (progresso), done (sucesso/aviso)
+  // e error (mensagem + tentar de novo).
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl overflow-hidden shadow-2xl">

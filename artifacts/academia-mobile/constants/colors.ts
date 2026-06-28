@@ -1,4 +1,9 @@
+// Tokens de design (paleta de cores e raio de borda) do app mobile. O tema é
+// escuro por padrão (a chave "light" carrega os valores usados na aplicação).
+// O hook useColors() consome estes tokens para estilizar os componentes.
 const colors = {
+  // Paleta principal: fundos, textos, cores semânticas e as cores específicas
+  // de cada modalidade (thai/jiu) além de estados de sucesso/aviso.
   light: {
     text: "#f2f2f2",
     tint: "#d42b2b",
@@ -24,6 +29,7 @@ const colors = {
     warning: "#f59e0b",
   },
 
+  // Raio de borda padrão (independente do esquema de cores).
   radius: 10,
 };
 

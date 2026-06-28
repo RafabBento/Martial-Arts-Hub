@@ -1,3 +1,7 @@
+// Página de cadastro de novos usuários (alunos e professores). Usa react-hook-form
+// + zod para validar o formulário, exibe campos condicionais conforme o perfil e
+// as modalidades escolhidas (prajied de Thai, faixa/grau de Jiu) e, ao concluir,
+// autentica o usuário recém-criado e o leva ao dashboard.
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+// Graduações de Muay Thai (prajied) com cores primária/secundária da faixinha.
 const PRAJIED_GRADES = [
   { value: "branco",                  label: "Branco",                  primary: "white",  secondary: null    },
   { value: "branco-ponta-vermelha",   label: "Branco ponta vermelha",   primary: "white",  secondary: "red"   },
@@ -39,6 +44,7 @@ const PRAJIED_GRADES = [
   { value: "preta",                   label: "Preta",                   primary: "black",  secondary: null    },
 ];
 
+// Mapa do prajied -> classes Tailwind (cor principal e ponta) para a faixinha.
 const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "branco":                 { primary: "bg-white" },
   "branco-ponta-vermelha":  { primary: "bg-white",     secondary: "bg-red-600"    },
@@ -53,6 +59,7 @@ const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "preta":                  { primary: "bg-gray-900"   },
 };
 
+// Faixas de Jiu-Jitsu (cor, rótulo e classe de fundo para o seletor).
 const JIU_COLORS = [
   { value: "white",  label: "Branca",  bg: "bg-white"      },
   { value: "blue",   label: "Azul",    bg: "bg-blue-600"   },
@@ -61,12 +68,15 @@ const JIU_COLORS = [
   { value: "black",  label: "Preta",   bg: "bg-gray-900"   },
 ];
 
+// Unidades disponíveis para vínculo do usuário (com endereço de referência).
 const UNIT_OPTIONS = [
   { value: "matriz",     label: "Front Matriz",       address: "Endereço atual" },
   { value: "panobianco", label: "Front Panobianco",   address: "R. Benjamin Pereira, 548" },
   { value: "upfitness",  label: "Front Up Fitness",   address: "Av. Gustavo Adolfo, 588" },
 ] as const;
 
+// Esquema de validação (zod) do formulário de cadastro. Define obrigatórios
+// (nome, e-mail, senha, perfil) e campos opcionais de contato/modalidade/graduação.
 const registerSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   email: z.string().email("E-mail inválido"),
@@ -86,14 +96,16 @@ const registerSchema = z.object({
   jiuDegree: z.number().min(1).max(4).optional(),
 });
 
+// Tipo inferido dos valores do formulário a partir do esquema zod.
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function Register() {
-  const [, setLocation] = useLocation();
-  const { setUser } = useAuth();
+  const [, setLocation] = useLocation();   // navegação após o cadastro
+  const { setUser } = useAuth();           // grava o usuário autenticado no contexto
   const { toast } = useToast();
-  const registerMutation = useRegister();
+  const registerMutation = useRegister();  // mutation de criação de conta
 
+  // Inicializa o formulário com validação zod e valores padrão.
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
@@ -116,11 +128,15 @@ export default function Register() {
     },
   });
 
-  const watchedRole = form.watch("role");
-  const watchedThai = form.watch("modalityThai");
-  const watchedJiu = form.watch("modalityJiu");
-  const watchedJiuDegree = form.watch("jiuDegree");
+  // Observa campos que controlam a exibição condicional de seções do formulário.
+  const watchedRole = form.watch("role");          // perfil escolhido (aluno/professor)
+  const watchedThai = form.watch("modalityThai");  // se Muay Thai está marcado
+  const watchedJiu = form.watch("modalityJiu");    // se Jiu-Jitsu está marcado
+  const watchedJiuDegree = form.watch("jiuDegree");// grau de Jiu selecionado
 
+  // Envia o cadastro normalizando os campos opcionais (string vazia -> undefined,
+  // booleanos com fallback). Em caso de sucesso, autentica e vai ao dashboard;
+  // em caso de erro, exibe um toast.
   const onSubmit = (values: RegisterFormValues) => {
     registerMutation.mutate(
       {
@@ -157,6 +173,7 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background dark text-foreground flex relative overflow-hidden">
+      {/* Logo de fundo decorativa (não interativa) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
         <img src="/logo-thai.png" alt="" aria-hidden className="w-[70vmin] h-[70vmin] object-contain opacity-[0.06]" />
       </div>
@@ -174,6 +191,7 @@ export default function Register() {
           <h1 className="text-3xl font-black uppercase tracking-tighter">Junte-se ao Clube</h1>
           <p className="text-muted-foreground">Cadastre-se para começar a acompanhar sua jornada nas artes marciais.</p>
 
+          {/* Formulário de cadastro com campos validados via react-hook-form */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               <FormField
@@ -548,6 +566,7 @@ export default function Register() {
                 </div>
               )}
 
+              {/* Botão de envio: mostra estado de carregamento enquanto cadastra */}
               <Button type="submit" className="w-full h-12 text-lg font-bold uppercase tracking-wide mt-4" disabled={registerMutation.isPending}>
                 {registerMutation.isPending ? "Cadastrando..." : "Cadastrar"}
               </Button>

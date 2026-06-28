@@ -1,3 +1,6 @@
+// Página de login. Valida e-mail/senha com Zod + react-hook-form, chama a
+// mutation de login da API e, em caso de sucesso, salva o usuário no AuthContext
+// e redireciona para o painel (/dashboard).
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,6 +20,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
+// Schema de validação do formulário de login: e-mail precisa ter formato válido
+// e a senha não pode ser vazia.
 const loginSchema = z.object({
   email: z.string().email("E-mail inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
@@ -25,11 +30,12 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const [, setLocation] = useLocation();
-  const { setUser } = useAuth();
-  const { toast } = useToast();
-  const loginMutation = useLogin();
+  const [, setLocation] = useLocation();       // navegação programática (wouter)
+  const { setUser } = useAuth();               // grava o usuário logado no contexto global
+  const { toast } = useToast();                // notificações de erro
+  const loginMutation = useLogin();            // mutation de login gerada pelo client da API
 
+  // Configura o formulário com validação Zod e valores iniciais vazios.
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -38,6 +44,8 @@ export default function Login() {
     },
   });
 
+  // Submissão do formulário: dispara a mutation de login. No sucesso, persiste o
+  // usuário no contexto e navega para o painel; no erro, mostra um toast.
   const onSubmit = (values: LoginFormValues) => {
     loginMutation.mutate(
       { data: values },
@@ -57,6 +65,8 @@ export default function Login() {
     );
   };
 
+  // Layout em duas colunas: lado esquerdo decorativo (marca) e lado direito com
+  // o formulário de login.
   return (
     <div className="min-h-screen bg-background dark text-foreground flex relative overflow-hidden">
       {/* Marca d'água em tela cheia */}
@@ -105,6 +115,9 @@ export default function Login() {
 
           <h1 className="text-3xl font-black uppercase tracking-tighter hidden lg:block">Entrar</h1>
 
+          {/* Formulário controlado por react-hook-form: campos de e-mail e senha
+              com mensagens de validação; o botão fica desabilitado enquanto o
+              login está em andamento (isPending) */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField

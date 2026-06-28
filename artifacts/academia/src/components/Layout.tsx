@@ -1,3 +1,8 @@
+// Layout principal das páginas autenticadas.
+// Fornece a estrutura comum: sidebar de navegação (responsiva, com overlay no
+// mobile), cabeçalho com dados do usuário e botão de sair, além da área de
+// conteúdo onde a página atual é renderizada. Os itens de menu variam conforme
+// o papel do usuário (ex.: "Mensalidades" só para professor/admin).
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "../contexts/AuthContext";
@@ -18,11 +23,13 @@ import {
 import { Button } from "./ui/button";
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  // Estado de abertura da sidebar no mobile, rota atual e dados do usuário.
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const { user, setUser } = useAuth();
   const logoutMutation = useLogout();
 
+  // Faz logout no servidor; ao concluir, limpa o usuário e volta para a home.
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
@@ -32,8 +39,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // "Master" = professor ou admin: tem acesso a recursos administrativos.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Itens do menu lateral. "Mensalidades" só aparece para usuários master.
   const navItems = [
     { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
     { name: "Alunos", href: "/students", icon: Users },
@@ -74,6 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        {/* Navegação principal: destaca o item cuja rota corresponde à URL atual. */}
         <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.startsWith(item.href);
@@ -115,7 +125,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Conteúdo principal: cabeçalho fixo + área rolável onde a página é renderizada. */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-16 flex items-center justify-between px-4 lg:px-8 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-4">
@@ -147,6 +157,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* Área de conteúdo: renderiza a página da rota atual (children). */}
         <main className="flex-1 overflow-y-auto bg-background p-4 lg:p-8">
           {children}
         </main>

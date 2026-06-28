@@ -1,3 +1,5 @@
+// Selo (badge) que identifica visualmente a modalidade do aluno/sessão:
+// vermelho para Muay Thai e azul para Jiu-Jitsu. Suporta um tamanho compacto.
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
@@ -9,6 +11,7 @@ interface ModalityBadgeProps {
 
 export function ModalityBadge({ modality, small }: ModalityBadgeProps) {
   const colors = useColors();
+  // Define cores de fundo, borda, texto e rótulo conforme a modalidade.
   const isThai = modality === "thai";
   const bg = isThai ? "#3b0a0a" : "#0a1a3b";
   const borderColor = isThai ? colors.thai : colors.jiu;

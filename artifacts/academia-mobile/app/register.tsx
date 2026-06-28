@@ -1,3 +1,6 @@
+// Tela de cadastro de novo usuário (aluno ou professor). Coleta dados, escolha
+// de unidade e modalidades, cria a conta via API e já faz login automático,
+// redirecionando para a área logada.
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -19,6 +22,7 @@ import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
+// Unidades (academias) disponíveis para seleção no cadastro.
 const UNITS = [
   { value: "matriz",     label: "Front Matriz",     address: "Endereço atual" },
   { value: "panobianco", label: "Front Panobianco", address: "R. Benjamin Pereira, 548" },
@@ -31,9 +35,11 @@ export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // login: salva a sessão após cadastrar. registerMutation: chamada à API.
   const { login } = useAuth();
   const registerMutation = useRegister();
 
+  // Estado controlado de todos os campos do formulário de cadastro.
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,8 +50,11 @@ export default function RegisterScreen() {
   const [modalityJiu, setModalityJiu] = useState(false);
   const [error, setError] = useState("");
 
+  // Padding superior: fixo no web, área segura (status bar/notch) no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  // Valida os campos, cria a conta e faz login automático. Modalidades só são
+  // enviadas para alunos (professores não treinam como aluno).
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       setError("Preencha nome, e-mail e senha.");

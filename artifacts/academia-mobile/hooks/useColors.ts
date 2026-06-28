@@ -1,3 +1,5 @@
+// Hook que devolve os tokens de cor da paleta ativa conforme o esquema do
+// dispositivo (claro/escuro), com fallback para a paleta padrão.
 import { useColorScheme } from "react-native";
 
 import colors from "@/constants/colors";
@@ -15,10 +17,13 @@ import colors from "@/constants/colors";
  * device's appearance setting.
  */
 export function useColors() {
+  // Esquema de cor atual do dispositivo (claro/escuro/null).
   const scheme = useColorScheme();
+  // Escolhe a paleta "dark" apenas se ela existir; caso contrário usa "light".
   const palette =
     scheme === "dark" && "dark" in colors
       ? (colors as Record<string, typeof colors.light>).dark
       : colors.light;
+  // Combina os tokens da paleta com valores independentes de tema (ex.: radius).
   return { ...palette, radius: colors.radius };
 }

@@ -1,13 +1,21 @@
+// Banner que incentiva o usuário a instalar o app como PWA.
+// No Android/Chromium aproveita o evento beforeinstallprompt para oferecer um
+// botão "instalar"; no iOS (que não tem esse evento) exibe instruções manuais
+// específicas (Safari vs. outros navegadores). Aparece só em celulares, fora do
+// modo standalone e respeita a escolha de dispensar (salva em localStorage).
 import { useEffect, useState } from "react";
 import { X, Share, Plus, Download, MoreVertical, Compass } from "lucide-react";
 
+// Chave em localStorage para lembrar que o usuário dispensou o banner.
 const DISMISS_KEY = "pwa-install-dismissed";
 
+// Tipagem do evento beforeinstallprompt (não padronizado no lib DOM padrão).
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+// Lê se o banner já foi dispensado (protegido contra modo privado/sandbox).
 function getDismissed(): boolean {
   try {
     return !!localStorage.getItem(DISMISS_KEY);
@@ -16,6 +24,7 @@ function getDismissed(): boolean {
   }
 }
 
+// Marca o banner como dispensado (protegido contra modo privado/sandbox).
 function setDismissed(): void {
   try {
     localStorage.setItem(DISMISS_KEY, "1");
@@ -24,6 +33,8 @@ function setDismissed(): void {
   }
 }
 
+// Detecta se o app já está rodando instalado (standalone) — nesse caso o banner
+// não deve aparecer. Cobre tanto a media query quanto a flag do iOS Safari.
 function isStandalone(): boolean {
   return (
     window.matchMedia?.("(display-mode: standalone)").matches ||
@@ -31,23 +42,29 @@ function isStandalone(): boolean {
   );
 }
 
+// Modos de exibição do banner conforme a plataforma/navegador detectado.
 type Mode = "ios-safari" | "ios-other" | "android";
 
 export function InstallPrompt() {
+  // Evento de instalação adiado (Android), visibilidade do banner e modo atual.
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<Mode | null>(null);
 
+  // Decide, na montagem, se e como mostrar o banner conforme a plataforma.
   useEffect(() => {
     if (isStandalone()) return;
     if (getDismissed()) return;
 
+    // Detecta a plataforma pelo user agent.
     const ua = window.navigator.userAgent;
     const ios = /iphone|ipad|ipod/i.test(ua);
     const android = /android/i.test(ua);
     if (!ios && !android) return; // só em navegadores de celular
 
     if (ios) {
+      // No iOS distinguimos Safari (tem o fluxo "Adicionar à Tela de Início")
+      // de outros navegadores (que precisam abrir no Safari para instalar).
       const otherBrowser = /crios|fxios|edgios|opios|mercury|brave/i.test(ua);
       const safari = /safari/i.test(ua) && !otherBrowser;
       setMode(safari ? "ios-safari" : "ios-other");
@@ -55,15 +72,17 @@ export function InstallPrompt() {
       return; // iOS não tem beforeinstallprompt
     }
 
-    // Android / Chromium
+    // Android / Chromium: aguarda o evento beforeinstallprompt do navegador.
     setMode("android");
     let captured = false;
+    // Captura e adia o prompt nativo para dispará-lo quando o usuário clicar.
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
       setVisible(true);
       captured = true;
     };
+    // Quando o app for instalado, esconde o banner e marca como dispensado.
     const onInstalled = () => {
       setVisible(false);
       setDismissed();
@@ -76,6 +95,7 @@ export function InstallPrompt() {
       if (!captured) setVisible(true);
     }, 1500);
 
+    // Cleanup: remove os listeners e cancela o timer ao desmontar.
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
@@ -83,13 +103,16 @@ export function InstallPrompt() {
     };
   }, []);
 
+  // Nada a mostrar enquanto invisível ou sem modo definido.
   if (!visible || !mode) return null;
 
+  // Fecha o banner por escolha do usuário e lembra para não exibir de novo.
   const dismiss = () => {
     setVisible(false);
     setDismissed();
   };
 
+  // Dispara o prompt de instalação nativo (Android) e trata a escolha do usuário.
   const install = async () => {
     if (!deferred) return;
     await deferred.prompt();
@@ -101,8 +124,11 @@ export function InstallPrompt() {
     setDeferred(null);
   };
 
+  // Ícone do app exibido no banner (respeita o BASE_URL do build/PWA).
   const iconSrc = `${import.meta.env.BASE_URL}pwa-192x192.png`;
 
+  // UI: cartão fixo na base com ícone, texto/instruções conforme o modo
+  // (iOS Safari, iOS outros, Android) e botões de instalar/dispensar.
   return (
     <div
       className="fixed inset-x-0 bottom-0 z-[60] p-3 dark pointer-events-none"

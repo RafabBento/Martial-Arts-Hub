@@ -1,3 +1,6 @@
+// Tela de fallback exibida pelo ErrorBoundary quando ocorre um erro fatal de
+// renderização. Mostra uma mensagem amigável e um botão para reiniciar o app;
+// em modo desenvolvimento (__DEV__), permite inspecionar os detalhes do erro.
 import { Feather } from "@expo/vector-icons";
 import { reloadAppAsync } from "expo";
 import React, { useState } from "react";
@@ -23,8 +26,11 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
+  // Controla a visibilidade do modal de detalhes do erro (apenas em dev).
   const [isModalVisible, setIsModalVisible] = useState(false);
 
+  // Tenta reiniciar o app por completo; se falhar, ao menos limpa o estado de
+  // erro do boundary para tentar renderizar novamente.
   const handleRestart = async () => {
     try {
       await reloadAppAsync();
@@ -34,6 +40,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     }
   };
 
+  // Monta o texto com mensagem e stack trace para exibir no modal de detalhes.
   const formatErrorDetails = (): string => {
     let details = `Error: ${error.message}\n\n`;
     if (error.stack) {
@@ -42,6 +49,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     return details;
   };
 
+  // Fonte monoespaçada por plataforma para exibir o stack trace legível.
   const monoFont = Platform.select({
     ios: "Menlo",
     android: "monospace",

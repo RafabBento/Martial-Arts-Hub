@@ -1,3 +1,7 @@
+// Página "Meu Perfil". Mostra dados do usuário logado, foto (com captura por
+// câmera e cadastro facial multiângulo), graduações por modalidade, banner de
+// aniversário e, para alunos, o cartão de mensalidade com dados de PIX.
+// Professores/admins podem editar suas próprias graduações.
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
@@ -15,6 +19,7 @@ import logoJiu from "/logo-jiu.png";
 
 type Modality = "thai" | "jiu";
 
+// Mapa do prajied (chave normalizada) -> classes Tailwind da faixinha (cor + ponta).
 const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "branco":                 { primary: "bg-white" },
   "branco-ponta-vermelha":  { primary: "bg-white",     secondary: "bg-red-600"    },
@@ -29,6 +34,7 @@ const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "preta":                  { primary: "bg-gray-900"   },
 };
 
+// Converte o rótulo exibido do prajied para a chave normalizada usada nos mapas.
 const PRAJIED_LABELS: Record<string, string> = {
   "Branco": "branco", "Branco ponta vermelha": "branco-ponta-vermelha",
   "Vermelha": "vermelha", "Vermelha ponta amarela": "vermelha-ponta-amarela",
@@ -38,17 +44,20 @@ const PRAJIED_LABELS: Record<string, string> = {
   "Preta": "preta",
 };
 
+// Mapa de cor da faixa de Jiu -> classe Tailwind de fundo.
 const JIU_COLOR_MAP: Record<string, string> = {
   white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
   brown: "bg-amber-800", black: "bg-gray-900",
 };
 
+// Opções de prajied (Muay Thai) para o seletor de graduação.
 const PRAJIED_OPTIONS = [
   "Branco", "Branco ponta vermelha", "Vermelha", "Vermelha ponta amarela",
   "Amarela", "Amarela ponta verde", "Verde", "Verde ponta azul",
   "Azul", "Azul ponta preta", "Preta",
 ];
 
+// Opções de faixa (Jiu-Jitsu) com rótulo, valor e cor.
 const JIU_GRADE_OPTIONS: { label: string; value: string; color: string }[] = [
   { label: "Branca", value: "Branca", color: "white" },
   { label: "Azul",   value: "Azul",   color: "blue"  },
@@ -57,6 +66,7 @@ const JIU_GRADE_OPTIONS: { label: string; value: string; color: string }[] = [
   { label: "Preta",  value: "Preta",  color: "black" },
 ];
 
+// Faixinha visual do prajied; resolve o rótulo para a chave e desenha a ponta se houver.
 function PrajiedStripe({ grade }: { grade: string }) {
   const key = PRAJIED_LABELS[grade] ?? grade;
   const entry = PRAJIED_MAP[key];
@@ -72,15 +82,17 @@ function PrajiedStripe({ grade }: { grade: string }) {
   );
 }
 
+// Faixinha simples de Jiu (apenas cor sólida, sem graus).
 function JiuStripe({ color }: { color: string }) {
   return <div className={`h-3 w-24 rounded-full border border-white/20 ${JIU_COLOR_MAP[color] ?? "bg-muted"}`} />;
 }
 
 /** BJJ belt: colored body + black tip with degree stripes */
+// Faixa de Jiu completa: corpo colorido + ponta preta com os graus (até 4 listras).
 function JiuBeltWithDegree({ color, degree }: { color: string | null | undefined; degree?: number | null }) {
   if (!color) return null;
   const bg = JIU_COLOR_MAP[color] ?? "bg-muted";
-  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
+  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);  // limita o grau ao intervalo 0..4
   const isWhite = color === "white";
   return (
     <div className={`flex h-5 w-28 rounded-sm overflow-hidden border ${isWhite ? "border-gray-400/50" : "border-white/15"}`}>
@@ -96,6 +108,7 @@ function JiuBeltWithDegree({ color, degree }: { color: string | null | undefined
   );
 }
 
+// Retorna true se a data de nascimento (YYYY-MM-DD) cai no dia de hoje (dia/mês).
 function isBirthdayToday(birthDate: string | null | undefined): boolean {
   if (!birthDate) return false;
   const today = new Date();
@@ -106,28 +119,34 @@ function isBirthdayToday(birthDate: string | null | undefined): boolean {
   );
 }
 
+// Nomes dos meses em português para exibição.
 const MONTHS = [
   "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
 ];
 
+// Cartão de mensalidade exibido para alunos: mostra o status do mês corrente e,
+// se pendente, os dados de pagamento via PIX com botão de copiar a chave.
 function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay?: number | null }) {
   const { toast } = useToast();
   const now = new Date();
-  const month = now.getMonth() + 1;
+  const month = now.getMonth() + 1;  // mês atual (1-12)
   const year = now.getFullYear();
 
+  // Busca os pagamentos do mês atual para localizar o do próprio aluno.
   const { data: payments } = useListPayments(
     { month, year },
     { query: { queryKey: getListPaymentsQueryKey({ month, year }) } }
   );
 
+  // Encontra o registro de pagamento do aluno e deriva status e data de pagamento.
   const myPayment = payments?.find(p => p.studentId === userId);
   const paid = myPayment?.paid ?? false;
   const paidDate = myPayment?.paidAt
     ? new Date(myPayment.paidAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
     : null;
 
+  // Copia a chave PIX (e-mail) para a área de transferência.
   const handleCopy = () => {
     navigator.clipboard.writeText("frontartesmarciais@gmail.com");
     toast({ title: "Chave PIX copiada!" });

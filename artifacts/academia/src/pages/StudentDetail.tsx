@@ -1,3 +1,7 @@
+// Página de perfil/detalhe de um aluno. Mostra dados pessoais, logos da equipe,
+// cadastro facial (foto da galeria ou modal multiângulo), graduações editáveis
+// (prajied de Thai e faixa/grau de Jiu) e o histórico de presenças por modalidade.
+// Edições de graduação e cadastro facial só são permitidas para professor/admin.
 import { useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import {
@@ -18,6 +22,8 @@ import { uploadImageToStorage } from "@/lib/uploadImage";
 import logoThai from "/logo-thai.png";
 import logoJiu from "/logo-jiu.png";
 
+// Lista ordenada de graduações de Muay Thai (prajied), com cores primária e
+// secundária (ponta) usadas para renderizar a faixinha.
 const PRAJIED_GRADES = [
   { value: "branco",                  label: "Branco",                  primary: "white",  secondary: null    },
   { value: "branco-ponta-vermelha",   label: "Branco ponta vermelha",   primary: "white",  secondary: "red"   },
@@ -31,6 +37,7 @@ const PRAJIED_GRADES = [
   { value: "azul-ponta-preta",        label: "Azul ponta preta",        primary: "blue",   secondary: "black" },
   { value: "preta",                   label: "Preta",                   primary: "black",  secondary: null    },
 ];
+// Faixas de Jiu-Jitsu (rótulos) e suas cores correspondentes.
 const JIU_GRADES = ["Branca", "Azul", "Roxa", "Marrom", "Preta"];
 const JIU_COLORS = [
   { value: "white", label: "Branca" },
@@ -40,6 +47,7 @@ const JIU_COLORS = [
   { value: "black", label: "Preta" },
 ];
 
+// Mapa do prajied -> classes Tailwind (cor principal e ponta) para a faixinha.
 const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "branco":                 { primary: "bg-white" },
   "branco-ponta-vermelha":  { primary: "bg-white",    secondary: "bg-red-600"   },
@@ -54,11 +62,13 @@ const PRAJIED_MAP: Record<string, { primary: string; secondary?: string }> = {
   "preta":                  { primary: "bg-gray-900"  },
 };
 
+// Mapa de cor da faixa de Jiu -> classe Tailwind de fundo.
 const JIU_COLOR_MAP: Record<string, string> = {
   white: "bg-white", blue: "bg-blue-600", purple: "bg-purple-600",
   brown: "bg-amber-800", black: "bg-gray-900",
 };
 
+// Faixinha visual do prajied; desenha a ponta secundária quando existir.
 function PrajiedStripe({ grade }: { grade: string }) {
   const entry = PRAJIED_MAP[grade];
   if (!entry) return null;
@@ -74,9 +84,10 @@ function PrajiedStripe({ grade }: { grade: string }) {
 }
 
 /** BJJ belt: colored body + black tip with degree stripes */
+// Faixa de Jiu visual: corpo colorido + ponta preta com os graus (até 4 listras).
 function BeltStripe({ color, degree }: { color: string; degree?: number | null }) {
   const bg = JIU_COLOR_MAP[color] ?? "bg-muted";
-  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);
+  const stripes = Math.min(Math.max(degree ?? 0, 0), 4);  // limita o grau ao intervalo 0..4
   const isWhite = color === "white";
   return (
     <div className={`flex h-5 w-28 rounded-sm overflow-hidden border ${isWhite ? "border-gray-400/50" : "border-white/15"}`}>
@@ -93,18 +104,22 @@ function BeltStripe({ color, degree }: { color: string; degree?: number | null }
 }
 
 export default function StudentDetail() {
-  const [, params] = useRoute("/students/:id");
-  const [, setLocation] = useLocation();
-  const studentId = params ? parseInt(params.id, 10) : 0;
-  const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai");
-  const [faceUploading, setFaceUploading] = useState(false);
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const faceInputRef = useRef<HTMLInputElement>(null);
+  const [, params] = useRoute("/students/:id");                       // captura o :id da rota
+  const [, setLocation] = useLocation();                             // navegação programática
+  const studentId = params ? parseInt(params.id, 10) : 0;            // id numérico do aluno
+  const [activeModality, setActiveModality] = useState<"thai" | "jiu">("thai"); // aba ativa (Thai/Jiu)
+  const [faceUploading, setFaceUploading] = useState(false);        // estado de envio de foto da galeria
+  const [enrollOpen, setEnrollOpen] = useState(false);              // controla o modal de cadastro facial
+  const faceInputRef = useRef<HTMLInputElement>(null);              // ref do input de arquivo oculto
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  // Apenas professor/admin podem editar graduações e cadastrar rosto.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
+  // Envia uma foto escolhida da galeria: faz upload, registra como foto de perfil
+  // (com tentativa de detecção facial) e revalida os dados do aluno. Avisa o
+  // usuário se nenhum rosto foi detectado na imagem.
   const handleGalleryFace = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -131,10 +146,12 @@ export default function StudentDetail() {
     }
   };
 
+  // Busca os dados completos do aluno.
   const { data: student, isLoading } = useGetStudent(studentId, {
     query: { enabled: !!studentId, queryKey: getGetStudentQueryKey(studentId) }
   });
 
+  // Histórico de presenças do aluno na modalidade ativa.
   const { data: attendance } = useListAttendance(
     { studentId, modality: activeModality },
     { query: { enabled: !!studentId, queryKey: getListAttendanceQueryKey({ studentId, modality: activeModality }) } }
@@ -142,6 +159,7 @@ export default function StudentDetail() {
 
   const updateStudentMutation = useUpdateStudent();
 
+  // Atualiza um campo de graduação genérico (faixa, cor ou grau) e revalida os dados.
   const handleGradeUpdate = (field: string, value: string | number | null) => {
     if (!studentId) return;
     updateStudentMutation.mutate(
@@ -157,6 +175,8 @@ export default function StudentDetail() {
     );
   };
 
+  // Atualiza o prajied (Muay Thai): converte o valor escolhido em rótulo + cor
+  // primária e salva ambos no aluno.
   const handleThaiPrajied = (value: string) => {
     if (!studentId) return;
     const entry = PRAJIED_GRADES.find(p => p.value === value);
@@ -174,14 +194,17 @@ export default function StudentDetail() {
     );
   };
 
+  // Spinner enquanto carrega os dados do aluno.
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
 
+  // Mensagem caso o aluno não exista.
   if (!student) {
     return <div className="text-center py-20 text-muted-foreground">Aluno nao encontrado</div>;
   }
 
+  // Exibe o alternador de modalidade somente quando o aluno pratica as duas.
   const showToggle = student.modalityThai && student.modalityJiu;
 
   return (
@@ -194,6 +217,7 @@ export default function StudentDetail() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Coluna esquerda: foto, identidade, logos, cadastro facial e contadores */}
         <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center gap-4">
           <div className="w-28 h-28 rounded-full bg-muted border-2 border-border overflow-hidden">
             {student.profilePhotoUrl
@@ -227,6 +251,7 @@ export default function StudentDetail() {
             );
           })()}
 
+          {/* Status do cadastro facial + ações (somente master): modal multiângulo ou upload da galeria */}
           <div className="w-full pt-3 border-t border-border space-y-2">
             <div className="flex items-center gap-2 text-sm">
               {student.hasFaceDescriptor
@@ -274,7 +299,9 @@ export default function StudentDetail() {
           </div>
         </div>
 
+        {/* Coluna direita: alternador de modalidade, graduações e histórico */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Alternador entre Muay Thai e Jiu-Jitsu (só quando pratica ambas) */}
           {showToggle && (
             <div className="flex gap-2 bg-card border border-border rounded-lg p-1 w-fit">
               <Button
@@ -296,12 +323,14 @@ export default function StudentDetail() {
             </div>
           )}
 
+          {/* Bloco de graduação: seção de Muay Thai e/ou Jiu conforme modalidade ativa */}
           <div className="bg-card border border-border rounded-lg p-5 space-y-4">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-primary" />
               <h2 className="font-bold text-lg uppercase tracking-wide">Graduacao</h2>
             </div>
 
+            {/* Seção de prajied (Muay Thai) — editável só por master */}
             {(activeModality === "thai" || !showToggle) && student.modalityThai && (
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Muay Thai</div>
@@ -344,6 +373,7 @@ export default function StudentDetail() {
               </div>
             )}
 
+            {/* Seção de faixa/cor/grau (Jiu-Jitsu) — editável só por master */}
             {(activeModality === "jiu" || !showToggle) && student.modalityJiu && (
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Jiu-Jitsu</div>
@@ -396,6 +426,7 @@ export default function StudentDetail() {
             )}
           </div>
 
+          {/* Histórico de presenças da modalidade ativa (lista rolável ou estado vazio) */}
           <div className="bg-card border border-border rounded-lg p-5">
             <div className="flex items-center gap-2 mb-4">
               <Camera size={18} className="text-primary" />
@@ -423,6 +454,7 @@ export default function StudentDetail() {
         </div>
       </div>
 
+      {/* Modal de cadastro facial multiângulo; ao concluir revalida os dados do aluno */}
       <FaceEnrollModal
         open={enrollOpen}
         userId={studentId}

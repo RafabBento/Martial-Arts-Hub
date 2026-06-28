@@ -1,3 +1,9 @@
+// =============================================================================
+// routes/payments.ts — Controle de mensalidades dos alunos.
+// Lista o status de pagamento de cada aluno em um mês/ano e permite marcar
+// (PUT) ou desmarcar (DELETE) o pagamento. A presença de uma linha em
+// monthlyPaymentsTable para (aluno, mês, ano) significa "pago".
+// =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, monthlyPaymentsTable, usersTable, studentProfilesTable } from "@workspace/db";
@@ -5,6 +11,7 @@ import { ListPaymentsQueryParams, MarkPaymentParams, UnmarkPaymentParams, MarkPa
 
 const router: IRouter = Router();
 
+// GET /payments — para um mês/ano, retorna todos os alunos com flag de pago.
 router.get("/payments", async (req, res): Promise<void> => {
   const query = ListPaymentsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -14,6 +21,7 @@ router.get("/payments", async (req, res): Promise<void> => {
 
   const { month, year } = query.data;
 
+  // Todos os alunos (ordenados por nome), para que a tela liste pagos e não pagos.
   const students = await db
     .select({
       userId: usersTable.id,
@@ -26,6 +34,7 @@ router.get("/payments", async (req, res): Promise<void> => {
     .where(eq(usersTable.role, "student"))
     .orderBy(usersTable.name);
 
+  // Pagamentos registrados no mês/ano consultado.
   const payments = await db
     .select()
     .from(monthlyPaymentsTable)
@@ -36,8 +45,10 @@ router.get("/payments", async (req, res): Promise<void> => {
       )
     );
 
+  // Indexa por aluno para cruzar com a lista completa de alunos.
   const paymentMap = new Map(payments.map(p => [p.studentId, p]));
 
+  // Combina: paid=true quando existe registro; senão os campos de pagamento ficam nulos.
   res.json(
     students.map(s => {
       const p = paymentMap.get(s.userId);
@@ -56,6 +67,7 @@ router.get("/payments", async (req, res): Promise<void> => {
   );
 });
 
+// PUT /payments/:studentId/:year/:month — marca a mensalidade como paga.
 router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> => {
   const params = MarkPaymentParams.safeParse(req.params);
   if (!params.success) {
@@ -63,9 +75,11 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
     return;
   }
 
+  // Notas são opcionais; body inválido é tolerado (notes = null).
   const bodyParse = MarkPaymentBody.safeParse(req.body);
   const notes = bodyParse.success ? (bodyParse.data?.notes ?? null) : null;
 
+  // Identifica quem está registrando o pagamento, para gravar paidByName (auditoria).
   const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
   const [requester] = requesterId
     ? await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, requesterId))
@@ -73,6 +87,8 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
 
   const { studentId, month, year } = params.data;
 
+  // Insere o registro de pagamento. onConflictDoNothing torna a operação
+  // idempotente: marcar de novo o mesmo (aluno, mês, ano) não duplica nem falha.
   await db
     .insert(monthlyPaymentsTable)
     .values({
@@ -85,6 +101,7 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
     })
     .onConflictDoNothing();
 
+  // Relê aluno e pagamento para devolver o estado consolidado ao cliente.
   const [student] = await db
     .select({ name: usersTable.name, profilePhotoUrl: usersTable.profilePhotoUrl, paymentDay: usersTable.paymentDay })
     .from(usersTable)
@@ -114,6 +131,7 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
   });
 });
 
+// DELETE /payments/:studentId/:year/:month — desmarca (remove) a mensalidade.
 router.delete("/payments/:studentId/:year/:month", async (req, res): Promise<void> => {
   const params = UnmarkPaymentParams.safeParse(req.params);
   if (!params.success) {
@@ -123,6 +141,7 @@ router.delete("/payments/:studentId/:year/:month", async (req, res): Promise<voi
 
   const { studentId, month, year } = params.data;
 
+  // Remove o registro daquele (aluno, mês, ano); sem registro = "não pago".
   await db
     .delete(monthlyPaymentsTable)
     .where(

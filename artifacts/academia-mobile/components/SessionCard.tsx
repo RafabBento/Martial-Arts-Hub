@@ -1,3 +1,5 @@
+// Cartão de uma sessão de treino: mostra modalidade, data/hora formatadas,
+// professor, descrição e total de presenças. Toque navega para o detalhe.
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -16,8 +18,10 @@ export function SessionCard({
   modality, sessionDate, teacherName, description, attendanceCount, onPress,
 }: SessionCardProps) {
   const colors = useColors();
+  // Cor de destaque (borda lateral/rótulo) conforme a modalidade.
   const isThai = modality === "thai";
   const accentColor = isThai ? colors.thai : colors.jiu;
+  // Formata a data da sessão em dia da semana/data e horário no padrão pt-BR.
   const date = new Date(sessionDate);
   const dayStr = date.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" });
   const timeStr = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });

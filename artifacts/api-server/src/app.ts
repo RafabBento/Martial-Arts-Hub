@@ -1,3 +1,9 @@
+// =============================================================================
+// app.ts — Montagem da aplicação Express (API do sistema da academia).
+// Define a ordem dos middlewares globais (logging, CORS, parsing de body,
+// sessão, autenticação via Bearer) e monta o roteador principal sob "/api".
+// O arquivo apenas configura o app; quem o sobe na porta é o index.ts.
+// =============================================================================
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -8,6 +14,9 @@ import { bearerAuth } from "./middlewares/bearerAuth";
 
 const app: Express = express();
 
+// Logging HTTP estruturado (pino). Os serializers reduzem o que é logado por
+// request/response para evitar ruído e vazamento de dados — guardamos apenas o
+// id da requisição, método, URL (sem query string) e o status code da resposta.
 app.use(
   pinoHttp({
     logger,
@@ -28,14 +37,21 @@ app.use(
   }),
 );
 
+// CORS com `origin: true` reflete a origem da requisição e `credentials: true`
+// permite o envio de cookies de sessão entre o front (web/mobile) e a API.
 app.use(cors({
   origin: true,
   credentials: true,
 }));
 
+// Parsing do corpo da requisição. Limite de 10mb porque alguns endpoints
+// recebem imagens em base64 (fotos de perfil/equipe para reconhecimento facial).
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// Sessão baseada em cookie. O segredo vem do ambiente (com fallback fixo só
+// para dev). saveUninitialized:false evita criar sessão antes do login; o cookie
+// é httpOnly (não acessível via JS) e expira em 7 dias.
 app.use(session({
   secret: process.env.SESSION_SECRET ?? "academia_fight_club_secret_2024",
   resave: false,
@@ -47,6 +63,9 @@ app.use(session({
   },
 }));
 
+// bearerAuth roda DEPOIS da sessão: quando não há cookie (ex.: app nativo no
+// Expo Go), ele decodifica o token Bearer e popula req.session.userId, para que
+// as rotas funcionem igual ao fluxo de cookie. Em seguida monta a API em "/api".
 app.use(bearerAuth);
 app.use("/api", router);
 

@@ -27,32 +27,42 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 
+// Tela de detalhe de uma sessão (rota dinâmica /session/[id]). Mostra os dados
+// da sessão e a lista de presenças; mestres podem remover presenças individuais
+// ou excluir a sessão inteira.
 export default function SessionDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  // Lê o id da sessão da URL (rota dinâmica) e o converte para número.
   const { id } = useLocalSearchParams<{ id: string }>();
   const sessionId = Number(id);
   const queryClient = useQueryClient();
+  // Mestres (professores) e admins podem excluir sessões/presenças.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   const [toast, setToast] = useState<string | null>(null);
 
+  // Queries: dados da sessão e lista de presenças daquela sessão.
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId);
   const { data: attendance, isLoading: attLoading } = useListAttendance({ sessionId });
 
+  // Mutações para excluir uma presença e excluir a sessão.
   const deleteAttMutation = useDeleteAttendance();
   const deleteSessionMutation = useDeleteSession();
 
+  // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Confirma e remove a presença de um aluno; em sucesso, invalida os caches.
   const handleDeleteAttendance = (attId: number, studentName: string) => {
     Alert.alert(
       "Remover presença",
@@ -78,6 +88,7 @@ export default function SessionDetailScreen() {
     );
   };
 
+  // Confirma e exclui a sessão inteira; em sucesso, atualiza a lista e volta.
   const handleDeleteSession = () => {
     Alert.alert(
       "Excluir sessão",
@@ -102,6 +113,7 @@ export default function SessionDetailScreen() {
     );
   };
 
+  // Enquanto a sessão carrega, exibe apenas o cabeçalho e um spinner.
   if (sessionLoading) {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -119,6 +131,7 @@ export default function SessionDetailScreen() {
 
   if (!session) return null;
 
+  // Cor de destaque e data formatada conforme a modalidade da sessão.
   const isThai = session.modality === "thai";
   const accentColor = isThai ? colors.thai : colors.jiu;
   const date = new Date(session.sessionDate);
