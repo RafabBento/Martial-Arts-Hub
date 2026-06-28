@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -74,6 +74,15 @@ function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dayLabel(d: Date) {
+  const label = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
   const list: ("thai" | "jiu")[] = [];
   if (m.modalityThai) list.push("thai");
@@ -134,8 +143,35 @@ export default function AttendanceScreen() {
     { query: { enabled: !!selectedSessionId, queryKey: getListAttendanceQueryKey({ sessionId: selectedSessionId ?? undefined }) } }
   );
 
+  // Todas as presenças (todas as sessões/dias) — base para a lista diária de
+  // hoje e para o histórico por data mais abaixo na tela.
+  const { data: allAttendance, refetch: refetchAllAttendance } = useListAttendance(
+    {},
+    { query: { queryKey: getListAttendanceQueryKey() } }
+  );
+
   const createAttMutation = useCreateAttendance();
   const createSessionMutation = useCreateSession();
+
+  // Vira o dia automaticamente à meia-noite: ao chegar 00h reavalia a tela e
+  // recarrega as presenças, de modo que "Presentes hoje" zere e o dia anterior
+  // desça para o histórico mesmo com a tela aberta.
+  const [, setDayTick] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+      timer = setTimeout(() => {
+        setDayTick(t => t + 1);
+        queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
+        refetchAllAttendance();
+        schedule();
+      }, next.getTime() - now.getTime());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [queryClient, refetchAllAttendance]);
 
   const currentClass = detectCurrentClass();
   const currentTeacher = currentClass && teachers
@@ -148,23 +184,23 @@ export default function AttendanceScreen() {
   const selectedSession = sessions?.find(s => s.id === selectedSessionId);
   const attendedIds = useMemo(() => new Set(attendance?.map(a => a.studentId) ?? []), [attendance]);
 
-  // Lista unificada de presentes: junta quem foi confirmado pelo reconhecimento
-  // facial / foto da equipe (estado local) com os registros da sessão selecionada,
-  // para que os rostos reconhecidos apareçam imediatamente em "Presentes na sessão".
+  // Presentes HOJE: todas as presenças marcadas no dia atual (de todas as
+  // sessões/modalidades), deduplicadas por aluno. Zera sozinho à meia-noite,
+  // pois passa a não haver mais registros com a data de hoje. Junta também as
+  // confirmações locais da foto da equipe (modo team) para feedback imediato.
   const presentList = useMemo(() => {
     const map = new Map<number, { studentId: number; name: string; photoUrl: string | null; faceRecognized: boolean }>();
-    for (const rec of attendance ?? []) {
+    for (const rec of allAttendance ?? []) {
+      if (!isToday(new Date(rec.createdAt))) continue;
       const student = students?.find(s => s.userId === rec.studentId);
+      const ex = map.get(rec.studentId);
       map.set(rec.studentId, {
         studentId: rec.studentId,
         name: student?.name ?? rec.studentName ?? "Aluno",
         photoUrl: student?.profilePhotoUrl ?? rec.studentPhotoUrl ?? null,
-        faceRecognized: rec.faceRecognized ?? false,
+        faceRecognized: (ex?.faceRecognized ?? false) || (rec.faceRecognized ?? false),
       });
     }
-    // Só funde as confirmações locais da foto da equipe no modo "team".
-    // No modo manual a lista fica estritamente atrelada à sessão selecionada,
-    // evitando que confirmações de outra sessão vazem para cá.
     if (mode === "team") {
       for (const m of [...matches, ...manualAdds]) {
         if (!confirmedIds.has(m.studentId) || map.has(m.studentId)) continue;
@@ -177,7 +213,34 @@ export default function AttendanceScreen() {
       }
     }
     return [...map.values()];
-  }, [attendance, students, matches, manualAdds, confirmedIds, mode]);
+  }, [allAttendance, students, matches, manualAdds, confirmedIds, mode]);
+
+  // Histórico de presenças agrupado por dia (exclui hoje, que aparece acima).
+  const historyByDay = useMemo(() => {
+    const groups = new Map<string, { label: string; ts: number; students: Map<number, { name: string; photoUrl: string | null; thai: boolean; jiu: boolean }> }>();
+    for (const rec of allAttendance ?? []) {
+      const d = new Date(rec.createdAt);
+      if (isToday(d)) continue;
+      const key = dayKey(d);
+      let g = groups.get(key);
+      if (!g) {
+        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        g = { label: dayLabel(d), ts: dayStart.getTime(), students: new Map() };
+        groups.set(key, g);
+      }
+      const student = students?.find(s => s.userId === rec.studentId);
+      const ex = g.students.get(rec.studentId);
+      g.students.set(rec.studentId, {
+        name: student?.name ?? rec.studentName ?? "Aluno",
+        photoUrl: student?.profilePhotoUrl ?? rec.studentPhotoUrl ?? null,
+        thai: (ex?.thai ?? false) || rec.modality === "thai",
+        jiu: (ex?.jiu ?? false) || rec.modality === "jiu",
+      });
+    }
+    return [...groups.values()]
+      .sort((a, b) => b.ts - a.ts)
+      .map(g => ({ label: g.label, ts: g.ts, students: [...g.students.values()] }));
+  }, [allAttendance, students]);
 
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type });
@@ -223,8 +286,9 @@ export default function AttendanceScreen() {
       {
         onSuccess: () => {
           setConfirmedIds(prev => new Set([...prev, studentId]));
-          queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: selectedSessionId }) });
+          queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
           refetchAttendance();
+          refetchAllAttendance();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast("Presença confirmada!");
           setStudentPickerOpen(false);
@@ -322,6 +386,7 @@ export default function AttendanceScreen() {
       queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
       refetchSessions();
       refetchAttendance();
+      refetchAllAttendance();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(
         `${res.created} presença${res.created !== 1 ? "s" : ""} registrada${res.created !== 1 ? "s" : ""}!${res.skipped > 0 ? ` (${res.skipped} já existiam)` : ""}`,
@@ -678,11 +743,11 @@ export default function AttendanceScreen() {
         )}
 
         {/* Lista de presentes (reconhecimento facial + sessão) */}
-        {(presentList.length > 0 || (mode === "manual" && selectedSessionId)) && (
+        {(
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.attendListHeader}>
               <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-                PRESENTES NA SESSÃO
+                PRESENTES HOJE
               </Text>
               <View style={[styles.countBadge, { backgroundColor: colors.primary + "22" }]}>
                 <Text style={[styles.countText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
@@ -690,6 +755,9 @@ export default function AttendanceScreen() {
                 </Text>
               </View>
             </View>
+            <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginBottom: 12 }]}>
+              Lista do dia — zera automaticamente à meia-noite
+            </Text>
             {presentList.length > 0 ? (
               presentList.map((p) => {
                 const initials = (p.name ?? "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -719,12 +787,78 @@ export default function AttendanceScreen() {
               <View style={styles.emptyAttend}>
                 <Ionicons name="people-outline" size={32} color={colors.mutedForeground} />
                 <Text style={[styles.emptyAttendText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Nenhuma presença registrada
+                  Nenhuma presença marcada hoje ainda
                 </Text>
               </View>
             )}
           </View>
         )}
+
+        {/* Histórico de presenças por dia */}
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.attendListHeader}>
+            <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              HISTÓRICO POR DIA
+            </Text>
+            {historyByDay.length > 0 && (
+              <View style={[styles.countBadge, { backgroundColor: colors.primary + "22" }]}>
+                <Text style={[styles.countText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                  {historyByDay.length}
+                </Text>
+              </View>
+            )}
+          </View>
+          {historyByDay.length > 0 ? (
+            historyByDay.map((day) => (
+              <View key={day.ts} style={{ marginBottom: 16 }}>
+                <View style={[styles.attendListHeader, { marginBottom: 8 }]}>
+                  <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                    {day.label}
+                  </Text>
+                  <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {day.students.length} presente{day.students.length !== 1 ? "s" : ""}
+                  </Text>
+                </View>
+                {day.students.map((s, idx) => {
+                  const initials = (s.name ?? "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+                  return (
+                    <View key={s.name + idx} style={[styles.attendRow, { borderBottomColor: colors.border }]}>
+                      <View style={[styles.attendAvatar, { backgroundColor: colors.primary + "22", alignItems: "center", justifyContent: "center" }]}>
+                        <Text style={[styles.attendInitials, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                          {initials}
+                        </Text>
+                      </View>
+                      <View style={styles.attendInfo}>
+                        <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+                          {s.name}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 4 }}>
+                        {s.thai && (
+                          <View style={{ backgroundColor: "#ef444422", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ color: "#f87171", fontSize: 10, fontFamily: "Inter_700Bold" }}>MT</Text>
+                          </View>
+                        )}
+                        {s.jiu && (
+                          <View style={{ backgroundColor: "#3b82f622", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ color: "#60a5fa", fontSize: 10, fontFamily: "Inter_700Bold" }}>JJ</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyAttend}>
+              <Ionicons name="calendar-outline" size={32} color={colors.mutedForeground} />
+              <Text style={[styles.emptyAttendText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                Nenhum registro de dias anteriores
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Modal: seletor de sessão */}

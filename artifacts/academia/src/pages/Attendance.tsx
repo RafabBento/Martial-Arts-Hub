@@ -47,6 +47,15 @@ function isToday(date: Date) {
       && date.getDate()     === t.getDate();
 }
 
+function dayKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dayLabel(d: Date) {
+  const label = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
 }
@@ -183,6 +192,32 @@ export default function Attendance() {
     { query: { enabled: !!selectedSession, queryKey: getListAttendanceQueryKey({ sessionId: selectedSession ? parseInt(selectedSession, 10) : undefined }) } }
   );
 
+  // Todas as presenças (todas as sessões/dias) — base para a lista diária de
+  // hoje e para o histórico por data mais abaixo na tela.
+  const { data: allAttendance } = useListAttendance(
+    {},
+    { query: { queryKey: getListAttendanceQueryKey() } }
+  );
+
+  // Vira o dia automaticamente à meia-noite: ao chegar 00h reavalia a tela e
+  // recarrega as presenças, de modo que "Presentes hoje" zere e o dia anterior
+  // desça para o histórico mesmo com a tela aberta.
+  const [, setDayTick] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+      timer = setTimeout(() => {
+        setDayTick(t => t + 1);
+        queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
+        schedule();
+      }, next.getTime() - now.getTime());
+    };
+    schedule();
+    return () => clearTimeout(timer);
+  }, [queryClient]);
+
   const createAttMutation = useCreateAttendance();
 
   const confirmAttendance = (studentId: number, faceRecognized: boolean) => {
@@ -199,7 +234,7 @@ export default function Attendance() {
       {
         onSuccess: () => {
           setConfirmedIds(prev => new Set([...prev, studentId]));
-          queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey({ sessionId: parseInt(selectedSession, 10) }) });
+          queryClient.invalidateQueries({ queryKey: getListAttendanceQueryKey() });
           toast({ title: "Presença confirmada!" });
         },
         onError: (e: any) => {
@@ -301,22 +336,22 @@ export default function Attendance() {
 
   const attendedIds = new Set(attendance?.map(a => a.studentId) ?? []);
 
-  // Lista unificada de presentes: junta quem foi confirmado pelo reconhecimento
-  // facial / foto da equipe (estado local) com os registros da sessão selecionada,
-  // para que os rostos reconhecidos apareçam imediatamente em "Presentes (sessão)".
+  // Presentes HOJE: todas as presenças marcadas no dia atual (de todas as
+  // sessões/modalidades), deduplicadas por aluno. Zera sozinho à meia-noite,
+  // pois passa a não haver mais registros com a data de hoje. Junta também as
+  // confirmações locais da foto da equipe (modo team) para feedback imediato.
   const presentList = (() => {
     const map = new Map<number, { studentId: number; name: string; photoUrl: string | null; faceRecognized: boolean }>();
-    for (const rec of attendance ?? []) {
+    for (const rec of allAttendance ?? []) {
+      if (!isToday(new Date(rec.createdAt))) continue;
+      const ex = map.get(rec.studentId);
       map.set(rec.studentId, {
         studentId: rec.studentId,
         name: rec.studentName,
         photoUrl: rec.studentPhotoUrl ?? null,
-        faceRecognized: rec.faceRecognized ?? false,
+        faceRecognized: (ex?.faceRecognized ?? false) || (rec.faceRecognized ?? false),
       });
     }
-    // Só funde as confirmações locais da foto da equipe no modo "team".
-    // No modo manual a lista fica estritamente atrelada à sessão selecionada,
-    // evitando que confirmações de outra sessão vazem para cá.
     if (mode === "team") {
       for (const m of [...matches, ...manualAdds]) {
         if (!confirmedIds.has(m.studentId) || map.has(m.studentId)) continue;
@@ -329,6 +364,33 @@ export default function Attendance() {
       }
     }
     return [...map.values()];
+  })();
+
+  // Histórico de presenças agrupado por dia (exclui hoje, que aparece acima).
+  const historyByDay = (() => {
+    const groups = new Map<string, { label: string; ts: number; students: Map<number, { name: string; photoUrl: string | null; faceRecognized: boolean; thai: boolean; jiu: boolean }> }>();
+    for (const rec of allAttendance ?? []) {
+      const d = new Date(rec.createdAt);
+      if (isToday(d)) continue;
+      const key = dayKey(d);
+      let g = groups.get(key);
+      if (!g) {
+        const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        g = { label: dayLabel(d), ts: dayStart.getTime(), students: new Map() };
+        groups.set(key, g);
+      }
+      const ex = g.students.get(rec.studentId);
+      g.students.set(rec.studentId, {
+        name: rec.studentName,
+        photoUrl: rec.studentPhotoUrl ?? null,
+        faceRecognized: (ex?.faceRecognized ?? false) || (rec.faceRecognized ?? false),
+        thai: (ex?.thai ?? false) || rec.modality === "thai",
+        jiu: (ex?.jiu ?? false) || rec.modality === "jiu",
+      });
+    }
+    return [...groups.values()]
+      .sort((a, b) => b.ts - a.ts)
+      .map(g => ({ label: g.label, ts: g.ts, students: [...g.students.values()] }));
   })();
 
   const teamAddCandidates = (students ?? []).filter(s =>
@@ -644,9 +706,10 @@ export default function Attendance() {
         <div className="bg-card border border-border rounded-lg p-5">
           <div className="flex items-center gap-2 mb-4">
             <UserCheck size={18} className="text-primary" />
-            <h2 className="font-bold uppercase tracking-wide text-sm">Presentes (sessão)</h2>
+            <h2 className="font-bold uppercase tracking-wide text-sm">Presentes hoje</h2>
             <span className="ml-auto text-sm font-bold text-primary">{presentList.length}</span>
           </div>
+          <p className="text-[11px] text-muted-foreground -mt-2 mb-3">Lista do dia — zera automaticamente à meia-noite</p>
           {presentList.length > 0 ? (
             <div className="space-y-2 max-h-[480px] overflow-y-auto">
               {presentList.map(p => (
@@ -666,10 +729,52 @@ export default function Attendance() {
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground text-xs">
-              {selectedSession ? "Nenhuma presença ainda" : "Reconheça uma foto da equipe ou selecione uma sessão na aba Manual"}
+              Nenhuma presença marcada hoje ainda
             </div>
           )}
         </div>
+      </div>
+
+      {/* Histórico de presenças por dia */}
+      <div className="bg-card border border-border rounded-lg p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <CalendarCheck size={18} className="text-primary" />
+          <h2 className="font-bold uppercase tracking-wide text-sm">Histórico por dia</h2>
+          {historyByDay.length > 0 && (
+            <span className="ml-auto text-sm font-bold text-primary">{historyByDay.length} dia{historyByDay.length !== 1 ? "s" : ""}</span>
+          )}
+        </div>
+        {historyByDay.length > 0 ? (
+          <div className="space-y-5 max-h-[640px] overflow-y-auto pr-1">
+            {historyByDay.map(day => (
+              <div key={day.ts}>
+                <div className="flex items-center gap-2 mb-2 sticky top-0 bg-card py-1">
+                  <span className="text-sm font-bold capitalize">{day.label}</span>
+                  <span className="ml-auto text-xs font-bold text-muted-foreground">{day.students.length} presente{day.students.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="space-y-2">
+                  {day.students.map(s => (
+                    <div key={s.name + day.ts} className="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">
+                      <div className="w-7 h-7 rounded-full bg-muted border border-border overflow-hidden shrink-0">
+                        {s.photoUrl
+                          ? <img src={s.photoUrl} alt={s.name} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-muted-foreground">{s.name.charAt(0)}</div>
+                        }
+                      </div>
+                      <div className="text-sm font-medium truncate flex-1 min-w-0">{s.name}</div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {s.thai && <span className="text-[10px] font-bold text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded">MT</span>}
+                        {s.jiu && <span className="text-[10px] font-bold text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded">JJ</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground text-xs">Nenhum registro de dias anteriores</div>
+        )}
       </div>
     </div>
   );
