@@ -430,7 +430,6 @@ export default function Attendance() {
                   ref={teamInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   className="hidden"
                   onChange={handleTeamPhoto}
                   data-testid="input-team-photo"
