@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Provisionamento único de uma VPS Ubuntu (ex.: Hostinger KVM 2) para rodar o
-# Martial Arts Hub. Rode isso DEPOIS de já ter subido o código pra
-# /var/www/martial-arts-hub (ver deploy/release.ps1) e ANTES do primeiro
-# `systemctl start api-server`.
+# Martial Arts Hub a partir do repositório no GitHub.
 #
 # Uso (na VPS, como root ou via sudo):
+#   curl -fsSL https://raw.githubusercontent.com/RafabBento/Martial-Arts-Hub/main/deploy/setup-vps.sh -o setup-vps.sh
 #   chmod +x setup-vps.sh && sudo ./setup-vps.sh
 set -euo pipefail
 
+REPO_URL=https://github.com/RafabBento/Martial-Arts-Hub.git
 APP_DIR=/var/www/martial-arts-hub
 APP_USER=martialarts
 ENV_DIR=/etc/martial-arts-hub
@@ -19,7 +19,7 @@ fi
 
 echo "==> Atualizando pacotes..."
 apt-get update -y
-apt-get install -y curl nginx ufw
+apt-get install -y curl git nginx ufw
 
 echo "==> Instalando Node.js 24 (NodeSource)..."
 if ! command -v node >/dev/null || [ "$(node -v | cut -d. -f1 | tr -d v)" -lt 24 ]; then
@@ -36,13 +36,21 @@ if ! id -u "$APP_USER" >/dev/null 2>&1; then
   useradd --system --create-home --shell /usr/sbin/nologin "$APP_USER"
 fi
 
-if [ ! -d "$APP_DIR" ]; then
-  echo "Erro: $APP_DIR não existe. Rode deploy/release.ps1 primeiro pra subir o código." >&2
-  exit 1
+echo "==> Clonando o repositório em $APP_DIR..."
+mkdir -p "$APP_DIR"
+chown "$APP_USER":"$APP_USER" "$APP_DIR"
+if [ -d "$APP_DIR/.git" ]; then
+  sudo -u "$APP_USER" git -C "$APP_DIR" pull
+else
+  sudo -u "$APP_USER" git clone "$REPO_URL" "$APP_DIR"
 fi
-chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
-mkdir -p "$APP_DIR/artifacts/api-server/storage"
-chown -R "$APP_USER":"$APP_USER" "$APP_DIR/artifacts/api-server/storage"
+sudo -u "$APP_USER" mkdir -p "$APP_DIR/artifacts/api-server/storage"
+
+echo "==> Instalando dependências e buildando..."
+cd "$APP_DIR"
+sudo -u "$APP_USER" pnpm install --frozen-lockfile
+sudo -u "$APP_USER" pnpm --filter @workspace/api-server run build
+sudo -u "$APP_USER" pnpm --filter @workspace/academia run build
 
 echo "==> Preparando /etc/martial-arts-hub/api-server.env..."
 mkdir -p "$ENV_DIR"

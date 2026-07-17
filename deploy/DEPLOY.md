@@ -1,31 +1,27 @@
 # Deploy na VPS (Hostinger KVM 2)
 
-Pré-requisitos: VPS Ubuntu 22.04/24.04 já provisionada, com acesso SSH (root
-ou usuário com sudo). Rode os comandos abaixo a partir do Windows (PowerShell),
-na raiz do repositório.
+O código é publicado via GitHub: https://github.com/RafabBento/Martial-Arts-Hub
+(repositório público — a VPS clona/atualiza direto por HTTPS, sem precisar de
+chave SSH ou token).
+
+Pré-requisito: VPS Ubuntu 22.04/24.04 com acesso SSH (root ou usuário com sudo).
 
 ## 1. Primeiro deploy
 
-```powershell
-.\deploy\release.ps1 -VpsHost <IP_DA_VPS> -VpsUser root
-```
-
-Isso sobe o código, instala dependências e builda o front + a API. Na
-primeira vez o serviço ainda não existe — o script só avisa e para aí.
-
-Depois, conecte na VPS e rode o provisionamento (uma vez só):
+Conecte na VPS e rode o script de provisionamento (uma vez só) — ele instala
+Node 24, pnpm, git, nginx, clona o repositório, instala dependências, builda
+tudo, configura o systemd e o nginx, e ajusta o firewall (ufw):
 
 ```bash
 ssh root@<IP_DA_VPS>
-cd /var/www/martial-arts-hub
-chmod +x deploy/setup-vps.sh
-sudo ./deploy/setup-vps.sh
+curl -fsSL https://raw.githubusercontent.com/RafabBento/Martial-Arts-Hub/main/deploy/setup-vps.sh -o setup-vps.sh
+chmod +x setup-vps.sh
+sudo ./setup-vps.sh
 ```
 
-O script instala Node 24, pnpm, nginx, cria o usuário de serviço, registra o
-systemd unit, configura o nginx e o firewall (ufw). Ele copia
-`deploy/api-server.env.example` para `/etc/martial-arts-hub/api-server.env`
-na primeira execução — **edite esse arquivo antes de iniciar**:
+Ele copia `deploy/api-server.env.example` para
+`/etc/martial-arts-hub/api-server.env` na primeira execução —
+**edite esse arquivo antes de iniciar**:
 
 ```bash
 sudo nano /etc/martial-arts-hub/api-server.env
@@ -46,15 +42,18 @@ Acesse `http://<IP_DA_VPS>` no navegador — deve carregar o app.
 
 ## 2. Deploys seguintes (atualizar o código)
 
-Sempre que quiser publicar mudanças, do Windows:
+O deploy só pega o que já foi **commitado e enviado (push) pro GitHub** —
+mudanças locais não sobem sozinhas. Fluxo normal:
 
-```powershell
-.\deploy\release.ps1 -VpsHost <IP_DA_VPS> -VpsUser root
-```
+1. Commitar e publicar as mudanças (GitHub Desktop → Commit → Push, ou `git push`).
+2. Do Windows, na raiz do repositório:
+   ```powershell
+   .\deploy\release.ps1 -VpsHost <IP_DA_VPS> -VpsUser root
+   ```
 
-Isso já builda e reinicia o serviço sozinho (a VPS já está provisionada).
-As fotos já enviadas (`artifacts/api-server/storage/`) **não são apagadas** —
-ficam fora do pacote de propósito.
+Isso faz `git pull` na VPS, reinstala dependências, builda e reinicia o
+serviço. As fotos já enviadas (`artifacts/api-server/storage/`) não são
+apagadas — ficam fora do controle de versão de propósito.
 
 ## 3. Comandos úteis na VPS
 
@@ -63,6 +62,7 @@ sudo systemctl status api-server      # está rodando?
 sudo journalctl -u api-server -f      # logs em tempo real
 sudo systemctl restart api-server     # reiniciar manualmente
 sudo nginx -t && sudo systemctl reload nginx   # validar/aplicar config do nginx
+cd /var/www/martial-arts-hub && git log --oneline -5   # qual commit está rodando
 ```
 
 ## 4. Quando tiver um domínio
@@ -70,7 +70,9 @@ sudo nginx -t && sudo systemctl reload nginx   # validar/aplicar config do nginx
 1. Aponte o DNS (registro A) do domínio pro IP da VPS.
 2. Troque `server_name _;` por `server_name seudominio.com;` em
    `/etc/nginx/sites-available/martial-arts-hub` (ou edite `deploy/nginx.conf`
-   e rode `release.ps1` de novo).
+   no repositório, dê push, e rode `release.ps1` de novo — mas nesse caso
+   também copie o arquivo atualizado por cima do de `/etc/nginx/sites-available/`
+   manualmente, o `release.ps1` não mexe na config do nginx sozinho).
 3. Instale certbot e gere o certificado:
    ```bash
    sudo apt-get install -y certbot python3-certbot-nginx
