@@ -14,6 +14,11 @@ import { bearerAuth } from "./middlewares/bearerAuth";
 
 const app: Express = express();
 
+// Atrás do nginx (reverse proxy), confia no X-Forwarded-Proto/Host para que
+// req.protocol/req.get("host") reflitam o que o cliente realmente acessou
+// (usado para montar URLs de upload absolutas — ver routes/storage.ts).
+app.set("trust proxy", 1);
+
 // Logging HTTP estruturado (pino). Os serializers reduzem o que é logado por
 // request/response para evitar ruído e vazamento de dados — guardamos apenas o
 // id da requisição, método, URL (sem query string) e o status code da resposta.
@@ -57,7 +62,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    // Só exige HTTPS quando COOKIE_SECURE=true (ativar ao configurar domínio
+    // + TLS na VPS). Em HTTP puro (ex.: acesso direto por IP) precisa ficar
+    // false, senão o navegador nunca envia o cookie de volta.
+    secure: process.env.COOKIE_SECURE === "true",
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   },

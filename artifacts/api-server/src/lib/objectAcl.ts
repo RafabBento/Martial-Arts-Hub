@@ -1,6 +1,15 @@
-import { File } from "@google-cloud/storage";
-
 const ACL_POLICY_METADATA_KEY = "custom:aclPolicy";
+
+// Subconjunto mínimo de operações que este módulo precisa de um "arquivo" de
+// storage — implementado por LocalFile (objectStorage.ts). Existia antes como
+// o tipo `File` do @google-cloud/storage; a interface fica aqui para o backend
+// de storage poder trocar sem esse módulo de ACL precisar mudar.
+export interface StorageFile {
+  name: string;
+  exists(): Promise<[boolean]>;
+  getMetadata(): Promise<[{ metadata?: Record<string, string> }]>;
+  setMetadata(opts: { metadata: Record<string, string> }): Promise<void>;
+}
 
 // Can be flexibly defined according to the use case.
 //
@@ -68,7 +77,7 @@ function createObjectAccessGroup(
 }
 
 export async function setObjectAclPolicy(
-  objectFile: File,
+  objectFile: StorageFile,
   aclPolicy: ObjectAclPolicy,
 ): Promise<void> {
   const [exists] = await objectFile.exists();
@@ -84,7 +93,7 @@ export async function setObjectAclPolicy(
 }
 
 export async function getObjectAclPolicy(
-  objectFile: File,
+  objectFile: StorageFile,
 ): Promise<ObjectAclPolicy | null> {
   const [metadata] = await objectFile.getMetadata();
   const aclPolicy = metadata?.metadata?.[ACL_POLICY_METADATA_KEY];
@@ -100,7 +109,7 @@ export async function canAccessObject({
   requestedPermission,
 }: {
   userId?: string;
-  objectFile: File;
+  objectFile: StorageFile;
   requestedPermission: ObjectPermission;
 }): Promise<boolean> {
   const aclPolicy = await getObjectAclPolicy(objectFile);

@@ -47,3 +47,15 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local env vars (secrets - never commit)
+.env
+.env.local
+artifacts/**/.env
+artifacts/**/.env.local
+
+# Uploaded photos stored on local disk (production storage backend)
+artifacts/api-server/storage/
+
+# Local launcher script (hardcoded machine-specific paths/ports)
+/Iniciar_projeto.bat

@@ -1,0 +1,23 @@
+[Unit]
+Description=Martial Arts Hub - API Server
+After=network.target
+
+[Service]
+Type=simple
+User=martialarts
+Group=martialarts
+WorkingDirectory=/var/www/martial-arts-hub/artifacts/api-server
+EnvironmentFile=/etc/martial-arts-hub/api-server.env
+ExecStart=/usr/bin/node --enable-source-maps dist/index.mjs
+Restart=on-failure
+RestartSec=5
+
+# Sandboxing básico: o processo só pode escrever dentro da própria pasta de
+# storage (fotos enviadas) — o resto do filesystem fica somente leitura.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/www/martial-arts-hub/artifacts/api-server/storage
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

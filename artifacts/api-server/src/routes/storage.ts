@@ -5,13 +5,13 @@
 // SEGURANÇA (anti-IDOR): objetos privados (fotos de perfil/equipe) só são
 // servidos a usuários autenticados e respeitam a política de ACL de cada objeto.
 // =============================================================================
-import { Router, type IRouter, type Request, type Response } from "express";
+import express, { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { ObjectStorageService, ObjectNotFoundError, verifyUploadToken } from "../lib/objectStorage";
 import { getObjectAclPolicy, ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
@@ -73,8 +73,11 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
       return;
     }
 
-    // Gera a URL pré-assinada e normaliza o caminho do objeto para uso interno.
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    // Gera a URL de upload (aponta para a própria API) e normaliza o caminho
+    // do objeto para uso interno. `baseUrl` respeita X-Forwarded-Proto/Host
+    // (app.ts habilita "trust proxy"), então funciona atrás do nginx e local.
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL(baseUrl);
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
     res.json(
@@ -89,6 +92,56 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
+
+/**
+ * PUT /storage/objects/uploads/:objectId
+ *
+ * Recebe os bytes do arquivo — o destino real da "uploadURL" retornada por
+ * /storage/uploads/request-url. Sem sessão: a autorização vem do token
+ * HMAC de curta duração (?token=&expires=) embutido na própria URL, do
+ * mesmo jeito que uma presigned URL de bucket funcionava antes.
+ */
+router.put(
+  "/storage/objects/uploads/:objectId",
+  express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }),
+  async (req: Request, res: Response) => {
+    const rawObjectId = req.params.objectId;
+    const objectId = Array.isArray(rawObjectId) ? rawObjectId[0] : rawObjectId;
+    const token = String(req.query["token"] ?? "");
+    const expires = Number(req.query["expires"]);
+
+    if (!objectId || !token || !verifyUploadToken(`private/uploads/${objectId}`, expires, token)) {
+      res.status(403).json({ error: "URL de upload inválida ou expirada" });
+      return;
+    }
+
+    const rawContentType = req.headers["content-type"];
+    const contentTypeHeader = (Array.isArray(rawContentType) ? rawContentType[0] : rawContentType) ?? "application/octet-stream";
+    const contentType = contentTypeHeader.split(";", 1)[0].trim();
+    if (!ALLOWED_UPLOAD_TYPES.has(contentType.toLowerCase())) {
+      res.status(400).json({ error: "Tipo de arquivo não permitido (apenas imagens)" });
+      return;
+    }
+
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      res.status(400).json({ error: "Corpo da requisição vazio ou inválido" });
+      return;
+    }
+    if (body.length > MAX_UPLOAD_BYTES) {
+      res.status(400).json({ error: "Arquivo muito grande" });
+      return;
+    }
+
+    try {
+      await objectStorageService.writeUploadedObject(objectId, body, contentType);
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      req.log.error({ err: error }, "Error writing uploaded object");
+      res.status(500).json({ error: "Falha ao salvar o arquivo enviado" });
+    }
+  },
+);
 
 /**
  * GET /storage/public-objects/*
