@@ -48,6 +48,12 @@ sudo -u "$APP_USER" mkdir -p "$APP_DIR/artifacts/api-server/storage"
 
 echo "==> Instalando dependências e buildando..."
 cd "$APP_DIR"
+sudo -u "$APP_USER" pnpm install --frozen-lockfile || true
+# pnpm bloqueia scripts de postinstall por padrão (proteção contra supply-chain);
+# só os pacotes listados em onlyBuiltDependencies (pnpm-workspace.yaml) podem
+# rodar, mas ainda assim precisam de aprovação explícita na primeira vez nesta
+# máquina — sem isso "pnpm run build" falha com ERR_PNPM_IGNORED_BUILDS.
+sudo -u "$APP_USER" pnpm approve-builds --all
 sudo -u "$APP_USER" pnpm install --frozen-lockfile
 sudo -u "$APP_USER" pnpm --filter @workspace/api-server run build
 sudo -u "$APP_USER" pnpm --filter @workspace/academia run build

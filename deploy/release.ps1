@@ -21,6 +21,7 @@ $remoteScript = @"
 set -euo pipefail
 cd $RemoteDir
 sudo -u martialarts git pull
+sudo -u martialarts pnpm install --frozen-lockfile || sudo -u martialarts pnpm approve-builds --all
 sudo -u martialarts pnpm install --frozen-lockfile
 sudo -u martialarts pnpm --filter @workspace/api-server run build
 sudo -u martialarts pnpm --filter @workspace/academia run build
@@ -30,7 +31,7 @@ echo 'Deploy concluido.'
 "@
 
 Write-Host "==> Atualizando ${VpsUser}@${VpsHost}:$RemoteDir ..." -ForegroundColor Cyan
-ssh "${VpsUser}@${VpsHost}" $remoteScript
+ssh -o BatchMode=yes "${VpsUser}@${VpsHost}" $remoteScript
 if ($LASTEXITCODE -ne 0) { throw "Deploy remoto falhou (exit $LASTEXITCODE)" }
 
 Write-Host "==> Deploy concluído." -ForegroundColor Green
