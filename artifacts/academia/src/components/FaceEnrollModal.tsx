@@ -131,7 +131,13 @@ export function FaceEnrollModal({
       if (my !== sessionRef.current) return false;
       const name = err instanceof DOMException ? err.name : "";
       const blockedInFrame = window.self !== window.top;
-      if (name === "NotFoundError" || name === "OverconstrainedError") {
+      if (!window.isSecureContext) {
+        // getUserMedia is unavailable on insecure origins (plain HTTP, not
+        // localhost) regardless of any camera permission the user granted.
+        setErrorMsg(
+          "A câmera só funciona em conexões seguras (HTTPS). Este site está sendo acessado por HTTP e o navegador bloqueia o acesso à câmera por segurança.",
+        );
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
         setErrorMsg("Nenhuma câmera foi encontrada neste dispositivo.");
       } else if (blockedInFrame) {
         setErrorMsg(

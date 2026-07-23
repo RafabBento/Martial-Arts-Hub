@@ -84,7 +84,13 @@ export function CameraCaptureModal({
       // When the app runs inside Replit's embedded preview iframe, the browser
       // blocks camera access (Permissions Policy). Opening in a real tab fixes it.
       const blockedInFrame = window.self !== window.top;
-      if (name === "NotFoundError" || name === "OverconstrainedError") {
+      if (!window.isSecureContext) {
+        // getUserMedia is unavailable on insecure origins (plain HTTP, not
+        // localhost) regardless of any camera permission the user granted.
+        setError(
+          "A câmera só funciona em conexões seguras (HTTPS). Este site está sendo acessado por HTTP e o navegador bloqueia o acesso à câmera por segurança. Use a opção de enviar um arquivo.",
+        );
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
         setError("Nenhuma câmera foi encontrada neste dispositivo. Use a opção de enviar um arquivo.");
       } else if (blockedInFrame) {
         setError(
