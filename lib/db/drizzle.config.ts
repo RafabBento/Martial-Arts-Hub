@@ -17,5 +17,7 @@ export default defineConfig({
     "monthly_payments",
     "student_face_descriptors",
     "attendance",
+    "email_verification_tokens",
+    "payment_reminders_sent",
   ],
 });

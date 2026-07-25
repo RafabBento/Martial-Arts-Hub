@@ -2,11 +2,13 @@
 // mês/ano selecionado separando pagos e pendentes, permite alternar o status de
 // pagamento e navegar entre meses. Os dados vêm da API por mês/ano.
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useListPayments, useMarkPayment, useUnmarkPayment, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Users, AlertCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Users, AlertCircle, Loader2, ShieldAlert, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 // Nomes dos meses em pt-BR (índice 0 = Janeiro) usados no cabeçalho de navegação.
 const MONTHS = [
@@ -15,6 +17,9 @@ const MONTHS = [
 ];
 
 export default function Payments() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
+  const [, setLocation] = useLocation();
   const now = new Date();
   // Mês/ano atualmente visualizados (inicia no mês corrente). month é 1-12.
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -28,7 +33,7 @@ export default function Payments() {
   // Lista de pagamentos do mês/ano selecionado.
   const { data: payments, isLoading } = useListPayments(
     { month, year },
-    { query: { queryKey: getListPaymentsQueryKey({ month, year }) } }
+    { query: { queryKey: getListPaymentsQueryKey({ month, year }), enabled: isMaster } }
   );
 
   const markMutation = useMarkPayment();     // marca mensalidade como paga
@@ -40,6 +45,8 @@ export default function Payments() {
 
   // Alterna o status de pagamento de um aluno. Ignora cliques se já houver uma
   // operação em andamento; escolhe marcar ou desmarcar conforme o estado atual.
+  // Alunos isentos (bolsista/unidade parceira) não passam por aqui — o botão
+  // fica desabilitado pra eles.
   const handleToggle = (studentId: number, paid: boolean, name: string) => {
     if (pendingId !== null) return;
     setPendingId(studentId);
@@ -76,6 +83,25 @@ export default function Payments() {
     if (month === 12) { setMonth(1); setYear(y => y + 1); }
     else setMonth(m => m + 1);
   };
+
+  // Acesso restrito: controle de mensalidade é exclusivo para professores e
+  // administradores. Fica depois de todos os hooks acima para não violar as
+  // Rules of Hooks.
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          O controle de mensalidades é exclusivo para professores e administradores.
+          Veja sua própria situação em Meu Perfil.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   // Separa os pagamentos em duas listas: pagos e pendentes, para exibição em seções.
   const paid = payments?.filter(p => p.paid) ?? [];
@@ -183,6 +209,8 @@ type PaymentEntry = {
   paid: boolean;
   paidAt?: string | null;
   notes?: string | null;
+  exempt?: boolean;
+  exemptReason?: "scholarship" | "unit" | null;
   month?: number;
   year?: number;
 };
@@ -218,25 +246,29 @@ function PaymentRow({ entry, month, onToggle, pending, disabled }: {
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-sm truncate">{entry.name}</div>
         <div className="text-xs text-muted-foreground">
-          {entry.paid && paidDate
-            ? <span className="text-green-400">Pago em {paidDate}</span>
-            : vencimento
-              ? <span className={entry.paymentDay && entry.paymentDay < new Date().getDate() && !entry.paid ? "text-primary" : ""}>{vencimento}</span>
-              : <span>Sem dia definido</span>
+          {entry.exempt
+            ? <span className="text-green-400 flex items-center gap-1">
+                <Award size={11} /> Isento ({entry.exemptReason === "scholarship" ? "bolsista" : "unidade parceira"})
+              </span>
+            : entry.paid && paidDate
+              ? <span className="text-green-400">Pago em {paidDate}</span>
+              : vencimento
+                ? <span className={entry.paymentDay && entry.paymentDay < new Date().getDate() && !entry.paid ? "text-primary" : ""}>{vencimento}</span>
+                : <span>Sem dia definido</span>
           }
         </div>
       </div>
 
       <button
         onClick={() => onToggle(entry.studentId, entry.paid, entry.name)}
-        disabled={disabled}
-        className="shrink-0 transition-colors"
-        title={entry.paid ? "Clique para desmarcar" : "Clique para marcar como pago"}
+        disabled={disabled || entry.exempt}
+        className="shrink-0 transition-colors disabled:opacity-60"
+        title={entry.exempt ? "Isento — não requer marcação manual" : entry.paid ? "Clique para desmarcar" : "Clique para marcar como pago"}
       >
         {pending
           ? <Loader2 size={24} className="animate-spin text-muted-foreground" />
           : entry.paid
-            ? <CheckCircle2 size={24} className="text-green-400 hover:text-green-300" />
+            ? <CheckCircle2 size={24} className={entry.exempt ? "text-green-400" : "text-green-400 hover:text-green-300"} />
             : <Circle size={24} className="text-muted-foreground hover:text-foreground" />
         }
       </button>

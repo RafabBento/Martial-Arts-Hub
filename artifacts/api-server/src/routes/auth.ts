@@ -5,14 +5,39 @@
 // =============================================================================
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, studentProfilesTable } from "@workspace/db";
+import { db, usersTable, studentProfilesTable, emailVerificationTokensTable } from "@workspace/db";
 import {
   RegisterBody,
   LoginBody,
+  VerifyEmailBody,
 } from "@workspace/api-zod";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
+import { sendEmail } from "../lib/email";
+import { verificationEmail } from "../lib/emailTemplates";
+import { getSessionUserId } from "../lib/authz";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+// Tokens de verificação de e-mail expiram em 48h.
+const EMAIL_VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000;
+
+// URL pública do front, usada para montar o link de verificação no e-mail.
+const PUBLIC_WEB_URL = process.env["PUBLIC_WEB_URL"] ?? "http://localhost:5173";
+
+// Gera um token de verificação para o usuário, grava no banco e dispara o
+// e-mail (fire-and-forget: falha de envio nunca derruba o registro/reenvio).
+async function issueVerificationEmail(user: { id: number; name: string; email: string }): Promise<void> {
+  const token = randomBytes(32).toString("hex");
+  await db.insert(emailVerificationTokensTable).values({
+    userId: user.id,
+    token,
+    expiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS),
+  });
+  const verifyUrl = `${PUBLIC_WEB_URL}/verify-email?token=${token}`;
+  const { subject, html } = verificationEmail({ name: user.name, verifyUrl });
+  await sendEmail({ to: user.email, subject, html });
+}
 
 // Hash de senha com SHA-256 + salt fixo da aplicação. Determinístico: o mesmo
 // cálculo é usado no login para comparar com o hash armazenado.
@@ -30,6 +55,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     email: user.email,
     role: user.role,
     unit: user.unit,
+    emailVerified: user.emailVerified,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -95,11 +121,19 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   // Emite o token Bearer (base64 de "id:email:timestamp") e já autentica a
-  // sessão para o usuário recém-criado.
+  // sessão para o usuário recém-criado. O cadastro NÃO fica bloqueado
+  // esperando a confirmação do e-mail (soft-gate — ver EmailVerifyBanner no
+  // front); se o envio falhar, o registro segue normalmente mesmo assim.
   const token = Buffer.from(`${user.id}:${user.email}:${Date.now()}`).toString("base64");
 
   (req.session as unknown as Record<string, unknown>).userId = user.id;
   (req.session as unknown as Record<string, unknown>).token = token;
+
+  try {
+    await issueVerificationEmail(user);
+  } catch (err) {
+    logger.error({ err, userId: user.id }, "Falha ao emitir e-mail de verificação no registro");
+  }
 
   res.status(201).json({ user: serializeUser(user), token });
 });
@@ -152,6 +186,58 @@ router.get("/auth/me", async (req, res): Promise<void> => {
   }
 
   res.json(serializeUser(user));
+});
+
+// POST /auth/verify-email — confirma o e-mail a partir do token enviado no
+// cadastro/reenvio. Token é de uso único: apagado após a verificação.
+router.post("/auth/verify-email", async (req, res): Promise<void> => {
+  const parsed = VerifyEmailBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(emailVerificationTokensTable)
+    .where(eq(emailVerificationTokensTable.token, parsed.data.token));
+
+  if (!row || row.expiresAt.getTime() < Date.now()) {
+    res.status(400).json({ error: "Link inválido ou expirado. Solicite um novo e-mail de confirmação." });
+    return;
+  }
+
+  await db.update(usersTable).set({ emailVerified: true }).where(eq(usersTable.id, row.userId));
+  // Remove todos os tokens do usuário (o usado e quaisquer outros pendentes).
+  await db.delete(emailVerificationTokensTable).where(eq(emailVerificationTokensTable.userId, row.userId));
+
+  res.json({ message: "E-mail confirmado com sucesso!" });
+});
+
+// POST /auth/resend-verification — reenvia o e-mail de confirmação para o
+// usuário autenticado (self). Invalida tokens antigos antes de gerar um novo.
+router.post("/auth/resend-verification", async (req, res): Promise<void> => {
+  const userId = getSessionUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  if (user.emailVerified) {
+    res.json({ message: "E-mail já confirmado." });
+    return;
+  }
+
+  await db.delete(emailVerificationTokensTable).where(eq(emailVerificationTokensTable.userId, user.id));
+  await issueVerificationEmail(user);
+
+  res.json({ message: "E-mail de confirmação reenviado." });
 });
 
 export default router;

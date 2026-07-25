@@ -8,11 +8,19 @@ import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, monthlyPaymentsTable, usersTable, studentProfilesTable } from "@workspace/db";
 import { ListPaymentsQueryParams, MarkPaymentParams, UnmarkPaymentParams, MarkPaymentBody } from "@workspace/api-zod";
+import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
 const router: IRouter = Router();
 
 // GET /payments — para um mês/ano, retorna todos os alunos com flag de pago.
+// Um aluno (não-mestre) só recebe a própria linha; mestre vê todo mundo.
 router.get("/payments", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
   const query = ListPaymentsQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
@@ -28,6 +36,8 @@ router.get("/payments", async (req, res): Promise<void> => {
       name: usersTable.name,
       profilePhotoUrl: usersTable.profilePhotoUrl,
       paymentDay: usersTable.paymentDay,
+      unit: usersTable.unit,
+      scholarship: studentProfilesTable.scholarship,
     })
     .from(usersTable)
     .innerJoin(studentProfilesTable, eq(usersTable.id, studentProfilesTable.userId))
@@ -48,18 +58,29 @@ router.get("/payments", async (req, res): Promise<void> => {
   // Indexa por aluno para cruzar com a lista completa de alunos.
   const paymentMap = new Map(payments.map(p => [p.studentId, p]));
 
+  // Não-mestre só enxerga a própria linha (mesmo formato de array, sem mudar
+  // o contrato consumido pelo front).
+  const visibleStudents = isMasterRole(requester.role)
+    ? students
+    : students.filter(s => s.userId === requester.id);
+
   // Combina: paid=true quando existe registro; senão os campos de pagamento ficam nulos.
+  // Isento (bolsista ou unidade parceira) conta sempre como pago, sem precisar
+  // de linha em monthly_payments nem de e-mail de cobrança.
   res.json(
-    students.map(s => {
+    visibleStudents.map(s => {
       const p = paymentMap.get(s.userId);
+      const exempt = s.unit !== "matriz" || s.scholarship;
       return {
         studentId: s.userId,
         name: s.name,
         profilePhotoUrl: s.profilePhotoUrl ?? null,
         paymentDay: s.paymentDay ?? null,
-        paid: !!p,
+        paid: exempt || !!p,
         paidAt: p?.paidAt?.toISOString() ?? null,
         notes: p?.notes ?? null,
+        exempt,
+        exemptReason: s.scholarship ? "scholarship" : s.unit !== "matriz" ? "unit" : null,
         month,
         year,
       };
@@ -68,7 +89,18 @@ router.get("/payments", async (req, res): Promise<void> => {
 });
 
 // PUT /payments/:studentId/:year/:month — marca a mensalidade como paga.
+// Master-only: só professor/admin confirma o recebimento de um pagamento.
 router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const params = MarkPaymentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -79,13 +111,10 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
   const bodyParse = MarkPaymentBody.safeParse(req.body);
   const notes = bodyParse.success ? (bodyParse.data?.notes ?? null) : null;
 
-  // Identifica quem está registrando o pagamento, para gravar paidByName (auditoria).
-  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
-  const [requester] = requesterId
-    ? await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, requesterId))
-    : [{ name: null }];
-
   const { studentId, month, year } = params.data;
+
+  // Nome de quem está registrando o pagamento, para auditoria (paidByName).
+  const [requesterUser] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, requester.id));
 
   // Insere o registro de pagamento. onConflictDoNothing torna a operação
   // idempotente: marcar de novo o mesmo (aluno, mês, ano) não duplica nem falha.
@@ -96,7 +125,7 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
       month,
       year,
       paidAt: new Date(),
-      paidByName: requester?.name ?? null,
+      paidByName: requesterUser?.name ?? null,
       notes: notes ?? null,
     })
     .onConflictDoNothing();
@@ -132,7 +161,18 @@ router.put("/payments/:studentId/:year/:month", async (req, res): Promise<void> 
 });
 
 // DELETE /payments/:studentId/:year/:month — desmarca (remove) a mensalidade.
+// Master-only.
 router.delete("/payments/:studentId/:year/:month", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const params = UnmarkPaymentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

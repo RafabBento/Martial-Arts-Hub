@@ -26,6 +26,7 @@ import {
   useUpdateUser,
   useUpdateStudent,
   useGetStudent,
+  useResendVerification,
   getListUsersQueryKey,
   getGetStudentQueryKey,
   registerProfilePhoto,
@@ -169,6 +170,7 @@ export default function ProfileScreen() {
   // Mutações para atualizar dados do usuário e do aluno (plano Bollacha).
   const updateUserMutation = useUpdateUser();
   const updateStudentMutation = useUpdateStudent();
+  const resendVerificationMutation = useResendVerification();
 
   // Professores/admins têm permissões e exibição diferentes dos alunos.
   const isTeacherOrAdmin = user?.role === "teacher" || user?.role === "admin";
@@ -437,6 +439,33 @@ export default function ProfileScreen() {
             <Text style={[styles.birthdayText, { color: "#fbbf24", fontFamily: "Inter_600SemiBold" }]}>
               Feliz aniversário, {user.name.split(" ")[0]}! 🎂 A academia inteira te deseja um ótimo dia!
             </Text>
+          </View>
+        )}
+
+        {/* Confirme seu e-mail — soft-gate, nunca bloqueia nenhuma função */}
+        {!user.emailVerified && (
+          <View style={[styles.birthdayBanner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+            <Ionicons name="mail-unread-outline" size={20} color={colors.primary} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <Text style={[styles.birthdayText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                Confirme seu e-mail para garantir o acesso à sua conta.
+              </Text>
+              <TouchableOpacity
+                style={[styles.editBtn, { borderColor: colors.primary, alignSelf: "flex-start" }]}
+                disabled={resendVerificationMutation.isPending}
+                onPress={() => {
+                  resendVerificationMutation.mutate(undefined, {
+                    onSuccess: () => showToast("E-mail de confirmação reenviado!"),
+                    onError: () => showToast("Erro ao reenviar e-mail"),
+                  });
+                }}
+              >
+                {resendVerificationMutation.isPending
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <Text style={[styles.editBtnText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>Reenviar e-mail</Text>
+                }
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 

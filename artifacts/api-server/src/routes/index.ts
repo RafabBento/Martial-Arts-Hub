@@ -16,6 +16,7 @@ import statsRouter from "./stats";
 import paymentsRouter from "./payments";
 import storageRouter from "./storage";
 import faceRouter from "./face";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(statsRouter);
 router.use(paymentsRouter);
 router.use(storageRouter);
 router.use(faceRouter);
+router.use(adminRouter);
 
 export default router;

@@ -200,7 +200,7 @@ export default function StudentDetailScreen() {
   };
 
   // Atualiza um campo de graduação do aluno (faixa, cor ou grau) e atualiza caches.
-  const handleGradeUpdate = (field: string, value: string | number | null) => {
+  const handleGradeUpdate = (field: string, value: string | number | boolean | null) => {
     updateMutation.mutate(
       { id: studentId, data: { [field]: value } as any },
       {
@@ -235,6 +235,41 @@ export default function StudentDetailScreen() {
   // Padding superior/inferior: fixos no web, áreas seguras no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  // Acesso restrito: o detalhe de outros alunos é exclusivo para professores
+  // e administradores — um aluno vendo o próprio perfil usa a aba Perfil.
+  if (!isMaster) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Perfil do Aluno</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.restricted}>
+          <View style={[styles.restrictedIcon, { backgroundColor: colors.primary + "18" }]}>
+            <Ionicons name="shield-outline" size={36} color={colors.primary} />
+          </View>
+          <Text style={[styles.restrictedTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            Acesso Restrito
+          </Text>
+          <Text style={[styles.restrictedSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            O detalhe de outros alunos é exclusivo para professores e administradores. Veja seus próprios dados na aba Perfil.
+          </Text>
+          <TouchableOpacity
+            style={[styles.backBtn2, { borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)")}
+          >
+            <Text style={[styles.backBtn2Text, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              Voltar ao Painel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // Enquanto o aluno carrega, exibe apenas o cabeçalho e um spinner.
   if (isLoading) {
@@ -320,6 +355,30 @@ export default function StudentDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* Bolsista: toggle permanente, master-only. Isenta o aluno da
+            mensalidade todo mês, sem precisar de e-mail de cobrança. */}
+        {isMaster ? (
+          <TouchableOpacity
+            style={[styles.faceBtn, {
+              backgroundColor: student.scholarship ? colors.success : "transparent",
+              borderColor: student.scholarship ? colors.success : colors.border,
+              borderWidth: 1,
+            }]}
+            onPress={() => handleGradeUpdate("scholarship", !student.scholarship)}
+            disabled={updateMutation.isPending}
+          >
+            <Ionicons name="ribbon-outline" size={16} color={student.scholarship ? "#fff" : colors.mutedForeground} />
+            <Text style={[styles.faceBtnText, { color: student.scholarship ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              {student.scholarship ? "Bolsista" : "Marcar como bolsista"}
+            </Text>
+          </TouchableOpacity>
+        ) : student.scholarship ? (
+          <View style={styles.faceRow}>
+            <Ionicons name="ribbon-outline" size={18} color={colors.success} />
+            <Text style={[styles.faceText, { color: colors.success, fontFamily: "Inter_600SemiBold" }]}>Bolsista</Text>
+          </View>
+        ) : null}
 
         {/* Toggle modalidade */}
         {showToggle && (
@@ -792,4 +851,11 @@ const styles = StyleSheet.create({
   gradeItemSwatch: { width: 32, height: 14, borderRadius: 7, borderWidth: 1, overflow: "hidden", flexDirection: "row" },
   gradeItemSecondary: { width: 10, position: "absolute", right: 0, top: 0, bottom: 0 },
   gradeItemLabel: { flex: 1, fontSize: 14 },
+
+  restricted: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
+  restrictedIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  restrictedTitle: { fontSize: 20, letterSpacing: 0.5 },
+  restrictedSub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  backBtn2: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
+  backBtn2Text: { fontSize: 14 },
 });

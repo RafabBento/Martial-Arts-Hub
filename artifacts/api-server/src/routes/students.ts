@@ -15,6 +15,7 @@ import {
   UpdateStudentBody,
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
+import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields } from "../lib/authz";
 
 // Unidades (filiais) válidas da academia.
 type Unit = "matriz" | "panobianco" | "upfitness";
@@ -22,23 +23,23 @@ type Unit = "matriz" | "panobianco" | "upfitness";
 const router: IRouter = Router();
 
 // GET /students — lista alunos com filtros por modalidade/unidade/busca e
-// presenças agregadas por modalidade.
+// presenças agregadas por modalidade. Master-only: a lista completa de alunos
+// não deve ficar visível para outros alunos.
 router.get("/students", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const query = ListStudentsQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
     return;
-  }
-
-  // Descobre o papel/unidade de quem está pedindo — alunos só veem a própria
-  // unidade (regra de autorização aplicada mais abaixo nas conditions).
-  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
-  let requesterUnit: Unit | null = null;
-  let requesterRole: string | null = null;
-  if (requesterId) {
-    const [requester] = await db.select({ role: usersTable.role, unit: usersTable.unit }).from(usersTable).where(eq(usersTable.id, requesterId));
-    requesterRole = requester?.role ?? null;
-    requesterUnit = (requester?.unit ?? null) as Unit | null;
   }
 
   // Filtros acumulados do WHERE. Base: só usuários com papel "student".
@@ -54,10 +55,8 @@ router.get("/students", async (req, res): Promise<void> => {
     conditions.push(eq(studentProfilesTable.modalityJiu, true));
   }
 
-  // Students auto-filtered to their unit; teachers/admins use optional query param
-  if (requesterRole === "student" && requesterUnit) {
-    conditions.push(eq(usersTable.unit, requesterUnit));
-  } else if (query.data.unit) {
+  // Filtro opcional de unidade (só professor/admin chega aqui).
+  if (query.data.unit) {
     conditions.push(eq(usersTable.unit, query.data.unit as Unit));
   }
 
@@ -73,6 +72,7 @@ router.get("/students", async (req, res): Promise<void> => {
       modalityThai: studentProfilesTable.modalityThai,
       modalityJiu: studentProfilesTable.modalityJiu,
       bollacha: studentProfilesTable.bollacha,
+      scholarship: studentProfilesTable.scholarship,
       thaiGrade: studentProfilesTable.thaiGrade,
       jiuGrade: studentProfilesTable.jiuGrade,
       jiuDegree: studentProfilesTable.jiuDegree,
@@ -133,6 +133,7 @@ router.get("/students", async (req, res): Promise<void> => {
     modalityThai: s.modalityThai,
     modalityJiu: s.modalityJiu,
     bollacha: s.bollacha,
+    scholarship: s.scholarship,
     thaiGrade: s.thaiGrade ?? null,
     jiuGrade: s.jiuGrade ?? null,
     jiuDegree: s.jiuDegree ?? null,
@@ -146,10 +147,21 @@ router.get("/students", async (req, res): Promise<void> => {
 });
 
 // GET /students/:id — detalhe de um aluno com suas contagens de presença.
+// Self ou master (o próprio aluno precisa continuar vendo o próprio perfil).
 router.get("/students/:id", async (req, res): Promise<void> => {
   const params = GetStudentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role) && requester.id !== params.data.id) {
+    res.status(403).json({ error: "Você só pode ver os próprios dados" });
     return;
   }
 
@@ -165,6 +177,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
       modalityThai: studentProfilesTable.modalityThai,
       modalityJiu: studentProfilesTable.modalityJiu,
       bollacha: studentProfilesTable.bollacha,
+      scholarship: studentProfilesTable.scholarship,
       thaiGrade: studentProfilesTable.thaiGrade,
       jiuGrade: studentProfilesTable.jiuGrade,
       jiuDegree: studentProfilesTable.jiuDegree,
@@ -208,6 +221,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     modalityThai: student.modalityThai,
     modalityJiu: student.modalityJiu,
     bollacha: student.bollacha,
+    scholarship: student.scholarship,
     thaiGrade: student.thaiGrade ?? null,
     jiuGrade: student.jiuGrade ?? null,
     jiuDegree: student.jiuDegree ?? null,
@@ -220,7 +234,8 @@ router.get("/students/:id", async (req, res): Promise<void> => {
   });
 });
 
-// PATCH /students/:id — atualiza o perfil de treino de um aluno.
+// PATCH /students/:id — atualiza o perfil de treino de um aluno. Self ou
+// master; self-edit de aluno não pode alterar campos de graduação.
 router.patch("/students/:id", async (req, res): Promise<void> => {
   const params = UpdateStudentParams.safeParse(req.params);
   if (!params.success) {
@@ -234,17 +249,22 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Descobre, pela sessão, se quem faz a alteração é um aluno (regra de authz).
-  const requesterId = (req.session as unknown as Record<string, unknown>).userId as number | undefined;
-  const requesterIsStudent = requesterId
-    ? (await db.select({ role: usersTable.role }).from(usersTable).where(eq(usersTable.id, requesterId)))[0]?.role === "student"
-    : false;
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  const isMaster = isMasterRole(requester.role);
+  if (!isMaster && requester.id !== params.data.id) {
+    res.status(403).json({ error: "Você só pode editar os próprios dados" });
+    return;
+  }
 
-  // Authz: alunos NÃO podem alterar campos de graduação — eles são removidos do
-  // update quando o requester é aluno (apenas professor/admin gradua).
-  const GRADE_FIELDS = ["thaiGrade", "thaiGradeColor", "jiuGrade", "jiuGradeColor", "jiuDegree"] as const;
-  const updateData = requesterIsStudent
-    ? Object.fromEntries(Object.entries(body.data).filter(([k]) => !GRADE_FIELDS.includes(k as typeof GRADE_FIELDS[number])))
+  // Authz: alunos NÃO podem alterar campos de graduação nem se autodeclarar
+  // bolsista — removidos do update quando o requester é aluno (só
+  // professor/admin gradua ou concede isenção).
+  const updateData = !isMaster
+    ? stripFields(body.data, [...GRADE_FIELDS, "scholarship"])
     : body.data;
 
   // Se sobrou algo para atualizar, executa o UPDATE; caso contrário (aluno
@@ -270,6 +290,7 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     modalityThai: profile.modalityThai,
     modalityJiu: profile.modalityJiu,
     bollacha: profile.bollacha,
+    scholarship: profile.scholarship,
     thaiGrade: profile.thaiGrade ?? null,
     jiuGrade: profile.jiuGrade ?? null,
     jiuDegree: profile.jiuDegree ?? null,

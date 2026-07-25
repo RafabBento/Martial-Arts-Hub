@@ -13,8 +13,8 @@
 
 import { useState } from "react";
 import { useListStudents, getListStudentsQueryKey } from "@workspace/api-client-react";
-import { Link } from "wouter";
-import { Search, Users, ChevronRight, MapPin } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Search, Users, ChevronRight, MapPin, ShieldAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "../contexts/AuthContext";
@@ -103,6 +103,7 @@ export default function Students() {
   // de informações extras como a unidade no cartão do aluno.
   const { user } = useAuth();
   const isMaster = user?.role === "teacher" || user?.role === "admin";
+  const [, setLocation] = useLocation();
 
   // ----------------------------------------------------------
   // Estados dos filtros
@@ -141,8 +142,28 @@ export default function Students() {
   // ----------------------------------------------------------
   const { data: students, isLoading } = useListStudents(
     queryParams,
-    { query: { queryKey: getListStudentsQueryKey(queryParams) } }
+    { query: { queryKey: getListStudentsQueryKey(queryParams), enabled: isMaster } }
   );
+
+  // Acesso restrito: a lista de alunos é exclusiva para professores e
+  // administradores (o backend já bloqueia isso; aqui é só a mensagem certa
+  // em vez de uma tela quebrada/vazia). Fica depois de todos os hooks acima
+  // para não violar as Rules of Hooks.
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          A lista de alunos é exclusiva para professores e administradores.
+          Veja seus próprios dados em Meu Perfil.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   // Opções do filtro de modalidade renderizadas como botões
   const modalityOptions = [

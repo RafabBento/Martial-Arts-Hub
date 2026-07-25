@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useListStudents } from "@workspace/api-client-react";
+import { useListStudents, getListStudentsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { MenuButton } from "@/components/MenuButton";
@@ -49,13 +49,50 @@ export default function StudentsScreen() {
   const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   // Busca os alunos no servidor (a busca por texto é feita server-side).
-  const { data: allStudents, isLoading, refetch } = useListStudents({ search: search || undefined });
+  const { data: allStudents, isLoading, refetch } = useListStudents(
+    { search: search || undefined },
+    { query: { enabled: isMaster, queryKey: getListStudentsQueryKey({ search: search || undefined }) } }
+  );
 
   // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
   // Padding superior: fixo no web, área segura no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  // Alunos comuns não têm acesso: exibe a tela de acesso restrito (mesmo
+  // padrão de app/(tabs)/attendance.tsx).
+  if (!isMaster) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <MenuButton />
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Alunos</Text>
+          </View>
+        </View>
+        <View style={styles.restricted}>
+          <View style={[styles.restrictedIcon, { backgroundColor: colors.primary + "18" }]}>
+            <Ionicons name="shield-outline" size={36} color={colors.primary} />
+          </View>
+          <Text style={[styles.restrictedTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            Acesso Restrito
+          </Text>
+          <Text style={[styles.restrictedSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            A lista de alunos é exclusiva para professores e administradores. Veja seus próprios dados em Meu Perfil.
+          </Text>
+          <TouchableOpacity
+            style={[styles.backBtn2, { borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)")}
+          >
+            <Text style={[styles.backBtn2Text, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              Voltar ao Painel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // Filtragem local por modalidade e unidade aplicada sobre a lista retornada.
   const filtered = (allStudents ?? []).filter(s => {
@@ -205,4 +242,10 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingTop: 8 },
   empty: { alignItems: "center", gap: 12, paddingVertical: 60 },
   emptyText: { fontSize: 15 },
+  restricted: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
+  restrictedIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  restrictedTitle: { fontSize: 20, letterSpacing: 0.5 },
+  restrictedSub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  backBtn2: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
+  backBtn2Text: { fontSize: 14 },
 });

@@ -10,6 +10,7 @@ export interface StudentProfileUpdate {
   modalityThai?: boolean;
   modalityJiu?: boolean;
   bollacha?: boolean;
+  scholarship?: boolean;
   thaiGrade?: string;
   jiuGrade?: string;
   thaiGradeColor?: string;

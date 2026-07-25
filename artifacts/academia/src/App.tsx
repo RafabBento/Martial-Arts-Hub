@@ -11,12 +11,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { PaymentReminder } from "./components/PaymentReminder";
+import { EmailVerifyBanner } from "./components/EmailVerifyBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { Layout } from "./components/Layout";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import StudentDetail from "./pages/StudentDetail";
@@ -110,7 +112,9 @@ function Router() {
       <Route path="/" component={() => <PublicRoute component={Home} />} />
       <Route path="/login" component={() => <PublicRoute component={Login} />} />
       <Route path="/register" component={() => <PublicRoute component={Register} />} />
-      
+      {/* Rota "crua": funciona logado ou deslogado, então não usa Protected/PublicRoute. */}
+      <Route path="/verify-email" component={VerifyEmail} />
+
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/students" component={() => <ProtectedRoute component={Students} />} />
       <Route path="/students/:id" component={() => <ProtectedRoute component={StudentDetail} />} />
@@ -139,6 +143,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          <EmailVerifyBanner />
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <Router />
           </WouterRouter>

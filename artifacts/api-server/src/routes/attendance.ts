@@ -2,12 +2,12 @@
 // routes/attendance.ts — Rotas de presença (attendance).
 // Lista presenças com filtros, cria registros avulsos, remove registros e
 // expõe o endpoint de presença em massa (/attendance/bulk) usado pelo
-// reconhecimento facial. O bulk é restrito a professores/admin e deriva as
-// modalidades do perfil de cada aluno (nunca do payload do cliente).
+// reconhecimento facial. O bulk é restrito a professores/admin; a modalidade é
+// escolhida pelo professor (uma só por importação), nunca derivada do aluno.
 // =============================================================================
 import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
-import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
+import { db, attendanceTable, usersTable, trainingSessionsTable } from "@workspace/db";
 import {
   ListAttendanceQueryParams,
   CreateAttendanceBody,
@@ -103,9 +103,10 @@ router.post("/attendance", async (req, res): Promise<void> => {
   });
 });
 
-// POST /attendance/bulk — registra presença de vários alunos de uma vez,
-// tipicamente após o reconhecimento facial da foto da equipe. Cria/reaproveita
-// a sessão do dia por modalidade e evita marcações duplicadas.
+// POST /attendance/bulk — registra presença de vários alunos de uma vez numa
+// única modalidade (escolhida pelo professor para a foto da equipe), tipicamente
+// após o reconhecimento facial. Cria/reaproveita a sessão do dia dessa
+// modalidade e evita marcações duplicadas.
 router.post("/attendance/bulk", async (req, res): Promise<void> => {
   // Authz: bulk attendance (facial recognition) is restricted to teachers/admins.
   // (Authz: presença em massa é restrita a professores/admin.)
@@ -128,112 +129,81 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
     return;
   }
 
-  const { photoUrl, students } = body.data;
+  const { photoUrl, modality, students } = body.data;
   // Trust the authenticated requester as the session owner, not the client payload.
   // (O dono da sessão é o professor autenticado — nunca um id vindo do cliente.)
   const teacherId = requester.id;
 
   // Janela do dia de hoje (00:00 até 23:59:59.999), usada para achar/criar a
-  // sessão "de hoje" de cada modalidade.
+  // sessão "de hoje" da modalidade escolhida.
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-  // Cache das sessões de hoje por modalidade, criadas sob demanda (lazy).
-  const sessionByModality = new Map<"thai" | "jiu", { id: number; ids: number[] }>();
+  // Sessão de hoje para a modalidade escolhida: reaproveita as existentes do dia
+  // (guardando todos os ids para o dedupe) ou cria uma nova se não houver.
+  const todays = await db
+    .select({ id: trainingSessionsTable.id })
+    .from(trainingSessionsTable)
+    .where(
+      and(
+        eq(trainingSessionsTable.modality, modality),
+        gte(trainingSessionsTable.sessionDate, startOfDay),
+        lte(trainingSessionsTable.sessionDate, endOfDay),
+      ),
+    )
+    .orderBy(sql`${trainingSessionsTable.sessionDate} DESC`);
 
-  // Garante uma sessão de hoje para a modalidade: reaproveita as existentes do
-  // dia (guardando todos os ids para o dedupe) ou cria uma nova se não houver.
-  async function ensureSession(modality: "thai" | "jiu"): Promise<{ id: number; ids: number[] }> {
-    const cached = sessionByModality.get(modality);
-    if (cached) return cached;
-
-    const todays = await db
-      .select({ id: trainingSessionsTable.id })
-      .from(trainingSessionsTable)
-      .where(
-        and(
-          eq(trainingSessionsTable.modality, modality),
-          gte(trainingSessionsTable.sessionDate, startOfDay),
-          lte(trainingSessionsTable.sessionDate, endOfDay),
-        ),
-      )
-      .orderBy(sql`${trainingSessionsTable.sessionDate} DESC`);
-
-    let ids = todays.map((s) => s.id);
-    let primaryId: number;
-    if (ids.length > 0) {
-      primaryId = ids[0];
-    } else {
-      const [createdSession] = await db
-        .insert(trainingSessionsTable)
-        .values({
-          modality,
-          sessionDate: now,
-          description: "Presença via reconhecimento facial",
-          teacherId,
-        })
-        .returning({ id: trainingSessionsTable.id });
-      primaryId = createdSession.id;
-      ids = [createdSession.id];
-    }
-
-    const entry = { id: primaryId, ids };
-    sessionByModality.set(modality, entry);
-    return entry;
+  let sessionIds = todays.map((s) => s.id);
+  let sessionId: number;
+  if (sessionIds.length > 0) {
+    sessionId = sessionIds[0];
+  } else {
+    const [createdSession] = await db
+      .insert(trainingSessionsTable)
+      .values({
+        modality,
+        sessionDate: now,
+        description: "Presença via reconhecimento facial",
+        teacherId,
+      })
+      .returning({ id: trainingSessionsTable.id });
+    sessionId = createdSession.id;
+    sessionIds = [createdSession.id];
   }
 
   // Contadores do resultado: quantas presenças foram criadas e quantas puladas.
   let created = 0;
   let skipped = 0;
 
-  for (const student of students) {
-    // Derive modalities from the student's registration, never from the client
-    // payload — attendance must follow each student's registered modalities.
-    // (As modalidades vêm SEMPRE do cadastro do aluno, nunca do payload.)
-    const [profile] = await db
-      .select({ thai: studentProfilesTable.modalityThai, jiu: studentProfilesTable.modalityJiu })
-      .from(studentProfilesTable)
-      .where(eq(studentProfilesTable.userId, student.studentId));
-    if (!profile) {
+  for (const studentId of students) {
+    // Dedupe: a student should not be marked twice in the same modality today.
+    // (Evita marcar o mesmo aluno duas vezes na mesma modalidade no dia.)
+    const existing = await db
+      .select({ id: attendanceTable.id })
+      .from(attendanceTable)
+      .where(
+        and(
+          eq(attendanceTable.studentId, studentId),
+          inArray(attendanceTable.sessionId, sessionIds),
+        ),
+      )
+      .limit(1);
+
+    // Já marcado hoje nessa modalidade → pula (incrementa skipped).
+    if (existing.length > 0) {
       skipped += 1;
       continue;
     }
-    // Constrói a lista de modalidades em que o aluno está inscrito.
-    const modalities: ("thai" | "jiu")[] = [];
-    if (profile.thai) modalities.push("thai");
-    if (profile.jiu) modalities.push("jiu");
-    for (const modality of modalities) {
-      const session = await ensureSession(modality);
 
-      // Dedupe: a student should not be marked twice in the same modality today.
-      // (Evita marcar o mesmo aluno duas vezes na mesma modalidade no dia.)
-      const existing = await db
-        .select({ id: attendanceTable.id })
-        .from(attendanceTable)
-        .where(
-          and(
-            eq(attendanceTable.studentId, student.studentId),
-            inArray(attendanceTable.sessionId, session.ids),
-          ),
-        )
-        .limit(1);
-
-      // Já marcado hoje nessa modalidade → pula (incrementa skipped).
-      if (existing.length > 0) {
-        skipped += 1;
-        continue;
-      }
-
-      // Registra a presença na sessão do dia, marcando faceRecognized=true.
-      await db.insert(attendanceTable).values({
-        sessionId: session.id,
-        studentId: student.studentId,
-        postTrainingPhotoUrl: photoUrl,
-        faceRecognized: true,
-      });
-      created += 1;
-    }
+    // Registra a presença na sessão do dia, marcando faceRecognized=true.
+    await db.insert(attendanceTable).values({
+      sessionId,
+      studentId,
+      postTrainingPhotoUrl: photoUrl,
+      faceRecognized: true,
+    });
+    created += 1;
   }
 
   res.json({ created, skipped });

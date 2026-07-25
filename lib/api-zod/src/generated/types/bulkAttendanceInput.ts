@@ -5,10 +5,13 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
-import type { BulkAttendanceStudent } from "./bulkAttendanceStudent";
+import type { BulkAttendanceInputModality } from "./bulkAttendanceInputModality";
 
 export interface BulkAttendanceInput {
   teacherId: number;
+  /** Single modality chosen by the teacher for this team photo; applied to every student in the list. */
+  modality: BulkAttendanceInputModality;
   photoUrl?: string;
-  students: BulkAttendanceStudent[];
+  /** Student user ids to mark present. */
+  students: number[];
 }

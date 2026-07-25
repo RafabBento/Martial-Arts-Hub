@@ -112,16 +112,6 @@ function fmtTime(hour: number, minute: number) {
   return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
 }
 
-// Extrai as modalidades de um TeamMatch como array.
-// Um aluno pode treinar Thai, Jiu ou ambos — essa função
-// retorna apenas as modalidades que ele efetivamente pratica.
-function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
-  const list: ("thai" | "jiu")[] = [];
-  if (m.modalityThai) list.push("thai");
-  if (m.modalityJiu)  list.push("jiu");
-  return list;
-}
-
 // Converte um objeto de aluno (da lista de students) para o
 // formato TeamMatch usado pela lista de identificados.
 // distance: 0 indica que foi adicionado manualmente (não por IA)
@@ -187,6 +177,10 @@ export default function Attendance() {
   const [autoCreating, setAutoCreating]     = useState(false);
   const [manualAdds, setManualAdds]         = useState<TeamMatch[]>([]);
   const [teamAddStudent, setTeamAddStudent] = useState("");
+  // Modalidade escolhida manualmente pelo mestre para a foto da equipe — sobrepõe
+  // a detecção automática por horário e é enviada como um único valor pro bulk
+  // attendance (evita marcar presença em modalidades que não aconteceram hoje).
+  const [teamModality, setTeamModality]     = useState<"thai" | "jiu" | "">("");
 
   // Ref para o input de arquivo oculto da foto da equipe.
   // Usamos ref em vez de estado para controlar o input diretamente
@@ -249,6 +243,15 @@ export default function Attendance() {
       setSelectedSession(String(todaySession.id));
     }
   }, [todaySession, selectedSession]);
+
+  // Pré-preenche a modalidade da foto da equipe com a aula detectada pelo
+  // horário, mas o mestre sempre pode trocar manualmente (ex: aulas que se
+  // sobrepõem, ou lançamento de presença fora do horário padrão).
+  useEffect(() => {
+    if (currentClass && !teamModality) {
+      setTeamModality(currentClass.modality);
+    }
+  }, [currentClass, teamModality]);
 
   // ----------------------------------------------------------
   // handleAutoSession — cria ou seleciona a sessão de hoje
@@ -493,6 +496,10 @@ export default function Attendance() {
   // ----------------------------------------------------------
   const handleRegisterAll = async () => {
     if (!user) return;
+    if (!teamModality) {
+      toast({ title: "Escolha a modalidade da foto antes de confirmar", variant: "destructive" });
+      return;
+    }
     const toRegister = [...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) {
       toast({ title: "Todos já estão registrados!" });
@@ -502,8 +509,9 @@ export default function Attendance() {
     try {
       const result = await bulkAttendance({
         teacherId: user.id,
+        modality: teamModality,
         photoUrl: teamPhotoUrl ?? undefined,
-        students: toRegister.map(m => ({ studentId: m.studentId, modalities: modalitiesOf(m) })),
+        students: toRegister.map(m => m.studentId),
       });
 
       // Atualiza o Set local com todos os IDs recém-registrados
@@ -631,10 +639,12 @@ export default function Attendance() {
   })();
 
   // Candidatos para adicionar manualmente à lista da foto:
-  // todos os alunos que ainda não estão na lista (nem como
-  // identificado pela IA, nem como adicionado manualmente,
-  // nem como já confirmado)
+  // alunos que praticam a modalidade escolhida e ainda não estão na lista
+  // (nem como identificado pela IA, nem como adicionado manualmente, nem
+  // como já confirmado) — evita marcar presença numa modalidade que o
+  // aluno nem treina.
   const teamAddCandidates = (Array.isArray(students) ? students : []).filter(s =>
+    (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true) &&
     !matches.some(m => m.studentId === s.userId) &&
     !manualAdds.some(m => m.studentId === s.userId) &&
     !confirmedIds.has(s.userId)
@@ -669,8 +679,8 @@ export default function Attendance() {
       <div>
         <h1 className="text-3xl font-black tracking-tight uppercase">Controle de Presença</h1>
         <p className="text-muted-foreground mt-1">
-          Envie a foto pós-treino da equipe — o reconhecimento facial é feito no servidor
-          e marca a presença em todas as modalidades de cada aluno
+          Escolha a modalidade e envie a foto pós-treino da equipe — o reconhecimento facial
+          é feito no servidor e marca a presença só na modalidade escolhida
         </p>
       </div>
 
@@ -800,9 +810,33 @@ export default function Attendance() {
                 <div>
                   <h3 className="font-bold text-sm uppercase tracking-wide">Foto Pós-Treino</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Envie a foto do grupo — o servidor identifica cada aluno e registra a presença
-                    em todas as modalidades que ele treina
+                    Escolha a modalidade da aula e envie a foto do grupo — o servidor identifica cada
+                    aluno e registra a presença só nessa modalidade
                   </p>
+                </div>
+
+                {/* Seletor de modalidade da foto — obrigatório antes de enviar.
+                    Pré-preenchido pela aula detectada no horário, mas sempre editável
+                    (ex: aulas que se sobrepõem, ou lançamento fora do horário padrão). */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={teamModality === "thai" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setTeamModality("thai")}
+                    data-testid="button-team-modality-thai"
+                  >
+                    Muay Thai
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={teamModality === "jiu" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setTeamModality("jiu")}
+                    data-testid="button-team-modality-jiu"
+                  >
+                    Jiu-Jitsu
+                  </Button>
                 </div>
 
                 {/* Input de arquivo oculto — ativado pelo botão abaixo via ref */}
@@ -816,7 +850,7 @@ export default function Attendance() {
                 />
                 <Button
                   onClick={() => teamInputRef.current?.click()}
-                  disabled={scanStatus === "uploading" || scanStatus === "recognizing"}
+                  disabled={!teamModality || scanStatus === "uploading" || scanStatus === "recognizing"}
                   className="w-full"
                   size="lg"
                   data-testid="button-team-photo"
@@ -826,6 +860,9 @@ export default function Attendance() {
                     : <><ImagePlus size={16} className="mr-2" />{teamPreviewUrl ? "Trocar foto" : "Enviar foto do grupo"}</>
                   }
                 </Button>
+                {!teamModality && (
+                  <p className="text-xs text-primary text-center">⚠ Escolha a modalidade antes de enviar a foto</p>
+                )}
 
                 {/* Mensagem de erro quando nenhum aluno foi identificado */}
                 {scanStatus === "notfound" && (
@@ -847,7 +884,6 @@ export default function Attendance() {
                         {[...matches, ...manualAdds].map(m => {
                           const alreadyIn = confirmedIds.has(m.studentId);
                           const isManual  = manualAdds.some(a => a.studentId === m.studentId);
-                          const mods      = modalitiesOf(m);
                           return (
                             <div
                               key={m.studentId}
@@ -869,16 +905,15 @@ export default function Attendance() {
                               <div className="flex-1 min-w-0">
                                 <div className="font-semibold text-sm">{m.name}</div>
                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                  {/* Selos de modalidade */}
-                                  {mods.map(mod => (
-                                    <span key={mod} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                      mod === "thai"
-                                        ? "bg-red-500/20 text-red-400"
-                                        : "bg-blue-500/20 text-blue-400"
-                                    }`}>
-                                      {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
-                                    </span>
-                                  ))}
+                                  {/* Selo de modalidade — único, igual pra todos (é a modalidade
+                                      escolhida acima para esta foto, não a do cadastro do aluno) */}
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    teamModality === "thai"
+                                      ? "bg-red-500/20 text-red-400"
+                                      : "bg-blue-500/20 text-blue-400"
+                                  }`}>
+                                    {teamModality === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+                                  </span>
                                   {/* Fonte de identificação: manual ou % de confiança da IA */}
                                   <span className="text-xs text-muted-foreground">
                                     {isManual

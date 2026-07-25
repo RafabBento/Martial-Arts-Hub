@@ -5,6 +5,7 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
+import type { PaymentStatusExemptReason } from "./paymentStatusExemptReason";
 
 export interface PaymentStatus {
   studentId: number;
@@ -18,4 +19,8 @@ export interface PaymentStatus {
   paidAt?: Date | null;
   /** @nullable */
   notes?: string | null;
+  /** True when the student never needs to pay (bolsista or partner-unit branch) — "paid" is always true for them without a monthly_payments row. */
+  exempt: boolean;
+  /** @nullable */
+  exemptReason: PaymentStatusExemptReason;
 }

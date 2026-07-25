@@ -16,6 +16,9 @@ export const studentProfilesTable = pgTable("student_profiles", {
   modalityJiu: boolean("modality_jiu").notNull().default(false),
   // Flag de regra de negócio "bollacha" (status/benefício específico da academia).
   bollacha: boolean("bollacha").notNull().default(false),
+  // Bolsista: aluno isento de mensalidade permanentemente, definido pelo mestre
+  // (distinto de "bollacha" — não tem relação com o time parceiro).
+  scholarship: boolean("scholarship").notNull().default(false),
   // Graduação de Muay Thai e de Jiu-Jitsu (faixa + grau).
   thaiGrade: text("thai_grade"),
   jiuGrade: text("jiu_grade"),

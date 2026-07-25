@@ -13,6 +13,7 @@ import {
   UpdateUserBody,
   DeleteUserParams,
 } from "@workspace/api-zod";
+import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -25,6 +26,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     email: user.email,
     role: user.role,
     unit: user.unit,
+    emailVerified: user.emailVerified,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -41,7 +43,18 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
 }
 
 // GET /users — lista usuários com filtros opcionais por papel e busca textual.
+// Master-only: a listagem completa não é necessária para nenhum fluxo de aluno.
 router.get("/users", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const query = ListUsersQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
@@ -67,11 +80,21 @@ router.get("/users", async (req, res): Promise<void> => {
   res.json(users.map(serializeUser));
 });
 
-// GET /users/:id — obtém um único usuário pelo id.
+// GET /users/:id — obtém um único usuário pelo id. Self ou master.
 router.get("/users/:id", async (req, res): Promise<void> => {
   const params = GetUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role) && requester.id !== params.data.id) {
+    res.status(403).json({ error: "Você só pode ver os próprios dados" });
     return;
   }
 
@@ -84,7 +107,9 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   res.json(serializeUser(user));
 });
 
-// PATCH /users/:id — atualização parcial dos dados de um usuário.
+// PATCH /users/:id — atualização parcial dos dados de um usuário. Self ou
+// master; self-edit de aluno não pode alterar campos de graduação (só quem
+// gradua é professor/admin — mesma regra de routes/students.ts).
 router.patch("/users/:id", async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
   if (!params.success) {
@@ -98,11 +123,25 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  const isMaster = isMasterRole(requester.role);
+  if (!isMaster && requester.id !== params.data.id) {
+    res.status(403).json({ error: "Você só pode editar os próprios dados" });
+    return;
+  }
+  const bodyData = (!isMaster && requester.role === "student")
+    ? stripFields(body.data, GRADE_FIELDS)
+    : body.data;
+
   // Drizzle .set() accepts undefined (omit) but not null for enum cols, so
   // extract unit and only spread it when it has a real value.
   // (Tradução: colunas enum não aceitam null no .set(); por isso separamos
   // "unit" e só o incluímos no update quando tem valor real.)
-  const { unit: unitVal, ...restBody } = body.data;
+  const { unit: unitVal, ...restBody } = bodyData;
   const updateData = {
     ...restBody,
     ...(unitVal != null ? { unit: unitVal } : {}),
@@ -123,11 +162,21 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   res.json(serializeUser(user));
 });
 
-// DELETE /users/:id — remove um usuário pelo id.
+// DELETE /users/:id — remove um usuário pelo id. Master-only.
 router.delete("/users/:id", async (req, res): Promise<void> => {
   const params = DeleteUserParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
     return;
   }
 

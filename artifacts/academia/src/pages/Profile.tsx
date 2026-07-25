@@ -142,6 +142,7 @@ function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay
   // Encontra o registro de pagamento do aluno e deriva status e data de pagamento.
   const myPayment = payments?.find(p => p.studentId === userId);
   const paid = myPayment?.paid ?? false;
+  const exempt = myPayment?.exempt ?? false;
   const paidDate = myPayment?.paidAt
     ? new Date(myPayment.paidAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
     : null;
@@ -168,14 +169,16 @@ function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay
         }
         <div>
           <div className={`font-bold ${paid ? "text-green-400" : "text-primary"}`}>
-            {paid ? "Mensalidade paga!" : "Pagamento pendente"}
+            {exempt ? "Isento de mensalidade" : paid ? "Mensalidade paga!" : "Pagamento pendente"}
           </div>
           <div className="text-xs text-muted-foreground">
-            {paid
-              ? `Confirmado em ${paidDate}`
-              : paymentDay
-                ? `Vence dia ${paymentDay} de cada mês`
-                : "Consulte o professor para informar sua data"
+            {exempt
+              ? "Você não precisa pagar mensalidade."
+              : paid
+                ? `Confirmado em ${paidDate}`
+                : paymentDay
+                  ? `Vence dia ${paymentDay} de cada mês`
+                  : "Consulte o professor para informar sua data"
             }
           </div>
         </div>

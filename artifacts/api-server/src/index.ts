@@ -5,6 +5,7 @@
 // =============================================================================
 import app from "./app";
 import { logger } from "./lib/logger";
+import { schedulePaymentReminderJob } from "./lib/paymentReminderJob";
 
 // A porta é obrigatória e deve vir do ambiente — não assumimos um default.
 const rawPort = process.env["PORT"];
@@ -32,3 +33,6 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 });
+
+// Job diário de lembrete de vencimento de mensalidade (ver lib/paymentReminderJob.ts).
+schedulePaymentReminderJob();

@@ -95,14 +95,6 @@ function dayLabel(d: Date) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-// Converte os flags de modalidade de um match na lista de modalidades ("thai"/"jiu").
-function modalitiesOf(m: TeamMatch): ("thai" | "jiu")[] {
-  const list: ("thai" | "jiu")[] = [];
-  if (m.modalityThai) list.push("thai");
-  if (m.modalityJiu) list.push("jiu");
-  return list;
-}
-
 // Converte um aluno (da lista) no formato TeamMatch usado na marcação por foto.
 function studentToMatch(s: {
   userId: number;
@@ -147,6 +139,10 @@ export default function AttendanceScreen() {
   const [registeringAll, setRegisteringAll] = useState(false);
   const [manualAdds, setManualAdds] = useState<TeamMatch[]>([]);
   const [pickerMode, setPickerMode] = useState<"manual" | "team">("manual");
+  // Modalidade escolhida manualmente pelo mestre para a foto da equipe — sobrepõe
+  // a detecção automática por horário e é enviada como um único valor pro bulk
+  // attendance (evita marcar presença em modalidades que não aconteceram hoje).
+  const [teamModality, setTeamModality] = useState<"thai" | "jiu" | "">("");
 
   // Mestres (professores) e admins têm acesso a esta tela.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
@@ -199,6 +195,15 @@ export default function AttendanceScreen() {
   const todaySession = currentClass && sessions
     ? sessions.find(s => s.modality === currentClass.modality && isToday(new Date(s.sessionDate)))
     : null;
+
+  // Pré-preenche a modalidade da foto da equipe com a aula detectada pelo
+  // horário, mas o mestre sempre pode trocar manualmente (ex: aulas que se
+  // sobrepõem, ou lançamento de presença fora do horário padrão).
+  useEffect(() => {
+    if (currentClass && !teamModality) {
+      setTeamModality(currentClass.modality);
+    }
+  }, [currentClass, teamModality]);
 
   // Sessão selecionada e conjunto de ids já presentes nela.
   const selectedSession = sessions?.find(s => s.id === selectedSessionId);
@@ -398,14 +403,16 @@ export default function AttendanceScreen() {
   // pulando quem já está confirmado, e atualiza as listas.
   const handleRegisterAll = async () => {
     if (!user) return;
+    if (!teamModality) { showToast("Escolha a modalidade da foto antes de confirmar", "err"); return; }
     const toRegister = [...matches, ...manualAdds].filter(m => !confirmedIds.has(m.studentId));
     if (toRegister.length === 0) { showToast("Todos já estão registrados!"); return; }
     setRegisteringAll(true);
     try {
       const res = await bulkAttendance({
         teacherId: user.id,
+        modality: teamModality,
         photoUrl: teamPhotoUrl ?? undefined,
-        students: toRegister.map(m => ({ studentId: m.studentId, modalities: modalitiesOf(m) })),
+        students: toRegister.map(m => m.studentId),
       });
       setConfirmedIds(prev => {
         const next = new Set(prev);
@@ -443,15 +450,18 @@ export default function AttendanceScreen() {
     );
   }, [students, attendedIds, confirmedIds, studentSearch]);
 
-  // Alunos candidatos a serem adicionados manualmente à foto (exclui já reconhecidos/confirmados).
+  // Alunos candidatos a serem adicionados manualmente à foto: praticam a
+  // modalidade escolhida e ainda não foram reconhecidos/confirmados — evita
+  // marcar presença numa modalidade que o aluno nem treina.
   const teamAddCandidates = useMemo(() => {
     if (!students) return [];
     const recognized = new Set(matches.map(m => m.studentId));
     return students.filter(s =>
+      (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true) &&
       !recognized.has(s.userId) && !confirmedIds.has(s.userId) &&
       (studentSearch === "" || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
     );
-  }, [students, matches, confirmedIds, studentSearch]);
+  }, [students, matches, confirmedIds, studentSearch, teamModality]);
 
   // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
@@ -614,26 +624,58 @@ export default function AttendanceScreen() {
             <View style={{ padding: 16, gap: 12 }}>
               <Text style={[styles.cardLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>FOTO PÓS-TREINO</Text>
               <Text style={[styles.galleryHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Envie a foto do grupo — o servidor identifica cada aluno e marca a presença em todas as modalidades que ele treina.
+                Escolha a modalidade e envie a foto do grupo — o servidor identifica cada aluno e marca a presença só nessa modalidade.
               </Text>
+              {/* Seletor de modalidade da foto — obrigatório antes de enviar.
+                  Pré-preenchido pela aula detectada no horário, mas sempre editável. */}
               <View style={styles.cameraBtns}>
                 <TouchableOpacity
-                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: busy ? 0.6 : 1 }]}
+                  style={[styles.addStudentBtn, {
+                    flex: 1,
+                    backgroundColor: teamModality === "thai" ? colors.thai : "transparent",
+                    borderWidth: 1,
+                    borderColor: teamModality === "thai" ? colors.thai : colors.border,
+                  }]}
+                  onPress={() => setTeamModality("thai")}
+                >
+                  <Text style={[styles.addStudentText, { color: teamModality === "thai" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Muay Thai</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addStudentBtn, {
+                    flex: 1,
+                    backgroundColor: teamModality === "jiu" ? colors.jiu : "transparent",
+                    borderWidth: 1,
+                    borderColor: teamModality === "jiu" ? colors.jiu : colors.border,
+                  }]}
+                  onPress={() => setTeamModality("jiu")}
+                >
+                  <Text style={[styles.addStudentText, { color: teamModality === "jiu" ? "#fff" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>Jiu-Jitsu</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.cameraBtns}>
+                <TouchableOpacity
+                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: (busy || !teamModality) ? 0.6 : 1 }]}
                   onPress={() => pickAndRecognize("camera")}
-                  disabled={busy}
+                  disabled={busy || !teamModality}
                 >
                   <Ionicons name="camera-outline" size={18} color="#fff" />
                   <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Câmera</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: busy ? 0.6 : 1 }]}
+                  style={[styles.addStudentBtn, { backgroundColor: colors.primary, flex: 1, opacity: (busy || !teamModality) ? 0.6 : 1 }]}
                   onPress={() => pickAndRecognize("gallery")}
-                  disabled={busy}
+                  disabled={busy || !teamModality}
                 >
                   <Ionicons name="image-outline" size={18} color="#fff" />
                   <Text style={[styles.addStudentText, { fontFamily: "Inter_600SemiBold" }]}>Galeria</Text>
                 </TouchableOpacity>
               </View>
+              {!teamModality && (
+                <View style={styles.inlineRow}>
+                  <Ionicons name="alert-circle-outline" size={14} color={colors.primary} />
+                  <Text style={[styles.inlineText, { color: colors.primary, fontFamily: "Inter_400Regular", flex: 1 }]}>Escolha a modalidade antes de enviar a foto</Text>
+                </View>
+              )}
               {scanStatus === "notfound" && !busy && (
                 <View style={styles.inlineRow}>
                   <Ionicons name="close-circle" size={14} color="#f87171" />
@@ -661,7 +703,6 @@ export default function AttendanceScreen() {
               const alreadyIn = confirmedIds.has(m.studentId);
               const isManual = manualAdds.some(a => a.studentId === m.studentId);
               const initials = m.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-              const mods = modalitiesOf(m);
               return (
                 <View key={m.studentId} style={[styles.attendRow, { borderBottomColor: colors.border }]}>
                   {m.profilePhotoUrl
@@ -672,13 +713,13 @@ export default function AttendanceScreen() {
                   <View style={styles.attendInfo}>
                     <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{m.name}</Text>
                     <View style={styles.modBadgeRow}>
-                      {mods.map(mod => (
-                        <View key={mod} style={[styles.modBadge, { backgroundColor: mod === "thai" ? "rgba(239,68,68,0.18)" : "rgba(59,130,246,0.18)" }]}>
-                          <Text style={[styles.modBadgeText, { color: mod === "thai" ? "#f87171" : "#60a5fa", fontFamily: "Inter_700Bold" }]}>
-                            {mod === "thai" ? "MUAY THAI" : "JIU-JITSU"}
-                          </Text>
-                        </View>
-                      ))}
+                      {/* Selo único — é a modalidade escolhida acima para esta
+                          foto, não a do cadastro do aluno */}
+                      <View style={[styles.modBadge, { backgroundColor: teamModality === "thai" ? "rgba(239,68,68,0.18)" : "rgba(59,130,246,0.18)" }]}>
+                        <Text style={[styles.modBadgeText, { color: teamModality === "thai" ? "#f87171" : "#60a5fa", fontFamily: "Inter_700Bold" }]}>
+                          {teamModality === "thai" ? "MUAY THAI" : "JIU-JITSU"}
+                        </Text>
+                      </View>
                       <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                         {isManual ? "Adicionado" : `${((1 - m.distance) * 100).toFixed(0)}%`}
                       </Text>

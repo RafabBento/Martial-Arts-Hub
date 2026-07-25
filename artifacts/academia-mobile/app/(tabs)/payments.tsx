@@ -215,10 +215,10 @@ export default function PaymentsScreen() {
                   />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.myStatusTitle, { color: myPayment?.paid ? "#4ade80" : colors.primary, fontFamily: "Inter_700Bold" }]}>
-                      {myPayment?.paid ? "Mensalidade paga!" : "Pagamento pendente"}
+                      {myPayment?.exempt ? "Isento de mensalidade" : myPayment?.paid ? "Mensalidade paga!" : "Pagamento pendente"}
                     </Text>
                     <Text style={[styles.myStatusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      {MONTHS[month - 1]} {year} · R$ 80,00
+                      {myPayment?.exempt ? "Você não precisa pagar mensalidade." : `${MONTHS[month - 1]} ${year} · R$ 80,00`}
                     </Text>
                   </View>
                 </View>
@@ -339,7 +339,7 @@ function PaymentRow({
   onToggle,
   colors,
 }: {
-  entry: { studentId: number; name: string; paid: boolean; paidAt?: string | null };
+  entry: { studentId: number; name: string; paid: boolean; paidAt?: string | null; exempt?: boolean; exemptReason?: "scholarship" | "unit" | null };
   isMaster: boolean;
   isPending: boolean;
   onToggle: (id: number, paid: boolean, name: string) => void;
@@ -360,7 +360,11 @@ function PaymentRow({
         <Text style={[styles.payName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
           {entry.name}
         </Text>
-        {entry.paid && entry.paidAt && (
+        {entry.exempt ? (
+          <Text style={[styles.paySub, { color: "#4ade80", fontFamily: "Inter_400Regular" }]}>
+            Isento ({entry.exemptReason === "scholarship" ? "bolsista" : "unidade parceira"})
+          </Text>
+        ) : entry.paid && entry.paidAt && (
           <Text style={[styles.paySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
             {new Date(entry.paidAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
           </Text>
@@ -371,9 +375,10 @@ function PaymentRow({
           style={[styles.toggleBtn, {
             backgroundColor: entry.paid ? "rgba(34,197,94,0.15)" : colors.primary + "15",
             borderColor: entry.paid ? "rgba(34,197,94,0.4)" : colors.primary + "50",
+            opacity: entry.exempt ? 0.6 : 1,
           }]}
           onPress={() => onToggle(entry.studentId, entry.paid, entry.name)}
-          disabled={isPending}
+          disabled={isPending || entry.exempt}
         >
           {isPending ? (
             <ActivityIndicator size="small" color={entry.paid ? "#4ade80" : colors.primary} />

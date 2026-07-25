@@ -57,6 +57,7 @@ export const LoginResponse = zod.object({
     email: zod.string(),
     role: zod.enum(["student", "teacher", "admin"]),
     unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+    emailVerified: zod.boolean(),
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
     birthDate: zod.string().nullish(),
@@ -89,6 +90,7 @@ export const GetMeResponse = zod.object({
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  emailVerified: zod.boolean(),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -101,6 +103,24 @@ export const GetMeResponse = zod.object({
   jiuGradeColor: zod.string().nullish(),
   jiuDegree: zod.number().nullish(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Confirm a user's email using the token sent at registration
+ */
+export const VerifyEmailBody = zod.object({
+  token: zod.string(),
+});
+
+export const VerifyEmailResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Resend the verification email to the logged-in user
+ */
+export const ResendVerificationResponse = zod.object({
+  message: zod.string(),
 });
 
 /**
@@ -117,6 +137,7 @@ export const ListUsersResponseItem = zod.object({
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  emailVerified: zod.boolean(),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -145,6 +166,7 @@ export const GetUserResponse = zod.object({
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  emailVerified: zod.boolean(),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -188,6 +210,7 @@ export const UpdateUserResponse = zod.object({
   email: zod.string(),
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  emailVerified: zod.boolean(),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -232,6 +255,9 @@ export const ListStudentsResponseItem = zod.object({
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
   bollacha: zod.boolean(),
+  scholarship: zod
+    .boolean()
+    .describe("Bolsista — isento de mensalidade permanentemente."),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
@@ -261,6 +287,9 @@ export const GetStudentResponse = zod.object({
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
   bollacha: zod.boolean(),
+  scholarship: zod
+    .boolean()
+    .describe("Bolsista — isento de mensalidade permanentemente."),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
@@ -283,6 +312,7 @@ export const UpdateStudentBody = zod.object({
   modalityThai: zod.boolean().optional(),
   modalityJiu: zod.boolean().optional(),
   bollacha: zod.boolean().optional(),
+  scholarship: zod.boolean().optional(),
   thaiGrade: zod.string().optional(),
   jiuGrade: zod.string().optional(),
   thaiGradeColor: zod.string().optional(),
@@ -300,6 +330,9 @@ export const UpdateStudentResponse = zod.object({
   modalityThai: zod.boolean(),
   modalityJiu: zod.boolean(),
   bollacha: zod.boolean(),
+  scholarship: zod
+    .boolean()
+    .describe("Bolsista — isento de mensalidade permanentemente."),
   thaiGrade: zod.string().nullish(),
   jiuGrade: zod.string().nullish(),
   thaiGradeColor: zod.string().nullish(),
@@ -454,6 +487,14 @@ export const ListPaymentsResponseItem = zod.object({
   paid: zod.boolean(),
   paidAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  exempt: zod
+    .boolean()
+    .describe(
+      'True when the student never needs to pay (bolsista or partner-unit branch) — \"paid\" is always true for them without a monthly_payments row.',
+    ),
+  exemptReason: zod
+    .union([zod.literal("scholarship"), zod.literal("unit"), zod.literal(null)])
+    .nullable(),
 });
 export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem);
 
@@ -478,6 +519,14 @@ export const MarkPaymentResponse = zod.object({
   paid: zod.boolean(),
   paidAt: zod.coerce.date().nullish(),
   notes: zod.string().nullish(),
+  exempt: zod
+    .boolean()
+    .describe(
+      'True when the student never needs to pay (bolsista or partner-unit branch) — \"paid\" is always true for them without a monthly_payments row.',
+    ),
+  exemptReason: zod
+    .union([zod.literal("scholarship"), zod.literal("unit"), zod.literal(null)])
+    .nullable(),
 });
 
 /**
@@ -645,21 +694,23 @@ export const RecognizeTeamResponse = zod.object({
 });
 
 /**
- * For each student, for each modality they train, finds (or creates) today's
-session for that modality and inserts an attendance record if one does not
-already exist. Server-side dedupe prevents duplicate presence.
+ * Finds (or creates) today's session for the given modality and inserts an
+attendance record for each student if one does not already exist.
+Server-side dedupe prevents duplicate presence.
 
- * @summary Mark attendance for many students across the modalities they train
+ * @summary Mark attendance for many students in a single modality
  */
 export const BulkAttendanceBody = zod.object({
   teacherId: zod.number(),
+  modality: zod
+    .enum(["thai", "jiu"])
+    .describe(
+      "Single modality chosen by the teacher for this team photo; applied to every student in the list.",
+    ),
   photoUrl: zod.string().optional(),
-  students: zod.array(
-    zod.object({
-      studentId: zod.number().describe("The student profile id."),
-      modalities: zod.array(zod.enum(["thai", "jiu"])),
-    }),
-  ),
+  students: zod
+    .array(zod.number())
+    .describe("Student user ids to mark present."),
 });
 
 export const BulkAttendanceResponse = zod.object({

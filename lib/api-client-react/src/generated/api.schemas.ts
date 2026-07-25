@@ -83,6 +83,7 @@ export interface User {
   email: string;
   role: UserRole;
   unit: UserUnit;
+  emailVerified: boolean;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -110,6 +111,10 @@ export interface User {
 
 export interface AuthResponse {
   user: User;
+  token: string;
+}
+
+export interface VerifyEmailInput {
   token: string;
 }
 
@@ -159,6 +164,8 @@ export interface StudentProfile {
   modalityThai: boolean;
   modalityJiu: boolean;
   bollacha: boolean;
+  /** Bolsista — isento de mensalidade permanentemente. */
+  scholarship: boolean;
   /** @nullable */
   thaiGrade?: string | null;
   /** @nullable */
@@ -179,6 +186,7 @@ export interface StudentProfileUpdate {
   modalityThai?: boolean;
   modalityJiu?: boolean;
   bollacha?: boolean;
+  scholarship?: boolean;
   thaiGrade?: string;
   jiuGrade?: string;
   thaiGradeColor?: string;
@@ -277,6 +285,18 @@ export interface MarkPaymentInput {
   notes?: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type PaymentStatusExemptReason =
+  | (typeof PaymentStatusExemptReason)[keyof typeof PaymentStatusExemptReason]
+  | null;
+
+export const PaymentStatusExemptReason = {
+  scholarship: "scholarship",
+  unit: "unit",
+} as const;
+
 export interface PaymentStatus {
   studentId: number;
   name: string;
@@ -289,6 +309,10 @@ export interface PaymentStatus {
   paidAt?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** True when the student never needs to pay (bolsista or partner-unit branch) — "paid" is always true for them without a monthly_payments row. */
+  exempt: boolean;
+  /** @nullable */
+  exemptReason: PaymentStatusExemptReason;
 }
 
 export interface DashboardStats {
@@ -402,24 +426,24 @@ export interface TeamRecognitionResult {
   matches: TeamMatch[];
 }
 
-export type BulkAttendanceStudentModalitiesItem =
-  (typeof BulkAttendanceStudentModalitiesItem)[keyof typeof BulkAttendanceStudentModalitiesItem];
+/**
+ * Single modality chosen by the teacher for this team photo; applied to every student in the list.
+ */
+export type BulkAttendanceInputModality =
+  (typeof BulkAttendanceInputModality)[keyof typeof BulkAttendanceInputModality];
 
-export const BulkAttendanceStudentModalitiesItem = {
+export const BulkAttendanceInputModality = {
   thai: "thai",
   jiu: "jiu",
 } as const;
 
-export interface BulkAttendanceStudent {
-  /** The student profile id. */
-  studentId: number;
-  modalities: BulkAttendanceStudentModalitiesItem[];
-}
-
 export interface BulkAttendanceInput {
   teacherId: number;
+  /** Single modality chosen by the teacher for this team photo; applied to every student in the list. */
+  modality: BulkAttendanceInputModality;
   photoUrl?: string;
-  students: BulkAttendanceStudent[];
+  /** Student user ids to mark present. */
+  students: number[];
 }
 
 export interface BulkAttendanceResult {

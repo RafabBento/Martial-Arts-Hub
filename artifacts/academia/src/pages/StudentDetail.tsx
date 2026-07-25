@@ -12,7 +12,7 @@ import {
   registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2, ScanFace } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2, ScanFace, ShieldAlert, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -160,7 +160,7 @@ export default function StudentDetail() {
   const updateStudentMutation = useUpdateStudent();
 
   // Atualiza um campo de graduação genérico (faixa, cor ou grau) e revalida os dados.
-  const handleGradeUpdate = (field: string, value: string | number | null) => {
+  const handleGradeUpdate = (field: string, value: string | number | boolean | null) => {
     if (!studentId) return;
     updateStudentMutation.mutate(
       { id: studentId, data: { [field]: value } },
@@ -193,6 +193,25 @@ export default function StudentDetail() {
       }
     );
   };
+
+  // Acesso restrito: esta página é exclusiva para professores e
+  // administradores — um aluno vendo o próprio perfil usa Meu Perfil.
+  // (Fica depois de todos os hooks acima para não violar as Rules of Hooks.)
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          O detalhe de outros alunos é exclusivo para professores e administradores.
+          Veja seus próprios dados em Meu Perfil.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   // Spinner enquanto carrega os dados do aluno.
   if (isLoading) {
@@ -296,6 +315,27 @@ export default function StudentDetail() {
           <div className="w-full space-y-2 text-sm text-muted-foreground">
             <div className="flex justify-between"><span>Presencas Thai</span><span className="font-bold text-foreground">{student.totalAttendanceThai}</span></div>
             <div className="flex justify-between"><span>Presencas Jiu</span><span className="font-bold text-foreground">{student.totalAttendanceJiu}</span></div>
+          </div>
+
+          {/* Bolsista: toggle permanente, master-only. Isenta o aluno da
+              mensalidade todo mês, sem precisar de e-mail de cobrança. */}
+          <div className="w-full pt-3 border-t border-border">
+            {isMaster ? (
+              <Button
+                variant={student.scholarship ? "default" : "outline"}
+                size="sm"
+                className="w-full gap-2"
+                disabled={updateStudentMutation.isPending}
+                onClick={() => handleGradeUpdate("scholarship", !student.scholarship)}
+              >
+                <Award size={14} />
+                {student.scholarship ? "Bolsista" : "Marcar como bolsista"}
+              </Button>
+            ) : student.scholarship ? (
+              <div className="flex items-center justify-center gap-2 text-sm text-green-400">
+                <Award size={14} /> Bolsista
+              </div>
+            ) : null}
           </div>
         </div>
 

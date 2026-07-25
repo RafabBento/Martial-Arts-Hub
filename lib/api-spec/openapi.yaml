@@ -112,6 +112,42 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/verify-email:
+    post:
+      operationId: verifyEmail
+      tags: [auth]
+      summary: Confirm a user's email using the token sent at registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailInput"
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid or expired token
+
+  /auth/resend-verification:
+    post:
+      operationId: resendVerification
+      tags: [auth]
+      summary: Resend the verification email to the logged-in user
+      responses:
+        "200":
+          description: Verification email resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          description: Unauthorized
+
   /users:
     get:
       operationId: listUsers
@@ -735,11 +771,11 @@ paths:
     post:
       operationId: bulkAttendance
       tags: [attendance]
-      summary: Mark attendance for many students across the modalities they train
+      summary: Mark attendance for many students in a single modality
       description: |
-        For each student, for each modality they train, finds (or creates) today's
-        session for that modality and inserts an attendance record if one does not
-        already exist. Server-side dedupe prevents duplicate presence.
+        Finds (or creates) today's session for the given modality and inserts an
+        attendance record for each student if one does not already exist.
+        Server-side dedupe prevents duplicate presence.
       requestBody:
         required: true
         content:
@@ -848,9 +884,16 @@ components:
         token:
           type: string
 
+    VerifyEmailInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
     User:
       type: object
-      required: [id, name, email, role, unit, createdAt]
+      required: [id, name, email, role, unit, emailVerified, createdAt]
       properties:
         id:
           type: integer
@@ -864,6 +907,8 @@ components:
         unit:
           type: string
           enum: [matriz, panobianco, upfitness]
+        emailVerified:
+          type: boolean
         phone:
           type: ["string", "null"]
         profilePhotoUrl:
@@ -933,7 +978,7 @@ components:
 
     StudentProfile:
       type: object
-      required: [id, userId, name, email, unit, modalityThai, modalityJiu, bollacha, createdAt]
+      required: [id, userId, name, email, unit, modalityThai, modalityJiu, bollacha, scholarship, createdAt]
       properties:
         id:
           type: integer
@@ -954,6 +999,9 @@ components:
           type: boolean
         bollacha:
           type: boolean
+        scholarship:
+          type: boolean
+          description: Bolsista — isento de mensalidade permanentemente.
         thaiGrade:
           type: ["string", "null"]
         jiuGrade:
@@ -982,6 +1030,8 @@ components:
         modalityJiu:
           type: boolean
         bollacha:
+          type: boolean
+        scholarship:
           type: boolean
         thaiGrade:
           type: string
@@ -1110,7 +1160,7 @@ components:
 
     PaymentStatus:
       type: object
-      required: [studentId, name, month, year, paid]
+      required: [studentId, name, month, year, paid, exempt, exemptReason]
       properties:
         studentId:
           type: integer
@@ -1127,6 +1177,12 @@ components:
           format: date-time
         notes:
           type: ["string", "null"]
+        exempt:
+          type: boolean
+          description: True when the student never needs to pay (bolsista or partner-unit branch) — "paid" is always true for them without a monthly_payments row.
+        exemptReason:
+          type: ["string", "null"]
+          enum: [scholarship, unit, null]
 
     DashboardStats:
       type: object
@@ -1295,30 +1351,23 @@ components:
           items:
             $ref: "#/components/schemas/TeamMatch"
 
-    BulkAttendanceStudent:
-      type: object
-      required: [studentId, modalities]
-      properties:
-        studentId:
-          type: integer
-          description: The student profile id.
-        modalities:
-          type: array
-          items:
-            type: string
-            enum: [thai, jiu]
     BulkAttendanceInput:
       type: object
-      required: [teacherId, students]
+      required: [teacherId, modality, students]
       properties:
         teacherId:
           type: integer
+        modality:
+          type: string
+          enum: [thai, jiu]
+          description: Single modality chosen by the teacher for this team photo; applied to every student in the list.
         photoUrl:
           type: string
         students:
           type: array
           items:
-            $ref: "#/components/schemas/BulkAttendanceStudent"
+            type: integer
+          description: Student user ids to mark present.
     BulkAttendanceResult:
       type: object
       required: [created, skipped]

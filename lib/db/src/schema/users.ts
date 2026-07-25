@@ -38,6 +38,9 @@ export const usersTable = pgTable("users", {
   jiuDegree: integer("jiu_degree"),
   // Unidade onde o usuário treina; por padrão "matriz".
   unit: unitEnum("unit").notNull().default("matriz"),
+  // Confirmação de e-mail: vira true quando o usuário clica no link enviado
+  // no cadastro. Não bloqueia login/uso (soft-gate, ver EmailVerifyBanner).
+  emailVerified: boolean("email_verified").notNull().default(false),
   // Timestamps de auditoria: criação e última atualização.
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   // $onUpdate atualiza automaticamente o updatedAt a cada UPDATE da linha.

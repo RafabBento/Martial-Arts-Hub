@@ -18,6 +18,8 @@ export interface StudentProfile {
   modalityThai: boolean;
   modalityJiu: boolean;
   bollacha: boolean;
+  /** Bolsista — isento de mensalidade permanentemente. */
+  scholarship: boolean;
   /** @nullable */
   thaiGrade?: string | null;
   /** @nullable */
