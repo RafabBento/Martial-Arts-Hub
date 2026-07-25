@@ -118,6 +118,16 @@ export interface VerifyEmailInput {
   token: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  /** @minLength 6 */
+  password: string;
+}
+
 export type UserUpdateUnit =
   | (typeof UserUpdateUnit)[keyof typeof UserUpdateUnit]
   | null;

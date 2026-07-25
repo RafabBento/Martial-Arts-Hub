@@ -5,15 +5,17 @@
 // =============================================================================
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, studentProfilesTable, emailVerificationTokensTable } from "@workspace/db";
+import { db, usersTable, studentProfilesTable, emailVerificationTokensTable, passwordResetTokensTable } from "@workspace/db";
 import {
   RegisterBody,
   LoginBody,
   VerifyEmailBody,
+  ForgotPasswordBody,
+  ResetPasswordBody,
 } from "@workspace/api-zod";
 import { createHash, randomBytes } from "crypto";
 import { sendEmail } from "../lib/email";
-import { verificationEmail } from "../lib/emailTemplates";
+import { verificationEmail, passwordResetEmail } from "../lib/emailTemplates";
 import { getSessionUserId } from "../lib/authz";
 import { logger } from "../lib/logger";
 
@@ -21,6 +23,10 @@ const router: IRouter = Router();
 
 // Tokens de verificação de e-mail expiram em 48h.
 const EMAIL_VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000;
+
+// Tokens de redefinição de senha expiram em 1h (janela mais curta — trocar de
+// senha é mais sensível que confirmar cadastro).
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 // URL pública do front, usada para montar o link de verificação no e-mail.
 const PUBLIC_WEB_URL = process.env["PUBLIC_WEB_URL"] ?? "http://localhost:5173";
@@ -238,6 +244,65 @@ router.post("/auth/resend-verification", async (req, res): Promise<void> => {
   await issueVerificationEmail(user);
 
   res.json({ message: "E-mail de confirmação reenviado." });
+});
+
+// POST /auth/forgot-password — envia um e-mail com link de redefinição de
+// senha, se o e-mail informado tiver conta. Resposta é sempre a mesma
+// mensagem genérica (exista o e-mail ou não) para não vazar quais e-mails
+// estão cadastrados.
+router.post("/auth/forgot-password", async (req, res): Promise<void> => {
+  const parsed = ForgotPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email));
+  if (user) {
+    try {
+      const token = randomBytes(32).toString("hex");
+      // Invalida qualquer token de redefinição pendente antes de gerar um novo.
+      await db.delete(passwordResetTokensTable).where(eq(passwordResetTokensTable.userId, user.id));
+      await db.insert(passwordResetTokensTable).values({
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
+      });
+      const resetUrl = `${PUBLIC_WEB_URL}/reset-password?token=${token}`;
+      const { subject, html } = passwordResetEmail({ name: user.name, resetUrl });
+      await sendEmail({ to: user.email, subject, html });
+    } catch (err) {
+      logger.error({ err, userId: user.id }, "Falha ao emitir e-mail de redefinição de senha");
+    }
+  }
+
+  res.json({ message: "Se este e-mail estiver cadastrado, enviamos um link de redefinição de senha." });
+});
+
+// POST /auth/reset-password — define uma nova senha a partir do token
+// enviado por /auth/forgot-password. Token de uso único.
+router.post("/auth/reset-password", async (req, res): Promise<void> => {
+  const parsed = ResetPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [row] = await db
+    .select()
+    .from(passwordResetTokensTable)
+    .where(eq(passwordResetTokensTable.token, parsed.data.token));
+
+  if (!row || row.expiresAt.getTime() < Date.now()) {
+    res.status(400).json({ error: "Link inválido ou expirado. Solicite uma nova redefinição de senha." });
+    return;
+  }
+
+  await db.update(usersTable).set({ passwordHash: hashPassword(parsed.data.password) }).where(eq(usersTable.id, row.userId));
+  // Remove todos os tokens do usuário (o usado e quaisquer outros pendentes).
+  await db.delete(passwordResetTokensTable).where(eq(passwordResetTokensTable.userId, row.userId));
+
+  res.json({ message: "Senha redefinida com sucesso!" });
 });
 
 export default router;

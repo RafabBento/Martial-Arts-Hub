@@ -42,6 +42,31 @@ export function verificationEmail({ name, verifyUrl }: { name: string; verifyUrl
   };
 }
 
+export function passwordResetEmail({ name, resetUrl }: { name: string; resetUrl: string }): { subject: string; html: string } {
+  return {
+    subject: "Redefinir sua senha — Front Artes Marciais",
+    html: layout(
+      `Olá, ${name.split(" ")[0]}!`,
+      `
+        <p style="font-size: 14px; line-height: 1.6;">
+          Recebemos um pedido para redefinir a senha da sua conta. Clique no botão
+          abaixo para escolher uma nova senha:
+        </p>
+        <a href="${resetUrl}" style="display: inline-block; background: ${BRAND_COLOR}; color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 12px 0;">
+          Redefinir senha
+        </a>
+        <p style="font-size: 12px; color: #666; line-height: 1.6;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <a href="${resetUrl}" style="color: ${BRAND_COLOR};">${resetUrl}</a>
+        </p>
+        <p style="font-size: 12px; color: #666;">
+          Este link expira em 1 hora. Se você não pediu essa redefinição, pode ignorar este e-mail.
+        </p>
+      `,
+    ),
+  };
+}
+
 export function paymentReminderEmail({
   name,
   paymentDay,

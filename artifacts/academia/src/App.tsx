@@ -19,6 +19,8 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Students from "./pages/Students";
 import StudentDetail from "./pages/StudentDetail";
@@ -112,8 +114,10 @@ function Router() {
       <Route path="/" component={() => <PublicRoute component={Home} />} />
       <Route path="/login" component={() => <PublicRoute component={Login} />} />
       <Route path="/register" component={() => <PublicRoute component={Register} />} />
-      {/* Rota "crua": funciona logado ou deslogado, então não usa Protected/PublicRoute. */}
+      {/* Rotas "cruas": funcionam logado ou deslogado, então não usam Protected/PublicRoute. */}
       <Route path="/verify-email" component={VerifyEmail} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
 
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/students" component={() => <ProtectedRoute component={Students} />} />

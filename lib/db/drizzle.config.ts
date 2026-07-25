@@ -19,5 +19,6 @@ export default defineConfig({
     "attendance",
     "email_verification_tokens",
     "payment_reminders_sent",
+    "password_reset_tokens",
   ],
 });

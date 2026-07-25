@@ -124,6 +124,34 @@ export const ResendVerificationResponse = zod.object({
 });
 
 /**
+ * Always responds with a generic success message, whether or not the
+email is registered — prevents leaking which emails have an account.
+
+ * @summary Request a password reset email
+ */
+export const ForgotPasswordBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const ForgotPasswordResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Set a new password using the token sent by /auth/forgot-password
+ */
+export const resetPasswordBodyPasswordMin = 6;
+
+export const ResetPasswordBody = zod.object({
+  token: zod.string(),
+  password: zod.string().min(resetPasswordBodyPasswordMin),
+});
+
+export const ResetPasswordResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
  * @summary List all users
  */
 export const ListUsersQueryParams = zod.object({
