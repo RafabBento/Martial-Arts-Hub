@@ -139,9 +139,9 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
   await db.update(usersTable).set({ profilePhotoUrl: photoUrl }).where(eq(usersTable.id, userId));
 
   // Persist the reference descriptor on the user's training profile (or clear
-  // it if no face was found). Students always have a profile; teachers may not
-  // yet — create one (defaulting to both modalities) so they can be recognized
-  // in team photos and appear in the rankings too.
+  // it if no face was found). Students always have a profile; teachers/admins
+  // may not yet — create one (defaulting to both modalities) so they can be
+  // recognized in team photos and appear in the rankings too.
   const [profile] = await db
     .select({ id: studentProfilesTable.id })
     .from(studentProfilesTable)
@@ -155,7 +155,7 @@ router.post("/face/profile-photo", async (req, res): Promise<void> => {
         facePhotoUrl: descriptor ? photoUrl : null,
       })
       .where(eq(studentProfilesTable.userId, userId));
-  } else if (user.role === "student" || user.role === "teacher") {
+  } else {
     await db.insert(studentProfilesTable).values({
       userId,
       modalityThai: true,
@@ -300,12 +300,13 @@ router.post("/face/enroll", async (req, res): Promise<void> => {
     return;
   }
 
-  // Ensure the user has a training profile so they can be recognized/ranked.
+  // Ensure the user has a training profile so they can be recognized/ranked
+  // (students always have one; teachers/admins may not yet).
   const [profile] = await db
     .select({ id: studentProfilesTable.id })
     .from(studentProfilesTable)
     .where(eq(studentProfilesTable.userId, userId));
-  if (!profile && (user.role === "student" || user.role === "teacher")) {
+  if (!profile) {
     await db.insert(studentProfilesTable).values({
       userId,
       modalityThai: true,

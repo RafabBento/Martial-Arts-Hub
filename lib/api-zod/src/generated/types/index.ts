@@ -9,6 +9,8 @@
 export * from "./activityItem";
 export * from "./activityItemType";
 export * from "./attendanceInput";
+export * from "./attendanceMonthSummary";
+export * from "./attendanceMonthSummaryRole";
 export * from "./attendanceRecord";
 export * from "./attendanceRecordModality";
 export * from "./authResponse";
@@ -20,6 +22,7 @@ export * from "./enrollFaceInput";
 export * from "./enrollFaceResult";
 export * from "./errorEnvelope";
 export * from "./forgotPasswordInput";
+export * from "./getAttendanceSummaryParams";
 export * from "./healthStatus";
 export * from "./listAttendanceModality";
 export * from "./listAttendanceParams";

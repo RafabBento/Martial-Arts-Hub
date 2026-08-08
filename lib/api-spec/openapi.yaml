@@ -497,6 +497,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
 
+  /attendance/summary:
+    get:
+      operationId: getAttendanceSummary
+      tags: [attendance]
+      summary: Monthly attendance totals per person (students and teachers/admins)
+      description: |
+        Master (teacher/admin) receives one row per person who has any
+        activity that month (students and teachers/admins); a student
+        receives only their own row. Saturday Muay Thai sessions count
+        double, same rule used elsewhere (student totals, rankings).
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly attendance summary
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AttendanceMonthSummary"
+        "401":
+          description: Unauthorized
+
   /rankings:
     get:
       operationId: listRankings
@@ -1168,6 +1201,31 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    AttendanceMonthSummary:
+      type: object
+      required: [userId, name, role, totalThai, totalJiu, total, month, year]
+      properties:
+        userId:
+          type: integer
+        name:
+          type: string
+        profilePhotoUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [student, teacher, admin]
+        totalThai:
+          type: integer
+          description: Muay Thai sessions attended this month (Saturdays count double).
+        totalJiu:
+          type: integer
+        total:
+          type: integer
+        month:
+          type: integer
+        year:
+          type: integer
 
     AttendanceInput:
       type: object

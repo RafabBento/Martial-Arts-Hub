@@ -119,8 +119,8 @@ function studentToMatch(s: {
   userId: number;
   name: string;
   profilePhotoUrl?: string | null;
-  modalityThai?: boolean;
-  modalityJiu?: boolean;
+  modalityThai?: boolean | null;
+  modalityJiu?: boolean | null;
 }): TeamMatch {
   return {
     studentId:      s.userId,
@@ -200,10 +200,16 @@ export default function Attendance() {
   );
 
   // Lista os professores para encontrar o instrutor da aula
-  // atual e usá-lo na criação automática de sessão
+  // atual e usá-lo na criação automática de sessão. Também entram
+  // como candidatos a presença (mestres podem treinar/participar
+  // de outras aulas, não só dar aula).
   const { data: teachers } = useListUsers(
     { role: "teacher" },
     { query: { queryKey: getListUsersQueryKey({ role: "teacher" }) } }
+  );
+  const { data: admins } = useListUsers(
+    { role: "admin" },
+    { query: { queryKey: getListUsersQueryKey({ role: "admin" }) } }
   );
 
   const createSessionMutation = useCreateSession();
@@ -304,6 +310,23 @@ export default function Attendance() {
     {},
     { query: { queryKey: getListStudentsQueryKey() } }
   );
+
+  // Candidatos a presença: alunos + professores/admins mesclados num só
+  // formato. Mestres também podem ser marcados presentes (ex: treinando na
+  // aula de outro), então entram nos mesmos seletores que os alunos.
+  // isMasterUser marca quem veio de teachers/admins (sem modalityThai/Jiu
+  // configurada, então não passa pelo filtro de modalidade da foto).
+  const attendeeCandidates = [
+    ...(Array.isArray(students) ? students : []).map(s => ({ ...s, isMasterUser: false })),
+    ...(Array.isArray(teachers) ? teachers : []).map(t => ({
+      userId: t.id, name: t.name, profilePhotoUrl: t.profilePhotoUrl,
+      modalityThai: t.modalityThai, modalityJiu: t.modalityJiu, isMasterUser: true,
+    })),
+    ...(Array.isArray(admins) ? admins : []).map(a => ({
+      userId: a.id, name: a.name, profilePhotoUrl: a.profilePhotoUrl,
+      modalityThai: a.modalityThai, modalityJiu: a.modalityJiu, isMasterUser: true,
+    })),
+  ];
 
   // Presenças da sessão selecionada — usadas no modo manual
   // para indicar quais alunos já foram marcados (✓ no select).
@@ -474,7 +497,7 @@ export default function Attendance() {
   // Verifica duplicatas antes de adicionar para evitar registros duplos.
   const addTeamStudent = (v: string) => {
     const id = parseInt(v, 10);
-    const s = Array.isArray(students) ? students.find(st => st.userId === id) : undefined;
+    const s = attendeeCandidates.find(st => st.userId === id);
     if (!s) return;
     if (matches.some(m => m.studentId === id) || manualAdds.some(m => m.studentId === id)) return;
     setManualAdds(prev => [...prev, studentToMatch(s)]);
@@ -638,13 +661,13 @@ export default function Attendance() {
       .map(g => ({ label: g.label, ts: g.ts, students: [...g.students.values()] }));
   })();
 
-  // Candidatos para adicionar manualmente à lista da foto:
-  // alunos que praticam a modalidade escolhida e ainda não estão na lista
-  // (nem como identificado pela IA, nem como adicionado manualmente, nem
-  // como já confirmado) — evita marcar presença numa modalidade que o
-  // aluno nem treina.
-  const teamAddCandidates = (Array.isArray(students) ? students : []).filter(s =>
-    (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true) &&
+  // Candidatos para adicionar manualmente à lista da foto: alunos que
+  // praticam a modalidade escolhida (evita marcar presença numa modalidade
+  // que o aluno nem treina) + professores/admins (sempre disponíveis,
+  // independente de modalidade) — e que ainda não estão na lista (nem
+  // identificado pela IA, nem adicionado manualmente, nem já confirmado).
+  const teamAddCandidates = attendeeCandidates.filter(s =>
+    (s.isMasterUser || (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true)) &&
     !matches.some(m => m.studentId === s.userId) &&
     !manualAdds.some(m => m.studentId === s.userId) &&
     !confirmedIds.has(s.userId)
@@ -1045,7 +1068,7 @@ export default function Attendance() {
                     <SelectValue placeholder="Selecionar aluno..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {Array.isArray(students) && students.map(s => (
+                    {attendeeCandidates.map(s => (
                       <SelectItem key={s.userId} value={String(s.userId)}>
                         {s.name}
                         {/* ✓ indica que já tem presença nesta sessão */}
@@ -1072,7 +1095,7 @@ export default function Attendance() {
 
               {/* Lista de alunos já confirmados na sessão atual */}
               <div className="space-y-2">
-                {Array.isArray(students) && students
+                {attendeeCandidates
                   .filter(s => attendedIds.has(s.userId) || confirmedIds.has(s.userId))
                   .map(s => (
                     <div key={s.userId} className="flex items-center gap-2 text-sm text-green-400">

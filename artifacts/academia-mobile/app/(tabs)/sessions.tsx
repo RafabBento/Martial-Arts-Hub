@@ -19,7 +19,9 @@ import {
   useListSessions,
   useCreateSession,
   useListUsers,
+  useGetAttendanceSummary,
   getListSessionsQueryKey,
+  getGetAttendanceSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
@@ -33,6 +35,12 @@ const FILTERS = [
   { label: "Todos", value: undefined as undefined | "thai" | "jiu" },
   { label: "Thai", value: "thai" as const },
   { label: "Jiu", value: "jiu" as const },
+];
+
+// Nomes dos meses em pt-BR, usados no navegador de mês do resumo mensal.
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
 // Cronograma semanal fixo (informativo) mostrado no cabeçalho da lista.
@@ -65,6 +73,25 @@ export default function SessionsScreen() {
 
   // Mestres (professores) e admins têm permissão para criar sessões.
   const isMaster = user?.role === "teacher" || user?.role === "admin";
+
+  // Resumo mensal de presença: mestre vê todo mundo (alunos e
+  // professores/admins); aluno vê só a própria linha (o backend já
+  // restringe isso — ver GET /attendance/summary).
+  const now = new Date();
+  const [summaryMonth, setSummaryMonth] = useState(now.getMonth() + 1);
+  const [summaryYear, setSummaryYear] = useState(now.getFullYear());
+  const { data: summary, isLoading: summaryLoading } = useGetAttendanceSummary(
+    { month: summaryMonth, year: summaryYear },
+    { query: { queryKey: getGetAttendanceSummaryQueryKey({ month: summaryMonth, year: summaryYear }) } }
+  );
+  const prevSummaryMonth = () => {
+    if (summaryMonth === 1) { setSummaryMonth(12); setSummaryYear(y => y - 1); }
+    else setSummaryMonth(m => m - 1);
+  };
+  const nextSummaryMonth = () => {
+    if (summaryMonth === 12) { setSummaryMonth(1); setSummaryYear(y => y + 1); }
+    else setSummaryMonth(m => m + 1);
+  };
 
   // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
@@ -177,6 +204,72 @@ export default function SessionsScreen() {
           onRefresh={refetch}
           refreshing={isLoading}
           ListHeaderComponent={
+            <>
+            {/* Resumo mensal de presença: navegador de mês + totais */}
+            <View style={[styles.scheduleCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 }]}>
+              <View style={styles.summaryNav}>
+                <TouchableOpacity onPress={prevSummaryMonth} hitSlop={8}>
+                  <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                <View style={{ alignItems: "center" }}>
+                  <Text style={[styles.scheduleTimeText, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                    {MONTHS[summaryMonth - 1]}
+                  </Text>
+                  <Text style={[styles.scheduleLocationText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {summaryYear}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={nextSummaryMonth} hitSlop={8}>
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+
+              {summaryLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
+              ) : isMaster ? (
+                Array.isArray(summary) && summary.length > 0 ? (
+                  <View style={{ gap: 4 }}>
+                    {summary.map(row => (
+                      <View key={row.userId} style={styles.summaryRow}>
+                        <Text style={[styles.summaryName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
+                          {row.name}{row.role !== "student" ? " 🛡️" : ""}
+                        </Text>
+                        <Text style={[styles.summaryTotals, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                          {row.totalThai > 0 ? `${row.totalThai} MT ` : ""}
+                          {row.totalJiu > 0 ? `${row.totalJiu} JJ ` : ""}
+                          · {row.total} aulas
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" }]}>
+                    Ninguém participou de aulas neste mês ainda
+                  </Text>
+                )
+              ) : (
+                (() => {
+                  const mine = summary?.[0];
+                  return (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 }}>
+                      <Ionicons name="trophy-outline" size={26} color={colors.primary} />
+                      <View>
+                        <Text style={[{ fontSize: 22, color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                          {mine?.total ?? 0} <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>aulas este mês</Text>
+                        </Text>
+                        <Text style={[styles.scheduleLocationText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                          {mine?.totalThai ? `${mine.totalThai} Muay Thai` : ""}
+                          {mine?.totalThai && mine?.totalJiu ? " · " : ""}
+                          {mine?.totalJiu ? `${mine.totalJiu} Jiu-Jitsu` : ""}
+                          {!mine?.totalThai && !mine?.totalJiu ? "Nenhuma aula registrada ainda" : ""}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()
+              )}
+            </View>
+
             <View style={[styles.scheduleCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.scheduleHeader}>
                 <Text style={[styles.scheduleTitle, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
@@ -220,6 +313,7 @@ export default function SessionsScreen() {
                 ))}
               </View>
             </View>
+            </>
           }
           renderItem={({ item }) => (
             <SessionCard
@@ -390,6 +484,10 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15 },
 
   scheduleCard: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 12, marginBottom: 16 },
+  summaryNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  summaryRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4, gap: 8 },
+  summaryName: { fontSize: 13, flex: 1 },
+  summaryTotals: { fontSize: 12 },
   scheduleHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   scheduleTitle: { fontSize: 11, letterSpacing: 1 },
   scheduleLocation: { flexDirection: "row", alignItems: "center", gap: 3 },

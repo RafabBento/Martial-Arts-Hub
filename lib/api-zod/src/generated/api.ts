@@ -475,6 +475,38 @@ export const DeleteAttendanceResponse = zod.object({
 });
 
 /**
+ * Master (teacher/admin) receives one row per person who has any
+activity that month (students and teachers/admins); a student
+receives only their own row. Saturday Muay Thai sessions count
+double, same rule used elsewhere (student totals, rankings).
+
+ * @summary Monthly attendance totals per person (students and teachers/admins)
+ */
+export const GetAttendanceSummaryQueryParams = zod.object({
+  month: zod.coerce.number(),
+  year: zod.coerce.number(),
+});
+
+export const GetAttendanceSummaryResponseItem = zod.object({
+  userId: zod.number(),
+  name: zod.string(),
+  profilePhotoUrl: zod.string().nullish(),
+  role: zod.enum(["student", "teacher", "admin"]),
+  totalThai: zod
+    .number()
+    .describe(
+      "Muay Thai sessions attended this month (Saturdays count double).",
+    ),
+  totalJiu: zod.number(),
+  total: zod.number(),
+  month: zod.number(),
+  year: zod.number(),
+});
+export const GetAttendanceSummaryResponse = zod.array(
+  GetAttendanceSummaryResponseItem,
+);
+
+/**
  * @summary Get attendance rankings
  */
 export const ListRankingsQueryParams = zod.object({

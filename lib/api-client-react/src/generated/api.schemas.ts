@@ -261,6 +261,29 @@ export interface AttendanceRecord {
   createdAt: string;
 }
 
+export type AttendanceMonthSummaryRole =
+  (typeof AttendanceMonthSummaryRole)[keyof typeof AttendanceMonthSummaryRole];
+
+export const AttendanceMonthSummaryRole = {
+  student: "student",
+  teacher: "teacher",
+  admin: "admin",
+} as const;
+
+export interface AttendanceMonthSummary {
+  userId: number;
+  name: string;
+  /** @nullable */
+  profilePhotoUrl?: string | null;
+  role: AttendanceMonthSummaryRole;
+  /** Muay Thai sessions attended this month (Saturdays count double). */
+  totalThai: number;
+  totalJiu: number;
+  total: number;
+  month: number;
+  year: number;
+}
+
 export interface AttendanceInput {
   sessionId: number;
   studentId: number;
@@ -524,6 +547,11 @@ export const ListAttendanceModality = {
   thai: "thai",
   jiu: "jiu",
 } as const;
+
+export type GetAttendanceSummaryParams = {
+  month: number;
+  year: number;
+};
 
 export type ListRankingsParams = {
   modality?: ListRankingsModality;

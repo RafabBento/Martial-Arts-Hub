@@ -13,6 +13,7 @@ import {
   CreateAttendanceBody,
   DeleteAttendanceParams,
   BulkAttendanceBody,
+  GetAttendanceSummaryQueryParams,
 } from "@workspace/api-zod";
 import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
@@ -260,6 +261,102 @@ router.delete("/attendance/:id", async (req, res): Promise<void> => {
   }
 
   res.json({ message: "Attendance record deleted successfully" });
+});
+
+// GET /attendance/summary — total de presenças de um mês/ano por pessoa (alunos
+// e professores/admins). Master recebe uma linha por pessoa com atividade no
+// mês; aluno recebe só a própria linha (mesmo que zerada). Sábado de Muay Thai
+// conta em dobro, mesma regra usada em routes/students.ts e routes/rankings.ts.
+router.get("/attendance/summary", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  const query = GetAttendanceSummaryQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const { month, year } = query.data;
+
+  // Janela do mês (00:00 do dia 1 até 23:59:59.999 do último dia).
+  const startOfMonth = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Soma ponderada por aluno+modalidade dentro do mês (sábado Thai = 2).
+  const rows = await db
+    .select({
+      studentId: attendanceTable.studentId,
+      modality: trainingSessionsTable.modality,
+      weighted: sql<number>`SUM(CASE WHEN ${trainingSessionsTable.modality} = 'thai' AND EXTRACT(DOW FROM ${trainingSessionsTable.sessionDate}) = 6 THEN 2 ELSE 1 END)::int`,
+    })
+    .from(attendanceTable)
+    .innerJoin(trainingSessionsTable, eq(attendanceTable.sessionId, trainingSessionsTable.id))
+    .where(and(
+      gte(trainingSessionsTable.sessionDate, startOfMonth),
+      lte(trainingSessionsTable.sessionDate, endOfMonth),
+    ))
+    .groupBy(attendanceTable.studentId, trainingSessionsTable.modality);
+
+  // Combina as duas modalidades por pessoa.
+  const totals = new Map<number, { totalThai: number; totalJiu: number }>();
+  for (const r of rows) {
+    const entry = totals.get(r.studentId) ?? { totalThai: 0, totalJiu: 0 };
+    if (r.modality === "thai") entry.totalThai += r.weighted;
+    else entry.totalJiu += r.weighted;
+    totals.set(r.studentId, entry);
+  }
+
+  // Aluno: só a própria linha, mesmo que zerada (quer ver o próprio total do mês).
+  if (!isMasterRole(requester.role)) {
+    const [me] = await db.select({ name: usersTable.name, profilePhotoUrl: usersTable.profilePhotoUrl })
+      .from(usersTable).where(eq(usersTable.id, requester.id));
+    const own = totals.get(requester.id) ?? { totalThai: 0, totalJiu: 0 };
+    res.json([{
+      userId: requester.id,
+      name: me?.name ?? "",
+      profilePhotoUrl: me?.profilePhotoUrl ?? null,
+      role: requester.role,
+      totalThai: own.totalThai,
+      totalJiu: own.totalJiu,
+      total: own.totalThai + own.totalJiu,
+      month,
+      year,
+    }]);
+    return;
+  }
+
+  // Master: uma linha por pessoa que teve atividade no mês (alunos e professores/admins).
+  const userIds = [...totals.keys()];
+  if (userIds.length === 0) {
+    res.json([]);
+    return;
+  }
+  const people = await db
+    .select({ id: usersTable.id, name: usersTable.name, profilePhotoUrl: usersTable.profilePhotoUrl, role: usersTable.role })
+    .from(usersTable)
+    .where(inArray(usersTable.id, userIds));
+
+  res.json(
+    people
+      .map(p => {
+        const t = totals.get(p.id)!;
+        return {
+          userId: p.id,
+          name: p.name,
+          profilePhotoUrl: p.profilePhotoUrl ?? null,
+          role: p.role,
+          totalThai: t.totalThai,
+          totalJiu: t.totalJiu,
+          total: t.totalThai + t.totalJiu,
+          month,
+          year,
+        };
+      })
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  );
 });
 
 export default router;

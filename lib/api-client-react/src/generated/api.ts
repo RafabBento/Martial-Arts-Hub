@@ -19,6 +19,7 @@ import type {
 import type {
   ActivityItem,
   AttendanceInput,
+  AttendanceMonthSummary,
   AttendanceRecord,
   AuthResponse,
   BulkAttendanceInput,
@@ -28,6 +29,7 @@ import type {
   EnrollFaceResult,
   ErrorEnvelope,
   ForgotPasswordInput,
+  GetAttendanceSummaryParams,
   HealthStatus,
   ListAttendanceParams,
   ListPaymentsParams,
@@ -2023,6 +2025,114 @@ export const useDeleteAttendance = <
 > => {
   return useMutation(getDeleteAttendanceMutationOptions(options));
 };
+
+/**
+ * Master (teacher/admin) receives one row per person who has any
+activity that month (students and teachers/admins); a student
+receives only their own row. Saturday Muay Thai sessions count
+double, same rule used elsewhere (student totals, rankings).
+
+ * @summary Monthly attendance totals per person (students and teachers/admins)
+ */
+export const getGetAttendanceSummaryUrl = (
+  params: GetAttendanceSummaryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/attendance/summary?${stringifiedParams}`
+    : `/api/attendance/summary`;
+};
+
+export const getAttendanceSummary = async (
+  params: GetAttendanceSummaryParams,
+  options?: RequestInit,
+): Promise<AttendanceMonthSummary[]> => {
+  return customFetch<AttendanceMonthSummary[]>(
+    getGetAttendanceSummaryUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAttendanceSummaryQueryKey = (
+  params?: GetAttendanceSummaryParams,
+) => {
+  return [`/api/attendance/summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAttendanceSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAttendanceSummary>>,
+  TError = ErrorType<void>,
+>(
+  params: GetAttendanceSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAttendanceSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAttendanceSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAttendanceSummary>>
+  > = ({ signal }) =>
+    getAttendanceSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAttendanceSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAttendanceSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAttendanceSummary>>
+>;
+export type GetAttendanceSummaryQueryError = ErrorType<void>;
+
+/**
+ * @summary Monthly attendance totals per person (students and teachers/admins)
+ */
+
+export function useGetAttendanceSummary<
+  TData = Awaited<ReturnType<typeof getAttendanceSummary>>,
+  TError = ErrorType<void>,
+>(
+  params: GetAttendanceSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAttendanceSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAttendanceSummaryQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get attendance rankings

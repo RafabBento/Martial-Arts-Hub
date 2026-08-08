@@ -100,8 +100,8 @@ function studentToMatch(s: {
   userId: number;
   name: string;
   profilePhotoUrl?: string | null;
-  modalityThai?: boolean;
-  modalityJiu?: boolean;
+  modalityThai?: boolean | null;
+  modalityJiu?: boolean | null;
 }): TeamMatch {
   return {
     studentId: s.userId,
@@ -151,6 +151,20 @@ export default function AttendanceScreen() {
   const { data: sessions, isLoading: sessionsLoading, refetch: refetchSessions } = useListSessions({});
   const { data: students } = useListStudents({});
   const { data: teachers } = useListUsers({ role: "teacher" });
+  // Professores/admins também podem ser marcados presentes (ex: treinando na
+  // aula de outro) — mesclados com os alunos nos seletores de presença abaixo.
+  const { data: admins } = useListUsers({ role: "admin" });
+  const attendeeCandidates = useMemo(() => [
+    ...(students ?? []).map(s => ({ ...s, isMasterUser: false })),
+    ...(teachers ?? []).map(t => ({
+      userId: t.id, name: t.name, profilePhotoUrl: t.profilePhotoUrl,
+      modalityThai: t.modalityThai, modalityJiu: t.modalityJiu, isMasterUser: true,
+    })),
+    ...(admins ?? []).map(a => ({
+      userId: a.id, name: a.name, profilePhotoUrl: a.profilePhotoUrl,
+      modalityThai: a.modalityThai, modalityJiu: a.modalityJiu, isMasterUser: true,
+    })),
+  ], [students, teachers, admins]);
   const { data: attendance, refetch: refetchAttendance } = useListAttendance(
     { sessionId: selectedSessionId ?? undefined },
     { query: { enabled: !!selectedSessionId, queryKey: getListAttendanceQueryKey({ sessionId: selectedSessionId ?? undefined }) } }
@@ -389,8 +403,8 @@ export default function AttendanceScreen() {
     userId: number;
     name: string;
     profilePhotoUrl?: string | null;
-    modalityThai?: boolean;
-    modalityJiu?: boolean;
+    modalityThai?: boolean | null;
+    modalityJiu?: boolean | null;
   }) => {
     setManualAdds(prev =>
       prev.some(a => a.studentId === s.userId)
@@ -441,27 +455,27 @@ export default function AttendanceScreen() {
     setMode(next);
   };
 
-  // Alunos disponíveis para marcação manual (exclui já presentes e aplica a busca).
+  // Alunos/professores/admins disponíveis para marcação manual (exclui já
+  // presentes e aplica a busca).
   const filteredStudents = useMemo(() => {
-    if (!students) return [];
-    return students.filter(s =>
+    return attendeeCandidates.filter(s =>
       !attendedIds.has(s.userId) && !confirmedIds.has(s.userId) &&
       (studentSearch === "" || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
     );
-  }, [students, attendedIds, confirmedIds, studentSearch]);
+  }, [attendeeCandidates, attendedIds, confirmedIds, studentSearch]);
 
-  // Alunos candidatos a serem adicionados manualmente à foto: praticam a
-  // modalidade escolhida e ainda não foram reconhecidos/confirmados — evita
-  // marcar presença numa modalidade que o aluno nem treina.
+  // Candidatos a serem adicionados manualmente à foto: alunos que praticam a
+  // modalidade escolhida (evita marcar presença numa modalidade que o aluno
+  // nem treina) + professores/admins (sempre disponíveis) — e que ainda não
+  // foram reconhecidos/confirmados.
   const teamAddCandidates = useMemo(() => {
-    if (!students) return [];
     const recognized = new Set(matches.map(m => m.studentId));
-    return students.filter(s =>
-      (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true) &&
+    return attendeeCandidates.filter(s =>
+      (s.isMasterUser || (teamModality === "thai" ? s.modalityThai : teamModality === "jiu" ? s.modalityJiu : true)) &&
       !recognized.has(s.userId) && !confirmedIds.has(s.userId) &&
       (studentSearch === "" || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
     );
-  }, [students, matches, confirmedIds, studentSearch, teamModality]);
+  }, [attendeeCandidates, matches, confirmedIds, studentSearch, teamModality]);
 
   // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
@@ -1019,7 +1033,9 @@ export default function AttendanceScreen() {
                   </View>
                   <View style={styles.flex}>
                     <Text style={[styles.attendName, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>{item.name}</Text>
-                    <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{item.email}</Text>
+                    {"email" in item && (
+                      <Text style={[styles.attendTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{item.email}</Text>
+                    )}
                   </View>
                   <Ionicons name={added ? "checkmark-circle" : "add-circle-outline"} size={22} color={added ? colors.success : colors.primary} />
                 </TouchableOpacity>

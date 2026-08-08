@@ -19,16 +19,24 @@ import {
   useListSessions, getListSessionsQueryKey,
   useCreateSession,
   useListUsers, getListUsersQueryKey,
+  useGetAttendanceSummary, getGetAttendanceSummaryQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { CalendarDays, Plus, ChevronRight, Users, Clock, MapPin } from "lucide-react";
+import { CalendarDays, Plus, ChevronRight, Users, Clock, MapPin, ChevronLeft, Trophy, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
+
+// Nomes dos meses em pt-BR (índice 0 = Janeiro), usados no navegador de mês
+// do resumo mensal — mesmo padrão de Payments.tsx.
+const MONTHS = [
+  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
+];
 
 export default function Sessions() {
 
@@ -54,8 +62,13 @@ export default function Sessions() {
     description: "",
     teacherId: "",
   });
+  // Mês/ano do resumo mensal (inicia no mês corrente).
+  const now = new Date();
+  const [summaryMonth, setSummaryMonth] = useState(now.getMonth() + 1);
+  const [summaryYear, setSummaryYear] = useState(now.getFullYear());
 
   const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
   const { toast } = useToast();
 
   // ----------------------------------------------------------
@@ -93,6 +106,25 @@ export default function Sessions() {
     { role: "teacher" },
     { query: { queryKey: getListUsersQueryKey({ role: "teacher" }) } }
   );
+
+  // ----------------------------------------------------------
+  // Resumo mensal de presença: mestre vê todo mundo (alunos e
+  // professores/admins) com o total do mês; aluno vê só a própria
+  // linha (o backend já faz essa restrição — ver GET /attendance/summary).
+  // ----------------------------------------------------------
+  const { data: summary, isLoading: summaryLoading } = useGetAttendanceSummary(
+    { month: summaryMonth, year: summaryYear },
+    { query: { queryKey: getGetAttendanceSummaryQueryKey({ month: summaryMonth, year: summaryYear }) } }
+  );
+
+  const prevSummaryMonth = () => {
+    if (summaryMonth === 1) { setSummaryMonth(12); setSummaryYear(y => y - 1); }
+    else setSummaryMonth(m => m - 1);
+  };
+  const nextSummaryMonth = () => {
+    if (summaryMonth === 12) { setSummaryMonth(1); setSummaryYear(y => y + 1); }
+    else setSummaryMonth(m => m + 1);
+  };
 
   // ----------------------------------------------------------
   // Mutation de criação de sessão
@@ -183,10 +215,85 @@ export default function Sessions() {
             {Array.isArray(sessions) ? sessions.length : 0} sessões registradas
           </p>
         </div>
-        {(user?.role === "teacher" || user?.role === "admin") && (
+        {isMaster && (
           <Button data-testid="button-new-session" onClick={() => setOpen(true)}>
             <Plus size={16} className="mr-2" /> Nova Sessão
           </Button>
+        )}
+      </div>
+
+      {/* --------------------------------------------------------
+          Resumo mensal de presença
+
+          Navegador de mês (mesmo padrão de Payments.tsx) + resumo:
+          - Mestre: total do mês de cada aluno/professor (quem participou)
+          - Aluno: só o próprio total do mês
+      -------------------------------------------------------- */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="icon" onClick={prevSummaryMonth} data-testid="button-summary-prev-month">
+            <ChevronLeft size={18} />
+          </Button>
+          <div className="text-center">
+            <div className="font-black text-sm uppercase tracking-wide">{MONTHS[summaryMonth - 1]}</div>
+            <div className="text-xs text-muted-foreground">{summaryYear}</div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={nextSummaryMonth} data-testid="button-summary-next-month">
+            <ChevronRight size={18} />
+          </Button>
+        </div>
+
+        {summaryLoading ? (
+          <div className="h-16 bg-muted rounded animate-pulse" />
+        ) : isMaster ? (
+          // Mestre: lista de todo mundo que teve atividade no mês, ordenada
+          // pelo total (já vem ordenada do backend).
+          Array.isArray(summary) && summary.length > 0 ? (
+            <div className="space-y-1.5">
+              {summary.map(row => (
+                <div key={row.userId} className="flex items-center gap-3 py-1.5 border-b border-border/40 last:border-0">
+                  <div className="w-8 h-8 rounded-full bg-muted border border-border overflow-hidden shrink-0">
+                    {row.profilePhotoUrl
+                      ? <img src={row.profilePhotoUrl} alt={row.name} className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">{row.name.charAt(0)}</div>
+                    }
+                  </div>
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                    <span className="text-sm font-medium truncate">{row.name}</span>
+                    {row.role !== "student" && (
+                      <span title="Mestre"><ShieldCheck size={12} className="text-primary shrink-0" /></span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs shrink-0">
+                    {row.totalThai > 0 && <span className="text-red-400 font-bold">{row.totalThai} MT</span>}
+                    {row.totalJiu > 0 && <span className="text-blue-400 font-bold">{row.totalJiu} JJ</span>}
+                    <span className="text-muted-foreground">· {row.total} aulas</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">Ninguém participou de aulas neste mês ainda</p>
+          )
+        ) : (
+          // Aluno: só o próprio total do mês.
+          (() => {
+            const mine = Array.isArray(summary) ? summary[0] : null;
+            return (
+              <div className="flex items-center gap-4 py-2">
+                <Trophy size={28} className="text-primary shrink-0" />
+                <div>
+                  <div className="text-2xl font-black">{mine?.total ?? 0} <span className="text-sm font-normal text-muted-foreground">aulas este mês</span></div>
+                  <div className="text-xs text-muted-foreground">
+                    {mine?.totalThai ? `${mine.totalThai} Muay Thai` : ""}
+                    {mine?.totalThai && mine?.totalJiu ? " · " : ""}
+                    {mine?.totalJiu ? `${mine.totalJiu} Jiu-Jitsu` : ""}
+                    {!mine?.totalThai && !mine?.totalJiu ? "Nenhuma aula registrada ainda" : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })()
         )}
       </div>
 
