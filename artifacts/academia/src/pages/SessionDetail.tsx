@@ -9,7 +9,7 @@ import {
   useDeleteSession,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Users, Trash2, Calendar } from "lucide-react";
+import { ArrowLeft, Users, Trash2, Calendar, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -20,6 +20,7 @@ export default function SessionDetail() {
   const [, setLocation] = useLocation();          // navegação programática
   const sessionId = params ? parseInt(params.id, 10) : 0;  // id numérico da sessão
   const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -28,10 +29,11 @@ export default function SessionDetail() {
     query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) }
   });
 
-  // Busca a lista de presenças desta sessão.
+  // Busca a lista de presenças desta sessão — master-only no backend também,
+  // então só dispara a requisição quando faz sentido.
   const { data: attendance, isLoading: attLoading } = useListAttendance(
     { sessionId },
-    { query: { enabled: !!sessionId, queryKey: getListAttendanceQueryKey({ sessionId }) } }
+    { query: { enabled: !!sessionId && isMaster, queryKey: getListAttendanceQueryKey({ sessionId }) } }
   );
 
   const deleteAttMutation = useDeleteAttendance();      // remove uma presença
@@ -61,6 +63,25 @@ export default function SessionDetail() {
       onError: () => toast({ title: "Erro ao excluir sessao", variant: "destructive" }),
     });
   };
+
+  // Acesso restrito: detalhe de sessão mostra a lista de presença de todos os
+  // alunos — exclusivo para professores/admins (o backend já bloqueia isso;
+  // aqui é só a mensagem certa em vez de uma lista vazia/quebrada). Fica
+  // depois de todos os hooks acima para não violar as Rules of Hooks.
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          O detalhe de sessão é exclusivo para professores e administradores.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   // Spinner enquanto carrega os dados da sessão.
   if (sessionLoading) {

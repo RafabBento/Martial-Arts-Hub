@@ -65,18 +65,44 @@ sudo nginx -t && sudo systemctl reload nginx   # validar/aplicar config do nginx
 cd /var/www/martial-arts-hub && git log --oneline -5   # qual commit está rodando
 ```
 
-## 4. Quando tiver um domínio
+## 4. HTTPS (domínio + Cloudflare Tunnel)
 
-1. Aponte o DNS (registro A) do domínio pro IP da VPS.
-2. Troque `server_name _;` por `server_name seudominio.com;` em
-   `/etc/nginx/sites-available/martial-arts-hub` (ou edite `deploy/nginx.conf`
-   no repositório, dê push, e rode `release.ps1` de novo — mas nesse caso
-   também copie o arquivo atualizado por cima do de `/etc/nginx/sites-available/`
-   manualmente, o `release.ps1` não mexe na config do nginx sozinho).
-3. Instale certbot e gere o certificado:
-   ```bash
-   sudo apt-get install -y certbot python3-certbot-nginx
-   sudo certbot --nginx -d seudominio.com
-   ```
-4. Em `/etc/martial-arts-hub/api-server.env`, mude `COOKIE_SECURE=true` e
-   `sudo systemctl restart api-server`.
+O projeto usa **Cloudflare Tunnel** para HTTPS, não certbot — o Nginx nunca
+termina TLS diretamente, ele só recebe HTTP puro em `localhost:80` vindo do
+`cloudflared`. Isso é por isso que `deploy/nginx.conf` tem o `map` de
+`X-Forwarded-Proto` (repassa o esquema real do visitante em vez de sempre
+`http`, que é o que o Nginx veria sozinho).
+
+Domínio atual: `frontartesmarciais.com` (nameservers na Cloudflare). Tunnel
+nomeado `martial-arts-hub`, config em `/etc/cloudflared/config.yml`, serviço
+systemd `cloudflared.service` (`enabled`, sobrevive a reboot).
+
+**Importante — forçar protocolo HTTP/2 em vez de QUIC:**
+Por padrão o `cloudflared` usa QUIC (UDP) pra falar com a borda da
+Cloudflare. Em VPS que tratam mal UDP (ex.: Hostinger KVM), isso causa
+desconexões intermitentes (`journalctl -u cloudflared -g quic` mostra
+`failed to dial to edge with quic: timeout`) — na prática, o usuário vê
+"Failed to fetch" no navegador bem no meio de um login/requisição, sem
+nenhum log do lado do `api-server` (a requisição nem chega a sair do
+tunnel). A correção é adicionar `protocol: http2` (TCP, bem mais tolerante)
+no topo de `/etc/cloudflared/config.yml`:
+
+```yaml
+protocol: http2
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: frontartesmarciais.com
+    service: http://localhost:80
+  - hostname: www.frontartesmarciais.com
+    service: http://localhost:80
+  - service: http_status:404
+```
+
+Depois: `sudo systemctl restart cloudflared` e confirme nos logs
+(`journalctl -u cloudflared -n 20`) que as conexões registraram com
+`protocol=http2`.
+
+`COOKIE_SECURE=true` em `/etc/martial-arts-hub/api-server.env` já deve estar
+ativo (necessário para os cookies de sessão funcionarem por HTTPS).

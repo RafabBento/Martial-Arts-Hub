@@ -14,15 +14,29 @@ import {
   DeleteAttendanceParams,
   BulkAttendanceBody,
 } from "@workspace/api-zod";
+import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
 const router: IRouter = Router();
 
 // GET /attendance — lista registros de presença com filtros opcionais
 // (sessão, aluno, modalidade), mais recentes primeiro, já com dados do aluno.
+// Master vê tudo; aluno só pode consultar a própria presença (studentId tem
+// que ser o dele mesmo — sem filtro, ou filtro de outro aluno, é bloqueado).
 router.get("/attendance", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
   const query = ListAttendanceQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
+    return;
+  }
+
+  if (!isMasterRole(requester.role) && query.data.studentId !== requester.id) {
+    res.status(403).json({ error: "Você só pode ver a própria presença" });
     return;
   }
 
@@ -71,7 +85,18 @@ router.get("/attendance", async (req, res): Promise<void> => {
 });
 
 // POST /attendance — cria um registro de presença avulso (1 aluno em 1 sessão).
+// Master-only: marcar presença é ação do professor/admin, nunca autorreportada.
 router.post("/attendance", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const body = CreateAttendanceBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -209,8 +234,18 @@ router.post("/attendance/bulk", async (req, res): Promise<void> => {
   res.json({ created, skipped });
 });
 
-// DELETE /attendance/:id — remove um registro de presença pelo id.
+// DELETE /attendance/:id — remove um registro de presença pelo id. Master-only.
 router.delete("/attendance/:id", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const params = DeleteAttendanceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

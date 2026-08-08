@@ -12,6 +12,7 @@ import {
   GetSessionParams,
   DeleteSessionParams,
 } from "@workspace/api-zod";
+import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -70,8 +71,18 @@ router.get("/sessions", async (req, res): Promise<void> => {
   })));
 });
 
-// POST /sessions — cria uma nova sessão de treino.
+// POST /sessions — cria uma nova sessão de treino. Master-only.
 router.post("/sessions", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const body = CreateSessionBody.safeParse(req.body);
   if (!body.success) {
     res.status(400).json({ error: body.error.message });
@@ -146,8 +157,18 @@ router.get("/sessions/:id", async (req, res): Promise<void> => {
   });
 });
 
-// DELETE /sessions/:id — remove uma sessão de treino pelo id.
+// DELETE /sessions/:id — remove uma sessão de treino pelo id. Master-only.
 router.delete("/sessions/:id", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const params = DeleteSessionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

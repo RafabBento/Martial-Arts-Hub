@@ -44,9 +44,13 @@ export default function SessionDetailScreen() {
 
   const [toast, setToast] = useState<string | null>(null);
 
-  // Queries: dados da sessão e lista de presenças daquela sessão.
+  // Queries: dados da sessão e lista de presenças daquela sessão. A lista de
+  // presenças é master-only no backend também, então só busca quando faz sentido.
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId);
-  const { data: attendance, isLoading: attLoading } = useListAttendance({ sessionId });
+  const { data: attendance, isLoading: attLoading } = useListAttendance(
+    { sessionId },
+    { query: { enabled: isMaster, queryKey: getListAttendanceQueryKey({ sessionId }) } }
+  );
 
   // Mutações para excluir uma presença e excluir a sessão.
   const deleteAttMutation = useDeleteAttendance();
@@ -130,6 +134,29 @@ export default function SessionDetailScreen() {
   }
 
   if (!session) return null;
+
+  // Acesso restrito: detalhe de sessão mostra a presença de todos os alunos —
+  // exclusivo para professores/admins. Fica depois de todos os hooks acima
+  // para não violar as Rules of Hooks.
+  if (!isMaster) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color={colors.foreground} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Sessão</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={styles.empty}>
+          <Ionicons name="shield-outline" size={40} color={colors.mutedForeground} />
+          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            Detalhe de sessão exclusivo para professores e administradores.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   // Cor de destaque e data formatada conforme a modalidade da sessão.
   const isThai = session.modality === "thai";
