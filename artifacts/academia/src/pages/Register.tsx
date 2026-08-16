@@ -19,6 +19,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -75,26 +77,82 @@ const UNIT_OPTIONS = [
   { value: "upfitness",  label: "Front Up Fitness",   address: "Av. Gustavo Adolfo, 588" },
 ] as const;
 
+// Calcula a idade a partir da data de nascimento (YYYY-MM-DD), na data atual.
+function calculateAge(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+// Só compara telefones se ambos estiverem preenchidos (evita falso-positivo
+// de "iguais" quando um dos dois ainda está vazio, o que quebraria a digitação).
+function samePhone(a: string, b: string): boolean {
+  if (!a.trim() || !b.trim()) return false;
+  const digits = (s: string) => s.replace(/\D/g, "");
+  return digits(a) === digits(b);
+}
+
 // Esquema de validação (zod) do formulário de cadastro. Define obrigatórios
-// (nome, e-mail, senha, perfil) e campos opcionais de contato/modalidade/graduação.
-const registerSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  email: z.string().email("E-mail inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
-  role: z.enum(["student", "teacher"]),
-  unit: z.enum(["matriz", "panobianco", "upfitness"]).default("matriz"),
-  phone: z.string().optional(),
-  birthDate: z.string().optional(),
-  paymentDay: z.coerce.number().min(1).max(31).optional(),
-  modalityThai: z.boolean().optional(),
-  modalityJiu: z.boolean().optional(),
-  bollacha: z.boolean().optional(),
-  thaiGrade: z.string().optional(),
-  thaiGradeColor: z.string().optional(),
-  jiuGrade: z.string().optional(),
-  jiuGradeColor: z.string().optional(),
-  jiuDegree: z.number().min(1).max(4).optional(),
-});
+// (nome, e-mail, senha, perfil, telefone, data de nascimento, termo de saúde)
+// e campos opcionais de modalidade/graduação. Validações cruzadas (telefones
+// distintos, dados do responsável para menores) ficam no superRefine abaixo.
+const registerSchema = z
+  .object({
+    name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    email: z.string().email("E-mail inválido"),
+    password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    role: z.enum(["student", "teacher"]),
+    unit: z.enum(["matriz", "panobianco", "upfitness"]).default("matriz"),
+    phone: z.string().min(8, "Telefone é obrigatório"),
+    birthDate: z.string().min(1, "Data de nascimento é obrigatória"),
+    paymentDay: z.coerce.number().min(1).max(31).optional(),
+    modalityThai: z.boolean().optional(),
+    modalityJiu: z.boolean().optional(),
+    bollacha: z.boolean().optional(),
+    thaiGrade: z.string().optional(),
+    thaiGradeColor: z.string().optional(),
+    jiuGrade: z.string().optional(),
+    jiuGradeColor: z.string().optional(),
+    jiuDegree: z.number().min(1).max(4).optional(),
+    // Termo de saúde e responsabilidade
+    hasInjury: z.boolean().default(false),
+    injuryDetails: z.string().optional(),
+    hasCondition: z.boolean().default(false),
+    conditionDetails: z.string().optional(),
+    takesMedication: z.boolean().default(false),
+    medicationDetails: z.string().optional(),
+    emergencyContactName: z.string().min(2, "Informe o nome do contato de emergência"),
+    emergencyContactPhone: z.string().min(8, "Informe o telefone do contato de emergência"),
+    imageConsent: z.boolean().default(false),
+    guardianName: z.string().optional(),
+    guardianPhone: z.string().optional(),
+    declarationAccepted: z.boolean().refine((v) => v === true, "É necessário aceitar a declaração para se cadastrar"),
+  })
+  .superRefine((data, ctx) => {
+    if (samePhone(data.emergencyContactPhone, data.phone)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["emergencyContactPhone"], message: "Não pode ser o mesmo telefone do próprio usuário" });
+    }
+    if (data.birthDate && calculateAge(data.birthDate) < 18) {
+      if (!data.guardianName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianName"], message: "Obrigatório para menores de idade" });
+      }
+      if (!data.guardianPhone?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianPhone"], message: "Obrigatório para menores de idade" });
+      } else {
+        if (samePhone(data.guardianPhone, data.phone)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianPhone"], message: "Não pode ser o mesmo telefone do usuário" });
+        }
+        if (samePhone(data.guardianPhone, data.emergencyContactPhone)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["guardianPhone"], message: "Não pode ser o mesmo do contato de emergência" });
+        }
+      }
+    }
+  });
 
 // Tipo inferido dos valores do formulário a partir do esquema zod.
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -125,6 +183,18 @@ export default function Register() {
       jiuGrade: undefined,
       jiuGradeColor: undefined,
       jiuDegree: undefined,
+      hasInjury: false,
+      injuryDetails: "",
+      hasCondition: false,
+      conditionDetails: "",
+      takesMedication: false,
+      medicationDetails: "",
+      emergencyContactName: "",
+      emergencyContactPhone: "",
+      imageConsent: false,
+      guardianName: "",
+      guardianPhone: "",
+      declarationAccepted: false,
     },
   });
 
@@ -133,6 +203,11 @@ export default function Register() {
   const watchedThai = form.watch("modalityThai");  // se Muay Thai está marcado
   const watchedJiu = form.watch("modalityJiu");    // se Jiu-Jitsu está marcado
   const watchedJiuDegree = form.watch("jiuDegree");// grau de Jiu selecionado
+  const watchedBirthDate = form.watch("birthDate");// data de nascimento (define se é menor)
+  const watchedHasInjury = form.watch("hasInjury");
+  const watchedHasCondition = form.watch("hasCondition");
+  const watchedTakesMedication = form.watch("takesMedication");
+  const isMinor = !!watchedBirthDate && calculateAge(watchedBirthDate) < 18;
 
   // Envia o cadastro normalizando os campos opcionais (string vazia -> undefined,
   // booleanos com fallback). Em caso de sucesso, autentica e vai ao dashboard;
@@ -143,7 +218,6 @@ export default function Register() {
         data: {
           ...values,
           unit: values.unit ?? "matriz",
-          birthDate: values.birthDate || undefined,
           paymentDay: values.paymentDay || undefined,
           modalityThai: values.modalityThai ?? false,
           modalityJiu: values.modalityJiu ?? false,
@@ -153,6 +227,11 @@ export default function Register() {
           jiuGrade: values.jiuGrade || undefined,
           jiuGradeColor: values.jiuGradeColor || undefined,
           jiuDegree: values.jiuDegree || undefined,
+          injuryDetails: values.hasInjury ? values.injuryDetails || undefined : undefined,
+          conditionDetails: values.hasCondition ? values.conditionDetails || undefined : undefined,
+          medicationDetails: values.takesMedication ? values.medicationDetails || undefined : undefined,
+          guardianName: isMinor ? values.guardianName : undefined,
+          guardianPhone: isMinor ? values.guardianPhone : undefined,
         },
       },
       {
@@ -225,7 +304,7 @@ export default function Register() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Telefone (Opcional)</FormLabel>
+                    <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Telefone</FormLabel>
                     <FormControl>
                       <Input type="tel" placeholder="(11) 99999-0000" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
                     </FormControl>
@@ -275,7 +354,7 @@ export default function Register() {
                   <FormItem>
                     <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" autoComplete="new-password" {...field} />
+                      <PasswordInput placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -565,6 +644,183 @@ export default function Register() {
                   )}
                 </div>
               )}
+
+              {/* Termo de saúde e responsabilidade — obrigatório para todos os perfis */}
+              <div className="space-y-4 rounded-lg border border-border bg-card/30 p-4">
+                <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Saúde e Responsabilidade</p>
+
+                <FormField
+                  control={form.control}
+                  name="hasInjury"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">Possui alguma lesão ou limitação?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+                {watchedHasInjury && (
+                  <FormField
+                    control={form.control}
+                    name="injuryDetails"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea placeholder="Descreva a lesão ou limitação" className="bg-card/50 border-border" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="hasCondition"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">Possui alguma doença ou condição que deveríamos saber?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+                {watchedHasCondition && (
+                  <FormField
+                    control={form.control}
+                    name="conditionDetails"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea placeholder="Descreva a doença ou condição" className="bg-card/50 border-border" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="takesMedication"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">Faz uso de medicamento contínuo?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+                {watchedTakesMedication && (
+                  <FormField
+                    control={form.control}
+                    name="medicationDetails"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea placeholder="Qual(is) medicamento(s)" className="bg-card/50 border-border" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="emergencyContactName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-muted-foreground">Nome do contato de emergência</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Nome completo" className="h-11 bg-card/50 border-border" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="emergencyContactPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs text-muted-foreground">Telefone do contato de emergência</FormLabel>
+                      <FormControl>
+                        <Input type="tel" placeholder="(11) 99999-0000" className="h-11 bg-card/50 border-border" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Não pode ser o mesmo telefone do próprio usuário</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="imageConsent"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 space-y-0">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">Autoriza o uso de imagens?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                {isMinor && (
+                  <div className="space-y-3 pl-4 border-l-2 border-primary/30">
+                    <p className="text-xs font-bold text-primary uppercase tracking-wider">Dados do responsável (menor de idade)</p>
+                    <FormField
+                      control={form.control}
+                      name="guardianName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs text-muted-foreground">Nome do responsável</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome completo" className="h-11 bg-card/50 border-border" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="guardianPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs text-muted-foreground">Telefone do responsável</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="(11) 99999-0000" className="h-11 bg-card/50 border-border" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="declarationAccepted"
+                  render={({ field }) => (
+                    <FormItem className="flex items-start gap-3 space-y-0 pt-2 border-t border-border">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} className="mt-0.5" />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer text-sm leading-snug">
+                        {isMinor
+                          ? "Li e declaro que estou deixando meu filho treinar com a Front."
+                          : "Declaro que li e que as informações acima são verdadeiras."}
+                      </FormLabel>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Botão de envio: mostra estado de carregamento enquanto cadastra */}
               <Button type="submit" className="w-full h-12 text-lg font-bold uppercase tracking-wide mt-4" disabled={registerMutation.isPending}>

@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/hooks/use-toast";
 
 const resetPasswordSchema = z.object({
@@ -88,7 +88,7 @@ export default function ResetPassword() {
                     <FormItem>
                       <FormLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Nova senha</FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="••••••••" autoComplete="new-password" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
+                        <PasswordInput placeholder="••••••••" autoComplete="new-password" className="h-12 bg-card/50 border-border focus-visible:ring-primary" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

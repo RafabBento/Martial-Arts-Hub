@@ -13,13 +13,16 @@ import {
   UpdateUserBody,
   DeleteUserParams,
 } from "@workspace/api-zod";
-import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields } from "../lib/authz";
+import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields, hasHealthDeclaration, getHealthDeclarationUserIds } from "../lib/authz";
 
 const router: IRouter = Router();
 
 // Representação pública do usuário (sem passwordHash); datas em ISO e opcionais
-// normalizados para null. Mesma forma usada nas rotas de auth.
-function serializeUser(user: typeof usersTable.$inferSelect) {
+// normalizados para null. Mesma forma usada nas rotas de auth. profileComplete
+// precisa ser calculado à parte (consulta a health_declarations) — importante
+// manter aqui igual ao de auth.ts, porque Profile.tsx faz setUser(response)
+// direto com o retorno de PATCH /users/:id.
+function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean) {
   return {
     id: user.id,
     name: user.name,
@@ -27,6 +30,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     role: user.role,
     unit: user.unit,
     emailVerified: user.emailVerified,
+    profileComplete,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -77,7 +81,9 @@ router.get("/users", async (req, res): Promise<void> => {
   }
 
   const users = await dbQuery;
-  res.json(users.map(serializeUser));
+  // Uma única consulta em lote em vez de N (ver getHealthDeclarationUserIds).
+  const withDeclaration = await getHealthDeclarationUserIds(users.map(u => u.id));
+  res.json(users.map(u => serializeUser(u, withDeclaration.has(u.id))));
 });
 
 // GET /users/:id — obtém um único usuário pelo id. Self ou master.
@@ -104,7 +110,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user));
+  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
 });
 
 // PATCH /users/:id — atualização parcial dos dados de um usuário. Self ou
@@ -133,8 +139,10 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     res.status(403).json({ error: "Você só pode editar os próprios dados" });
     return;
   }
-  const bodyData = (!isMaster && requester.role === "student")
-    ? stripFields(body.data, GRADE_FIELDS)
+  // Self-edit de aluno: bloqueia campos de graduação. "role" é bloqueado para
+  // qualquer edição não-master (só um mestre pode promover/rebaixar alguém).
+  const bodyData = !isMaster
+    ? stripFields(body.data, requester.role === "student" ? [...GRADE_FIELDS, "role"] : ["role"])
     : body.data;
 
   // Drizzle .set() accepts undefined (omit) but not null for enum cols, so
@@ -159,7 +167,7 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user));
+  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
 });
 
 // DELETE /users/:id — remove um usuário pelo id. Master-only.

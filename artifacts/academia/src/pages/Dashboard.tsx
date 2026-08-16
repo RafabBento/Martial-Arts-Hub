@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-client-react";
 import { Users, CalendarDays, Camera, TrendingUp, Dumbbell, Shield } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "../contexts/AuthContext";
 
 // ============================================================
 // Componente StatCard
@@ -98,6 +99,8 @@ function ModalityBadge({ modality }: { modality: string | null | undefined }) {
 // Componente principal: Dashboard
 // ============================================================
 export default function Dashboard() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   // ----------------------------------------------------------
   // Busca as estatísticas agregadas da academia.
@@ -128,7 +131,7 @@ export default function Dashboard() {
   // respostas inesperadas da API (ex: objeto, null, string).
   // ----------------------------------------------------------
   const { data: activity, isLoading: activityLoading } = useGetRecentActivity({
-    query: { queryKey: getGetRecentActivityQueryKey() }
+    query: { queryKey: getGetRecentActivityQueryKey(), enabled: isMaster }
   });
 
   // ----------------------------------------------------------
@@ -193,11 +196,14 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Grade de duas colunas: coluna principal (2/3) + coluna lateral (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Grade de duas colunas: coluna principal (2/3) + coluna lateral (1/3).
+          A atividade recente expõe presenças individuais de outros alunos —
+          exclusiva para professores/admins; alunos veem só a coluna lateral. */}
+      <div className={`grid grid-cols-1 gap-6 ${isMaster ? "lg:grid-cols-3" : "lg:grid-cols-1 max-w-md"}`}>
 
         {/* --------------------------------------------------------
             Seção 2: Atividade Recente (coluna principal, 2/3 da largura)
+            Master-only.
 
             Exibe as últimas 10 atividades registradas no sistema
             (presenças confirmadas em sessões de treino).
@@ -215,54 +221,56 @@ export default function Dashboard() {
             garante com certeza que é um array antes de chamar .slice()
             e .map(), evitando o erro "slice is not a function".
         -------------------------------------------------------- */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
-          <h2 className="text-lg font-bold uppercase tracking-wide mb-4">Atividade Recente</h2>
+        {isMaster && (
+          <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
+            <h2 className="text-lg font-bold uppercase tracking-wide mb-4">Atividade Recente</h2>
 
-          {activityLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-12 bg-muted rounded animate-pulse" />
-              ))}
-            </div>
-          ) : activity && Array.isArray(activity) && activity.length > 0 ? (
-            <div className="space-y-2">
-              {/* .slice(0, 10) limita a lista aos primeiros 10 itens,
-                  mesmo que a API retorne mais, para não sobrecarregar
-                  a interface visualmente */}
-              {activity.slice(0, 10).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0"
-                >
-                  {/* Avatar do aluno: se tiver foto usa a imagem,
-                      senão exibe a primeira letra do nome como fallback */}
-                  <div className="w-9 h-9 rounded-full bg-muted border border-border overflow-hidden shrink-0 flex items-center justify-center text-sm font-bold text-muted-foreground">
-                    {item.studentPhotoUrl
-                      ? <img src={item.studentPhotoUrl} alt="" className="w-full h-full object-cover" />
-                      : item.studentName?.charAt(0).toUpperCase()}
-                  </div>
-
-                  {/* Descrição da atividade e data formatada em pt-BR.
-                      "truncate" corta o texto com "..." se for longo demais
-                      para caber na largura disponível */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{item.description}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(item.createdAt).toLocaleString("pt-BR")}
+            {activityLoading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                ))}
+              </div>
+            ) : activity && Array.isArray(activity) && activity.length > 0 ? (
+              <div className="space-y-2">
+                {/* .slice(0, 10) limita a lista aos primeiros 10 itens,
+                    mesmo que a API retorne mais, para não sobrecarregar
+                    a interface visualmente */}
+                {activity.slice(0, 10).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0"
+                  >
+                    {/* Avatar do aluno: se tiver foto usa a imagem,
+                        senão exibe a primeira letra do nome como fallback */}
+                    <div className="w-9 h-9 rounded-full bg-muted border border-border overflow-hidden shrink-0 flex items-center justify-center text-sm font-bold text-muted-foreground">
+                      {item.studentPhotoUrl
+                        ? <img src={item.studentPhotoUrl} alt="" className="w-full h-full object-cover" />
+                        : item.studentName?.charAt(0).toUpperCase()}
                     </div>
-                  </div>
 
-                  {/* Selo de modalidade (MUAY THAI ou JIU-JITSU) */}
-                  <ModalityBadge modality={item.modality} />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              Nenhuma atividade recente
-            </div>
-          )}
-        </div>
+                    {/* Descrição da atividade e data formatada em pt-BR.
+                        "truncate" corta o texto com "..." se for longo demais
+                        para caber na largura disponível */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">{item.description}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(item.createdAt).toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+
+                    {/* Selo de modalidade (MUAY THAI ou JIU-JITSU) */}
+                    <ModalityBadge modality={item.modality} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                Nenhuma atividade recente
+              </div>
+            )}
+          </div>
+        )}
 
         {/* --------------------------------------------------------
             Seção 3: Ações Rápidas + Distribuição de Alunos

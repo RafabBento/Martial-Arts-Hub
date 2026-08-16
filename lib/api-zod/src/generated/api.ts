@@ -21,7 +21,13 @@ export const registerBodyNameMin = 2;
 
 export const registerBodyPasswordMin = 6;
 
+export const registerBodyPhoneMin = 8;
+
 export const registerBodyPaymentDayMax = 31;
+
+export const registerBodyEmergencyContactNameMin = 2;
+
+export const registerBodyEmergencyContactPhoneMin = 8;
 
 export const RegisterBody = zod.object({
   name: zod.string().min(registerBodyNameMin),
@@ -29,8 +35,8 @@ export const RegisterBody = zod.object({
   password: zod.string().min(registerBodyPasswordMin),
   role: zod.enum(["student", "teacher"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]).nullish(),
-  phone: zod.string().optional(),
-  birthDate: zod.string().nullish(),
+  phone: zod.string().min(registerBodyPhoneMin),
+  birthDate: zod.string(),
   paymentDay: zod.number().min(1).max(registerBodyPaymentDayMax).nullish(),
   modalityThai: zod.boolean().nullish(),
   modalityJiu: zod.boolean().nullish(),
@@ -40,6 +46,18 @@ export const RegisterBody = zod.object({
   jiuGrade: zod.string().nullish(),
   jiuGradeColor: zod.string().nullish(),
   jiuDegree: zod.number().nullish(),
+  hasInjury: zod.boolean().optional(),
+  injuryDetails: zod.string().nullish(),
+  hasCondition: zod.boolean().optional(),
+  conditionDetails: zod.string().nullish(),
+  takesMedication: zod.boolean().optional(),
+  medicationDetails: zod.string().nullish(),
+  emergencyContactName: zod.string().min(registerBodyEmergencyContactNameMin),
+  emergencyContactPhone: zod.string().min(registerBodyEmergencyContactPhoneMin),
+  imageConsent: zod.boolean().optional(),
+  guardianName: zod.string().nullish(),
+  guardianPhone: zod.string().nullish(),
+  declarationAccepted: zod.boolean(),
 });
 
 /**
@@ -58,6 +76,11 @@ export const LoginResponse = zod.object({
     role: zod.enum(["student", "teacher", "admin"]),
     unit: zod.enum(["matriz", "panobianco", "upfitness"]),
     emailVerified: zod.boolean(),
+    profileComplete: zod
+      .boolean()
+      .describe(
+        "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+      ),
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
     birthDate: zod.string().nullish(),
@@ -91,6 +114,11 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   emailVerified: zod.boolean(),
+  profileComplete: zod
+    .boolean()
+    .describe(
+      "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -121,6 +149,70 @@ export const VerifyEmailResponse = zod.object({
  */
 export const ResendVerificationResponse = zod.object({
   message: zod.string(),
+});
+
+/**
+ * Used to backfill the health declaration (and phone/birthDate) for
+accounts created before that questionnaire existed. Self only — the
+logged-in user completes their own profile.
+
+ * @summary Complete the health/liability declaration for an existing account
+ */
+export const completeProfileBodyPhoneMin = 8;
+
+export const completeProfileBodyEmergencyContactNameMin = 2;
+
+export const completeProfileBodyEmergencyContactPhoneMin = 8;
+
+export const CompleteProfileBody = zod
+  .object({
+    phone: zod.string().min(completeProfileBodyPhoneMin),
+    birthDate: zod.string(),
+    hasInjury: zod.boolean().optional(),
+    injuryDetails: zod.string().nullish(),
+    hasCondition: zod.boolean().optional(),
+    conditionDetails: zod.string().nullish(),
+    takesMedication: zod.boolean().optional(),
+    medicationDetails: zod.string().nullish(),
+    emergencyContactName: zod
+      .string()
+      .min(completeProfileBodyEmergencyContactNameMin),
+    emergencyContactPhone: zod
+      .string()
+      .min(completeProfileBodyEmergencyContactPhoneMin),
+    imageConsent: zod.boolean().optional(),
+    guardianName: zod.string().nullish(),
+    guardianPhone: zod.string().nullish(),
+    declarationAccepted: zod.boolean(),
+  })
+  .describe(
+    "Health\/liability declaration subset of RegisterInput, used to backfill\naccounts created before that questionnaire existed.\n",
+  );
+
+export const CompleteProfileResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  emailVerified: zod.boolean(),
+  profileComplete: zod
+    .boolean()
+    .describe(
+      "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
+  phone: zod.string().nullish(),
+  profilePhotoUrl: zod.string().nullish(),
+  birthDate: zod.string().nullish(),
+  paymentDay: zod.number().nullish(),
+  modalityThai: zod.boolean().nullish(),
+  modalityJiu: zod.boolean().nullish(),
+  thaiGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
 });
 
 /**
@@ -166,6 +258,11 @@ export const ListUsersResponseItem = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   emailVerified: zod.boolean(),
+  profileComplete: zod
+    .boolean()
+    .describe(
+      "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -195,6 +292,11 @@ export const GetUserResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   emailVerified: zod.boolean(),
+  profileComplete: zod
+    .boolean()
+    .describe(
+      "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -218,6 +320,10 @@ export const UpdateUserParams = zod.object({
 
 export const UpdateUserBody = zod.object({
   name: zod.string().optional(),
+  role: zod
+    .enum(["student", "teacher", "admin"])
+    .optional()
+    .describe("Somente professor\/admin pode alterar o papel de um usuário."),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]).nullish(),
   phone: zod.string().optional(),
   profilePhotoUrl: zod.string().optional(),
@@ -239,6 +345,11 @@ export const UpdateUserResponse = zod.object({
   role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   emailVerified: zod.boolean(),
+  profileComplete: zod
+    .boolean()
+    .describe(
+      "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -278,6 +389,7 @@ export const ListStudentsResponseItem = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
@@ -310,6 +422,7 @@ export const GetStudentResponse = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),
@@ -353,6 +466,7 @@ export const UpdateStudentResponse = zod.object({
   userId: zod.number(),
   name: zod.string(),
   email: zod.string(),
+  role: zod.enum(["student", "teacher", "admin"]),
   unit: zod.enum(["matriz", "panobianco", "upfitness"]),
   profilePhotoUrl: zod.string().nullish(),
   modalityThai: zod.boolean(),

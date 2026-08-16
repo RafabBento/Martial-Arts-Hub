@@ -18,6 +18,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/hooks/use-toast";
 
 // Schema de validação do formulário de login: e-mail precisa ter formato válido
@@ -145,7 +146,7 @@ export default function Login() {
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" autoComplete="current-password" {...field} />
+                      <PasswordInput placeholder="••••••••" className="h-12 bg-card/50 border-border focus-visible:ring-primary" autoComplete="current-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

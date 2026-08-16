@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useGetStudent,
   useUpdateStudent,
+  useUpdateUser,
   useListAttendance,
   getGetStudentQueryKey,
   getListStudentsQueryKey,
@@ -147,6 +148,24 @@ export default function StudentDetailScreen() {
 
   // Mutação para atualizar os dados/graduações do aluno.
   const updateMutation = useUpdateStudent();
+  const updateUserMutation = useUpdateUser();
+
+  // Promove o aluno a administrador: papel "admin" passa a ter todos os
+  // privilégios de mestre (inclusive rotas restritas a admin).
+  const handlePromoteToAdmin = () => {
+    updateUserMutation.mutate(
+      { id: studentId, data: { role: "admin" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+          queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast("Usuário promovido a administrador!");
+        },
+        onError: () => showToast("Erro ao promover usuário"),
+      }
+    );
+  };
 
   // Exibe um toast temporário (some sozinho após 2,5s).
   const showToast = (msg: string) => {
@@ -379,6 +398,28 @@ export default function StudentDetailScreen() {
             <Text style={[styles.faceText, { color: colors.success, fontFamily: "Inter_600SemiBold" }]}>Bolsista</Text>
           </View>
         ) : null}
+
+        {/* Promover a administrador: master-only. Dá ao usuário todos os
+            privilégios de mestre, inclusive rotas restritas a admin. */}
+        {isMaster && (
+          student.role === "admin" ? (
+            <View style={styles.faceRow}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+              <Text style={[styles.faceText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>Administrador</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.faceBtn, { backgroundColor: "transparent", borderColor: colors.border, borderWidth: 1 }]}
+              onPress={handlePromoteToAdmin}
+              disabled={updateUserMutation.isPending}
+            >
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.mutedForeground} />
+              <Text style={[styles.faceBtnText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                Promover a Administrador
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
 
         {/* Toggle modalidade */}
         {showToggle && (

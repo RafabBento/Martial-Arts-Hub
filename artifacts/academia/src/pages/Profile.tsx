@@ -149,7 +149,7 @@ function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay
 
   // Copia a chave PIX (e-mail) para a área de transferência.
   const handleCopy = () => {
-    navigator.clipboard.writeText("frontartesmarciais@gmail.com");
+    navigator.clipboard.writeText("frontrecebimento@gmail.com");
     toast({ title: "Chave PIX copiada!" });
   };
 
@@ -207,7 +207,7 @@ function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay
           <div className="flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-4 py-3">
             <div className="flex-1 min-w-0">
               <div className="text-xs text-muted-foreground mb-0.5">Chave PIX (e-mail)</div>
-              <div className="font-mono text-sm font-semibold truncate">frontartesmarciais@gmail.com</div>
+              <div className="font-mono text-sm font-semibold truncate">frontrecebimento@gmail.com</div>
             </div>
             <Button size="sm" variant="outline" onClick={handleCopy} className="shrink-0 gap-2">
               <Copy size={14} /> Copiar

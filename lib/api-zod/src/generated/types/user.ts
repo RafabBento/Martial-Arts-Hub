@@ -15,6 +15,11 @@ export interface User {
   role: UserRole;
   unit: UserUnit;
   emailVerified: boolean;
+  /** True once the health/liability declaration has been filled out
+(at registration, or via /auth/complete-profile for accounts
+created before that questionnaire existed).
+ */
+  profileComplete: boolean;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

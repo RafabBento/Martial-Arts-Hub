@@ -32,7 +32,7 @@ export function PaymentReminder() {
       setTimeout(() => {
         toast({
           title: "Hoje é seu dia de pagamento!",
-          description: `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontartesmarciais@gmail.com`,
+          description: `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontrecebimento@gmail.com`,
           duration: 8000,
         });
       }, 600);
@@ -54,7 +54,7 @@ export function PaymentReminder() {
 
     if (diff === 0) {
       title = "Hoje é seu dia de pagamento!";
-      description = `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontartesmarciais@gmail.com`;
+      description = `Lembre-se de pagar a mensalidade hoje (dia ${day}). Valor: R$ 80,00 — PIX: frontrecebimento@gmail.com`;
     } else if (diff === 1) {
       title = "Mensalidade vence amanhã!";
       description = `Seu pagamento vence amanhã, dia ${day}. Não deixe para última hora!`;

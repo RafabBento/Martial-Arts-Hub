@@ -13,11 +13,13 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { PaymentReminder } from "./components/PaymentReminder";
 import { EmailVerifyBanner } from "./components/EmailVerifyBanner";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { Layout } from "./components/Layout";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import CompleteProfile from "./pages/CompleteProfile";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -67,6 +69,13 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   // Sem usuário (e já redirecionando), não renderiza nada para evitar flash de conteúdo.
   if (!user) return null;
+
+  // Termo de saúde/responsabilidade pendente (contas criadas antes desse
+  // questionário existir, inclusive mestres/admins): bloqueia qualquer rota e
+  // mostra só a tela de preenchimento, fora do Layout (sem navegação visível).
+  if (!user.profileComplete) {
+    return <CompleteProfile />;
+  }
 
   // Usuário autenticado: renderiza a página dentro do layout com sidebar/cabeçalho.
   return (
@@ -153,6 +162,7 @@ function App() {
           </WouterRouter>
           <PaymentReminder />
           <InstallPrompt />
+          <UpdatePrompt />
           <Toaster />
         </TooltipProvider>
       </AuthProvider>

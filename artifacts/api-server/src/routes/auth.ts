@@ -5,18 +5,19 @@
 // =============================================================================
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, usersTable, studentProfilesTable, emailVerificationTokensTable, passwordResetTokensTable } from "@workspace/db";
+import { db, usersTable, studentProfilesTable, emailVerificationTokensTable, passwordResetTokensTable, healthDeclarationsTable } from "@workspace/db";
 import {
   RegisterBody,
   LoginBody,
   VerifyEmailBody,
   ForgotPasswordBody,
   ResetPasswordBody,
+  CompleteProfileBody,
 } from "@workspace/api-zod";
 import { createHash, randomBytes } from "crypto";
 import { sendEmail } from "../lib/email";
-import { verificationEmail, passwordResetEmail } from "../lib/emailTemplates";
-import { getSessionUserId } from "../lib/authz";
+import { verificationEmail, passwordResetEmail, healthDeclarationEmail } from "../lib/emailTemplates";
+import { getSessionUserId, hasHealthDeclaration } from "../lib/authz";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -51,10 +52,71 @@ function hashPassword(password: string): string {
   return createHash("sha256").update(password + "academia_salt_2024").digest("hex");
 }
 
+// Normaliza telefone para comparação (mantém só dígitos) — evita que
+// formatação diferente ("(11) 99999-0000" vs "11999990000") escape da
+// checagem de "não pode ser o mesmo telefone do próprio usuário".
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
+// Calcula se a pessoa é menor de idade (<18) a partir da data de nascimento
+// (YYYY-MM-DD), na data atual do cadastro.
+function calculateIsMinor(birthDate: string): boolean {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age < 18;
+}
+
+// Validação compartilhada do termo de saúde/responsabilidade, usada tanto no
+// cadastro (POST /auth/register) quanto no preenchimento retroativo
+// (POST /auth/complete-profile). Retorna o erro a exibir, ou isMinor quando
+// tudo está válido.
+function validateHealthFields(input: {
+  phone: string;
+  birthDate: string;
+  emergencyContactPhone: string;
+  declarationAccepted: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+}): { error: string } | { isMinor: boolean } {
+  if (!input.declarationAccepted) {
+    return { error: "É necessário aceitar a declaração final para continuar." };
+  }
+
+  // O contato de emergência precisa ser uma pessoa diferente do próprio usuário.
+  if (normalizePhone(input.emergencyContactPhone) === normalizePhone(input.phone)) {
+    return { error: "O contato de emergência não pode ter o mesmo telefone do próprio usuário." };
+  }
+
+  const isMinor = calculateIsMinor(input.birthDate);
+
+  // Menores de idade precisam informar os dados do responsável, além do
+  // contato de emergência (que continua sendo uma pessoa à parte).
+  if (isMinor) {
+    if (!input.guardianName?.trim() || !input.guardianPhone?.trim()) {
+      return { error: "Para menores de idade, é necessário informar o nome e telefone do responsável." };
+    }
+    if (normalizePhone(input.guardianPhone) === normalizePhone(input.phone)) {
+      return { error: "O telefone do responsável não pode ser o mesmo telefone do usuário." };
+    }
+    if (normalizePhone(input.guardianPhone) === normalizePhone(input.emergencyContactPhone)) {
+      return { error: "O telefone do responsável não pode ser o mesmo do contato de emergência." };
+    }
+  }
+
+  return { isMinor };
+}
+
 // Monta a representação pública do usuário enviada ao cliente. Note que o
 // passwordHash NUNCA é incluído; datas viram ISO string e campos opcionais
-// são normalizados para null.
-function serializeUser(user: typeof usersTable.$inferSelect) {
+// são normalizados para null. profileComplete precisa ser calculado à parte
+// (consulta a health_declarations) e passado explicitamente por quem chama.
+function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean) {
   return {
     id: user.id,
     name: user.name,
@@ -62,6 +124,7 @@ function serializeUser(user: typeof usersTable.$inferSelect) {
     role: user.role,
     unit: user.unit,
     emailVerified: user.emailVerified,
+    profileComplete,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -86,7 +149,19 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role, unit, phone, birthDate, paymentDay, modalityThai, modalityJiu, bollacha, thaiGrade, thaiGradeColor, jiuGrade, jiuGradeColor, jiuDegree } = parsed.data;
+  const {
+    name, email, password, role, unit, phone, birthDate, paymentDay, modalityThai, modalityJiu, bollacha,
+    thaiGrade, thaiGradeColor, jiuGrade, jiuGradeColor, jiuDegree,
+    hasInjury, injuryDetails, hasCondition, conditionDetails, takesMedication, medicationDetails,
+    emergencyContactName, emergencyContactPhone, imageConsent, guardianName, guardianPhone, declarationAccepted,
+  } = parsed.data;
+
+  const validation = validateHealthFields({ phone, birthDate, emergencyContactPhone, declarationAccepted, guardianName, guardianPhone });
+  if ("error" in validation) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+  const { isMinor } = validation;
 
   // Email é único: rejeita se já houver cadastro com este email.
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email));
@@ -126,6 +201,24 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     });
   }
 
+  // Termo de saúde e responsabilidade — aplicado a todos os papéis (aluno e
+  // professor), não só alunos.
+  await db.insert(healthDeclarationsTable).values({
+    userId: user.id,
+    hasInjury: hasInjury ?? false,
+    injuryDetails: (hasInjury && injuryDetails) ? injuryDetails : null,
+    hasCondition: hasCondition ?? false,
+    conditionDetails: (hasCondition && conditionDetails) ? conditionDetails : null,
+    takesMedication: takesMedication ?? false,
+    medicationDetails: (takesMedication && medicationDetails) ? medicationDetails : null,
+    emergencyContactName,
+    emergencyContactPhone,
+    imageConsent: imageConsent ?? false,
+    isMinor,
+    guardianName: isMinor ? (guardianName ?? null) : null,
+    guardianPhone: isMinor ? (guardianPhone ?? null) : null,
+  });
+
   // Emite o token Bearer (base64 de "id:email:timestamp") e já autentica a
   // sessão para o usuário recém-criado. O cadastro NÃO fica bloqueado
   // esperando a confirmação do e-mail (soft-gate — ver EmailVerifyBanner no
@@ -141,7 +234,32 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     logger.error({ err, userId: user.id }, "Falha ao emitir e-mail de verificação no registro");
   }
 
-  res.status(201).json({ user: serializeUser(user), token });
+  // E-mail extra, separado do de confirmação de cadastro, com uma cópia do
+  // termo de saúde preenchido.
+  try {
+    const { subject, html } = healthDeclarationEmail({
+      name: user.name,
+      isMinor,
+      hasInjury: hasInjury ?? false,
+      injuryDetails: (hasInjury && injuryDetails) ? injuryDetails : null,
+      hasCondition: hasCondition ?? false,
+      conditionDetails: (hasCondition && conditionDetails) ? conditionDetails : null,
+      takesMedication: takesMedication ?? false,
+      medicationDetails: (takesMedication && medicationDetails) ? medicationDetails : null,
+      emergencyContactName,
+      emergencyContactPhone,
+      imageConsent: imageConsent ?? false,
+      guardianName: isMinor ? (guardianName ?? null) : null,
+      guardianPhone: isMinor ? (guardianPhone ?? null) : null,
+    });
+    await sendEmail({ to: user.email, subject, html });
+  } catch (err) {
+    logger.error({ err, userId: user.id }, "Falha ao emitir e-mail de confirmação do termo de saúde");
+  }
+
+  // Acabamos de gravar o termo de saúde nesta mesma requisição: já sabemos
+  // que o perfil está completo, sem precisar de outra consulta.
+  res.status(201).json({ user: serializeUser(user, true), token });
 });
 
 // POST /auth/login — valida credenciais e abre a sessão.
@@ -167,7 +285,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   (req.session as unknown as Record<string, unknown>).userId = user.id;
   (req.session as unknown as Record<string, unknown>).token = token;
 
-  res.json({ user: serializeUser(user), token });
+  res.json({ user: serializeUser(user, await hasHealthDeclaration(user.id)), token });
 });
 
 // POST /auth/logout — destrói a sessão atual (cookie deixa de autenticar).
@@ -191,7 +309,92 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user));
+  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
+});
+
+// POST /auth/complete-profile — preenche retroativamente o termo de saúde e
+// responsabilidade (e telefone/data de nascimento, se ainda vazios) para
+// contas criadas antes desse questionário existir. Self only. Depois disso,
+// profileComplete vira true e o gate de navegação libera o app.
+router.post("/auth/complete-profile", async (req, res): Promise<void> => {
+  const userId = getSessionUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  const parsed = CompleteProfileBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const {
+    phone, birthDate, hasInjury, injuryDetails, hasCondition, conditionDetails,
+    takesMedication, medicationDetails, emergencyContactName, emergencyContactPhone,
+    imageConsent, guardianName, guardianPhone, declarationAccepted,
+  } = parsed.data;
+
+  const validation = validateHealthFields({ phone, birthDate, emergencyContactPhone, declarationAccepted, guardianName, guardianPhone });
+  if ("error" in validation) {
+    res.status(400).json({ error: validation.error });
+    return;
+  }
+  const { isMinor } = validation;
+
+  const [existingUser] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!existingUser) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  const [user] = await db.update(usersTable).set({ phone, birthDate }).where(eq(usersTable.id, userId)).returning();
+
+  const healthValues = {
+    hasInjury: hasInjury ?? false,
+    injuryDetails: (hasInjury && injuryDetails) ? injuryDetails : null,
+    hasCondition: hasCondition ?? false,
+    conditionDetails: (hasCondition && conditionDetails) ? conditionDetails : null,
+    takesMedication: takesMedication ?? false,
+    medicationDetails: (takesMedication && medicationDetails) ? medicationDetails : null,
+    emergencyContactName,
+    emergencyContactPhone,
+    imageConsent: imageConsent ?? false,
+    isMinor,
+    guardianName: isMinor ? (guardianName ?? null) : null,
+    guardianPhone: isMinor ? (guardianPhone ?? null) : null,
+  };
+
+  // Upsert: normalmente é a primeira vez (conta antiga sem termo), mas um
+  // reenvio acidental não deve quebrar com erro de chave duplicada.
+  await db
+    .insert(healthDeclarationsTable)
+    .values({ userId, ...healthValues })
+    .onConflictDoUpdate({ target: healthDeclarationsTable.userId, set: healthValues });
+
+  // E-mail extra de confirmação do termo, mesmo template usado no cadastro.
+  try {
+    const { subject, html } = healthDeclarationEmail({
+      name: user.name,
+      isMinor,
+      hasInjury: healthValues.hasInjury,
+      injuryDetails: healthValues.injuryDetails,
+      hasCondition: healthValues.hasCondition,
+      conditionDetails: healthValues.conditionDetails,
+      takesMedication: healthValues.takesMedication,
+      medicationDetails: healthValues.medicationDetails,
+      emergencyContactName,
+      emergencyContactPhone,
+      imageConsent: healthValues.imageConsent,
+      guardianName: healthValues.guardianName,
+      guardianPhone: healthValues.guardianPhone,
+    });
+    await sendEmail({ to: user.email, subject, html });
+  } catch (err) {
+    logger.error({ err, userId }, "Falha ao emitir e-mail de confirmação do termo de saúde (complete-profile)");
+  }
+
+  res.json(serializeUser(user, true));
 });
 
 // POST /auth/verify-email — confirma o e-mail a partir do token enviado no

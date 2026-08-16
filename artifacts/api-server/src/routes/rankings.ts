@@ -9,6 +9,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { db, attendanceTable, usersTable, studentProfilesTable, trainingSessionsTable } from "@workspace/db";
 import { ListRankingsQueryParams } from "@workspace/api-zod";
+import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -172,8 +173,19 @@ async function buildRanking(modality: "thai" | "jiu", period: "all" | "week" | "
   }));
 }
 
-// GET /rankings — endpoint público da rota: aceita modality e period.
+// GET /rankings — master-only: o ranking expõe a frequência individual de
+// todos os alunos, mesma regra de dados de terceiros usada em students/attendance.
 router.get("/rankings", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   const query = ListRankingsQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });

@@ -15,7 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useGetDashboardStats, useGetRecentActivity } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetRecentActivity, getGetRecentActivityQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { MenuButton } from "@/components/MenuButton";
@@ -27,16 +27,19 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  // Professores/admins veem o atalho extra de "Presença" e a atividade recente
+  // (que expõe presenças de terceiros — não é dado que um aluno deva ver).
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   // Queries do dashboard: estatísticas agregadas e atividade recente.
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetDashboardStats();
-  const { data: activity, isLoading: actLoading, refetch: refetchAct } = useGetRecentActivity();
+  const { data: activity, isLoading: actLoading, refetch: refetchAct } = useGetRecentActivity({
+    query: { enabled: isMaster, queryKey: getGetRecentActivityQueryKey() },
+  });
 
   // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
-  // Professores/admins veem o atalho extra de "Presença".
-  const isMaster = user?.role === "teacher" || user?.role === "admin";
   // Loading combinado e handler do pull-to-refresh (recarrega ambas as queries).
   const dataLoading = statsLoading || actLoading;
   const onRefresh = () => { refetchStats(); refetchAct(); };
@@ -134,54 +137,58 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        <Text style={[styles.section, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 24 }]}>
-          ATIVIDADE RECENTE
-        </Text>
-
-        {actLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-        ) : activity && activity.length > 0 ? (
-          // Mostra as 10 atividades mais recentes; a cor de destaque varia por modalidade.
-          activity.slice(0, 10).map((item, i) => {
-            const isThai = item.modality === "thai";
-            const accentColor = isThai ? colors.thai : colors.jiu;
-            return (
-              <View
-                key={i}
-                style={[styles.activityItem, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: accentColor }]}
-              >
-                {item.studentPhotoUrl ? (
-                  <AuthImage path={item.studentPhotoUrl} style={styles.activityAvatar} />
-                ) : (
-                  <View style={[styles.activityAvatar, { backgroundColor: accentColor + "30", alignItems: "center", justifyContent: "center" }]}>
-                    <Text style={[styles.activityAvatarText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
-                      {item.studentName?.charAt(0) ?? "?"}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.activityInfo}>
-                  <Text style={[styles.activityTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                    {item.studentName}
-                  </Text>
-                  <Text style={[styles.activitySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {isThai ? "Muay Thai" : "Jiu-Jitsu"} · {new Date(item.createdAt).toLocaleDateString("pt-BR")}
-                  </Text>
-                </View>
-                <View style={[styles.activityBadge, { backgroundColor: accentColor + "20" }]}>
-                  <Text style={[styles.activityBadgeText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
-                    {isThai ? "MT" : "JJ"}
-                  </Text>
-                </View>
-              </View>
-            );
-          })
-        ) : (
-          <View style={styles.empty}>
-            <Ionicons name="calendar-outline" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Nenhuma atividade recente
+        {isMaster && (
+          <>
+            <Text style={[styles.section, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 24 }]}>
+              ATIVIDADE RECENTE
             </Text>
-          </View>
+
+            {actLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
+            ) : activity && activity.length > 0 ? (
+              // Mostra as 10 atividades mais recentes; a cor de destaque varia por modalidade.
+              activity.slice(0, 10).map((item, i) => {
+                const isThai = item.modality === "thai";
+                const accentColor = isThai ? colors.thai : colors.jiu;
+                return (
+                  <View
+                    key={i}
+                    style={[styles.activityItem, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: accentColor }]}
+                  >
+                    {item.studentPhotoUrl ? (
+                      <AuthImage path={item.studentPhotoUrl} style={styles.activityAvatar} />
+                    ) : (
+                      <View style={[styles.activityAvatar, { backgroundColor: accentColor + "30", alignItems: "center", justifyContent: "center" }]}>
+                        <Text style={[styles.activityAvatarText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
+                          {item.studentName?.charAt(0) ?? "?"}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.activityInfo}>
+                      <Text style={[styles.activityTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                        {item.studentName}
+                      </Text>
+                      <Text style={[styles.activitySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        {isThai ? "Muay Thai" : "Jiu-Jitsu"} · {new Date(item.createdAt).toLocaleDateString("pt-BR")}
+                      </Text>
+                    </View>
+                    <View style={[styles.activityBadge, { backgroundColor: accentColor + "20" }]}>
+                      <Text style={[styles.activityBadgeText, { color: accentColor, fontFamily: "Inter_700Bold" }]}>
+                        {isThai ? "MT" : "JJ"}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="calendar-outline" size={40} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Nenhuma atividade recente
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>

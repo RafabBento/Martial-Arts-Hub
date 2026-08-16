@@ -17,12 +17,25 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt" (não "autoUpdate"): deixamos o UpdatePrompt.tsx controlar quando
+      // recarregar — um reload automático no meio de um formulário/captura de foto
+      // perderia o que o usuário estava fazendo. injectRegister:false porque o
+      // registro do service worker é feito manualmente ali via virtual:pwa-register/react.
+      registerType: "prompt",
+      injectRegister: false,
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "robots.txt"],
       devOptions: {
         enabled: true,
         type: "module",
         suppressWarnings: true,
+      },
+      workbox: {
+        // Remove do cache do service worker os arquivos de builds antigas (JS/CSS
+        // com hash) assim que uma nova versão assume — sem isso, um aparelho que
+        // ficou com a aba aberta entre deploys pode tentar buscar um arquivo que
+        // já não existe mais no servidor (cada build apaga os anteriores) e cair
+        // em "Failed to fetch".
+        cleanupOutdatedCaches: true,
       },
       manifest: {
         name: "Front Artes Marciais",

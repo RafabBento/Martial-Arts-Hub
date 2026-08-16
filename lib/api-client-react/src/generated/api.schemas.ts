@@ -39,8 +39,9 @@ export interface RegisterInput {
   password: string;
   role: RegisterInputRole;
   unit?: RegisterInputUnit;
-  phone?: string;
-  birthDate?: string | null;
+  /** @minLength 8 */
+  phone: string;
+  birthDate: string;
   /**
    * @minimum 1
    * @maximum 31
@@ -54,6 +55,45 @@ export interface RegisterInput {
   jiuGrade?: string | null;
   jiuGradeColor?: string | null;
   jiuDegree?: number | null;
+  hasInjury?: boolean;
+  injuryDetails?: string | null;
+  hasCondition?: boolean;
+  conditionDetails?: string | null;
+  takesMedication?: boolean;
+  medicationDetails?: string | null;
+  /** @minLength 2 */
+  emergencyContactName: string;
+  /** @minLength 8 */
+  emergencyContactPhone: string;
+  imageConsent?: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  declarationAccepted: boolean;
+}
+
+/**
+ * Health/liability declaration subset of RegisterInput, used to backfill
+accounts created before that questionnaire existed.
+
+ */
+export interface CompleteProfileInput {
+  /** @minLength 8 */
+  phone: string;
+  birthDate: string;
+  hasInjury?: boolean;
+  injuryDetails?: string | null;
+  hasCondition?: boolean;
+  conditionDetails?: string | null;
+  takesMedication?: boolean;
+  medicationDetails?: string | null;
+  /** @minLength 2 */
+  emergencyContactName: string;
+  /** @minLength 8 */
+  emergencyContactPhone: string;
+  imageConsent?: boolean;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  declarationAccepted: boolean;
 }
 
 export interface LoginInput {
@@ -84,6 +124,11 @@ export interface User {
   role: UserRole;
   unit: UserUnit;
   emailVerified: boolean;
+  /** True once the health/liability declaration has been filled out
+(at registration, or via /auth/complete-profile for accounts
+created before that questionnaire existed).
+ */
+  profileComplete: boolean;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -128,6 +173,18 @@ export interface ResetPasswordInput {
   password: string;
 }
 
+/**
+ * Somente professor/admin pode alterar o papel de um usuário.
+ */
+export type UserUpdateRole =
+  (typeof UserUpdateRole)[keyof typeof UserUpdateRole];
+
+export const UserUpdateRole = {
+  student: "student",
+  teacher: "teacher",
+  admin: "admin",
+} as const;
+
 export type UserUpdateUnit =
   | (typeof UserUpdateUnit)[keyof typeof UserUpdateUnit]
   | null;
@@ -140,6 +197,8 @@ export const UserUpdateUnit = {
 
 export interface UserUpdate {
   name?: string;
+  /** Somente professor/admin pode alterar o papel de um usuário. */
+  role?: UserUpdateRole;
   unit?: UserUpdateUnit;
   phone?: string;
   profilePhotoUrl?: string;
@@ -153,6 +212,15 @@ export interface UserUpdate {
   jiuGradeColor?: string | null;
   jiuDegree?: number | null;
 }
+
+export type StudentProfileRole =
+  (typeof StudentProfileRole)[keyof typeof StudentProfileRole];
+
+export const StudentProfileRole = {
+  student: "student",
+  teacher: "teacher",
+  admin: "admin",
+} as const;
 
 export type StudentProfileUnit =
   (typeof StudentProfileUnit)[keyof typeof StudentProfileUnit];
@@ -168,6 +236,7 @@ export interface StudentProfile {
   userId: number;
   name: string;
   email: string;
+  role: StudentProfileRole;
   unit: StudentProfileUnit;
   /** @nullable */
   profilePhotoUrl?: string | null;

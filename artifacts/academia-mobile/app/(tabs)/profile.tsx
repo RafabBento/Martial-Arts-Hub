@@ -343,7 +343,7 @@ export default function ProfileScreen() {
 
   // Copia a chave PIX (e-mail) para a área de transferência.
   const copyPix = async () => {
-    await Clipboard.setStringAsync("frontartesmarciais@gmail.com");
+    await Clipboard.setStringAsync("frontrecebimento@gmail.com");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Chave PIX copiada!");
   };

@@ -1,7 +1,7 @@
 // Tela de rankings de frequência. Lista os alunos ordenados por presença,
 // com filtros de modalidade (Thai/Jiu/ambos) e período (semana/mês/ano/geral).
 import { Ionicons } from "@expo/vector-icons";
-import { Redirect } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useListRankings } from "@workspace/api-client-react";
+import { useListRankings, getListRankingsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { MenuButton } from "@/components/MenuButton";
@@ -35,19 +35,59 @@ const PERIODS = [
 export default function RankingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   // Filtros selecionados que alimentam a query de rankings.
   const [modality, setModality] = useState<"both" | "thai" | "jiu">("both");
   const [period, setPeriod] = useState<"week" | "month" | "year" | "all">("month");
   const { user, isLoading: authLoading } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
 
   // Busca o ranking no servidor conforme modalidade e período escolhidos.
-  const { data, isLoading, refetch } = useListRankings({ modality, period });
+  // O ranking expõe a frequência individual de todos os alunos — só busca
+  // quando o usuário é mestre.
+  const { data, isLoading, refetch } = useListRankings(
+    { modality, period },
+    { query: { enabled: isMaster, queryKey: getListRankingsQueryKey({ modality, period }) } }
+  );
 
   // Guarda de autenticação: sem usuário logado, redireciona para o login.
   if (!user && !authLoading) return <Redirect href="/login" />;
 
   // Padding superior: fixo no web, área segura no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  // Alunos comuns não têm acesso: ranking é exclusivo para professores/admins.
+  if (!isMaster) {
+    return (
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <MenuButton />
+            <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Rankings</Text>
+          </View>
+        </View>
+        <View style={styles.restricted}>
+          <View style={[styles.restrictedIcon, { backgroundColor: colors.primary + "18" }]}>
+            <Ionicons name="shield-outline" size={36} color={colors.primary} />
+          </View>
+          <Text style={[styles.restrictedTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            Acesso Restrito
+          </Text>
+          <Text style={[styles.restrictedSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            O ranking de presenças é exclusivo para professores e administradores.
+          </Text>
+          <TouchableOpacity
+            style={[styles.backBtn2, { borderColor: colors.border }]}
+            onPress={() => router.push("/(tabs)")}
+          >
+            <Text style={[styles.backBtn2Text, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              Voltar ao Painel
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -122,4 +162,10 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 20 },
   empty: { alignItems: "center", gap: 12, paddingVertical: 60 },
   emptyText: { fontSize: 15 },
+  restricted: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
+  restrictedIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  restrictedTitle: { fontSize: 20, letterSpacing: 0.5 },
+  restrictedSub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  backBtn2: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 10, marginTop: 8 },
+  backBtn2Text: { fontSize: 14 },
 });

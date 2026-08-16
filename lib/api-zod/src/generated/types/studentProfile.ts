@@ -5,6 +5,7 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
+import type { StudentProfileRole } from "./studentProfileRole";
 import type { StudentProfileUnit } from "./studentProfileUnit";
 
 export interface StudentProfile {
@@ -12,6 +13,7 @@ export interface StudentProfile {
   userId: number;
   name: string;
   email: string;
+  role: StudentProfileRole;
   unit: StudentProfileUnit;
   /** @nullable */
   profilePhotoUrl?: string | null;

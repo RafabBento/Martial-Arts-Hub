@@ -111,7 +111,7 @@ export default function PaymentsScreen() {
 
   // Copia a chave PIX (e-mail) para a área de transferência.
   const copyPix = async () => {
-    await Clipboard.setStringAsync("frontartesmarciais@gmail.com");
+    await Clipboard.setStringAsync("frontrecebimento@gmail.com");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("Chave PIX copiada!");
   };
@@ -249,7 +249,7 @@ export default function PaymentsScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.pixLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Chave PIX (e-mail)</Text>
                         <Text style={[{ color: colors.foreground, fontFamily: "Inter_600SemiBold", fontSize: 13 }]} numberOfLines={1}>
-                          frontartesmarciais@gmail.com
+                          frontrecebimento@gmail.com
                         </Text>
                       </View>
                       <TouchableOpacity style={[styles.copyBtn, { borderColor: colors.border }]} onPress={copyPix}>

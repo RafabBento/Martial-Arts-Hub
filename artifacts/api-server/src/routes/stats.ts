@@ -6,6 +6,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql, gte, inArray } from "drizzle-orm";
 import { db, usersTable, trainingSessionsTable, attendanceTable, studentProfilesTable } from "@workspace/db";
+import { getSessionUserId, getRequester, isMasterRole } from "../lib/authz";
 
 const router: IRouter = Router();
 
@@ -104,7 +105,18 @@ router.get("/stats/dashboard", async (req, res): Promise<void> => {
 });
 
 // GET /stats/recent-activity — últimas 20 presenças para o feed de atividades.
+// Master-only: o feed expõe quem treinou (presença de terceiros).
 router.get("/stats/recent-activity", async (req, res): Promise<void> => {
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isMasterRole(requester.role)) {
+    res.status(403).json({ error: "Acesso restrito a professores e administradores" });
+    return;
+  }
+
   // Junta presença → aluno → sessão para montar a descrição da atividade,
   // ordenando da mais recente para a mais antiga (limite de 20).
   const records = await db

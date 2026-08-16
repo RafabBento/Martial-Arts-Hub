@@ -3,9 +3,10 @@
 // Cada item mostra colocação, foto, faixa/prajied e percentual de presença.
 import { useState } from "react";
 import { useListRankings, getListRankingsQueryKey } from "@workspace/api-client-react";
-import { Trophy, Medal } from "lucide-react";
+import { Trophy, Medal, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "../contexts/AuthContext";
 
 // Mapa de cor da faixa de Jiu-Jitsu (valor da faixa -> classe Tailwind de fundo).
 const JIU_BG: Record<string, string> = {
@@ -171,6 +172,10 @@ function RankingList({
 }
 
 export default function Rankings() {
+  const { user } = useAuth();
+  const isMaster = user?.role === "teacher" || user?.role === "admin";
+  const [, setLocation] = useLocation();
+
   // Período selecionado para o cálculo do ranking (geral, semana, mês ou ano).
   const [period, setPeriod] = useState<"all" | "week" | "month" | "year">("all");
 
@@ -178,8 +183,26 @@ export default function Rankings() {
   // resposta traz as listas separadas de thai e jiu.
   const { data: bothData, isLoading } = useListRankings(
     { modality: "both", period },
-    { query: { queryKey: getListRankingsQueryKey({ modality: "both", period }) } }
+    { query: { queryKey: getListRankingsQueryKey({ modality: "both", period }), enabled: isMaster } }
   );
+
+  // Acesso restrito: ranking expõe a frequência individual de todos os alunos,
+  // exclusivo para professores e administradores. Fica depois dos hooks acima
+  // para não violar as Rules of Hooks.
+  if (!isMaster) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+          <ShieldAlert size={32} className="text-primary" />
+        </div>
+        <h2 className="text-2xl font-black uppercase">Acesso restrito</h2>
+        <p className="text-muted-foreground max-w-sm">
+          O ranking de presenças é exclusivo para professores e administradores.
+        </p>
+        <Button variant="outline" onClick={() => setLocation("/dashboard")}>Voltar ao Painel</Button>
+      </div>
+    );
+  }
 
   // Opções do seletor de período exibidas como botões.
   const periodOptions: { value: "all" | "week" | "month" | "year"; label: string }[] = [

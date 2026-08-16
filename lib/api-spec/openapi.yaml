@@ -148,6 +148,33 @@ paths:
         "401":
           description: Unauthorized
 
+  /auth/complete-profile:
+    post:
+      operationId: completeProfile
+      tags: [auth]
+      summary: Complete the health/liability declaration for an existing account
+      description: |
+        Used to backfill the health declaration (and phone/birthDate) for
+        accounts created before that questionnaire existed. Self only — the
+        logged-in user completes their own profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteProfileInput"
+      responses:
+        "200":
+          description: Profile completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request
+        "401":
+          description: Unauthorized
+
   /auth/forgot-password:
     post:
       operationId: forgotPassword
@@ -888,7 +915,7 @@ components:
 
     RegisterInput:
       type: object
-      required: [name, email, password, role]
+      required: [name, email, password, role, phone, birthDate, emergencyContactName, emergencyContactPhone, declarationAccepted]
       properties:
         name:
           type: string
@@ -908,9 +935,9 @@ components:
           nullable: true
         phone:
           type: string
+          minLength: 8
         birthDate:
           type: string
-          nullable: true
         paymentDay:
           type: integer
           nullable: true
@@ -940,6 +967,81 @@ components:
         jiuDegree:
           type: integer
           nullable: true
+        hasInjury:
+          type: boolean
+        injuryDetails:
+          type: string
+          nullable: true
+        hasCondition:
+          type: boolean
+        conditionDetails:
+          type: string
+          nullable: true
+        takesMedication:
+          type: boolean
+        medicationDetails:
+          type: string
+          nullable: true
+        emergencyContactName:
+          type: string
+          minLength: 2
+        emergencyContactPhone:
+          type: string
+          minLength: 8
+        imageConsent:
+          type: boolean
+        guardianName:
+          type: string
+          nullable: true
+        guardianPhone:
+          type: string
+          nullable: true
+        declarationAccepted:
+          type: boolean
+
+    CompleteProfileInput:
+      type: object
+      required: [phone, birthDate, emergencyContactName, emergencyContactPhone, declarationAccepted]
+      description: |
+        Health/liability declaration subset of RegisterInput, used to backfill
+        accounts created before that questionnaire existed.
+      properties:
+        phone:
+          type: string
+          minLength: 8
+        birthDate:
+          type: string
+        hasInjury:
+          type: boolean
+        injuryDetails:
+          type: string
+          nullable: true
+        hasCondition:
+          type: boolean
+        conditionDetails:
+          type: string
+          nullable: true
+        takesMedication:
+          type: boolean
+        medicationDetails:
+          type: string
+          nullable: true
+        emergencyContactName:
+          type: string
+          minLength: 2
+        emergencyContactPhone:
+          type: string
+          minLength: 8
+        imageConsent:
+          type: boolean
+        guardianName:
+          type: string
+          nullable: true
+        guardianPhone:
+          type: string
+          nullable: true
+        declarationAccepted:
+          type: boolean
 
     LoginInput:
       type: object
@@ -987,7 +1089,7 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, unit, emailVerified, createdAt]
+      required: [id, name, email, role, unit, emailVerified, profileComplete, createdAt]
       properties:
         id:
           type: integer
@@ -1003,6 +1105,12 @@ components:
           enum: [matriz, panobianco, upfitness]
         emailVerified:
           type: boolean
+        profileComplete:
+          type: boolean
+          description: |
+            True once the health/liability declaration has been filled out
+            (at registration, or via /auth/complete-profile for accounts
+            created before that questionnaire existed).
         phone:
           type: ["string", "null"]
         profilePhotoUrl:
@@ -1034,6 +1142,10 @@ components:
       properties:
         name:
           type: string
+        role:
+          type: string
+          enum: [student, teacher, admin]
+          description: Somente professor/admin pode alterar o papel de um usuário.
         unit:
           type: string
           enum: [matriz, panobianco, upfitness]
@@ -1072,7 +1184,7 @@ components:
 
     StudentProfile:
       type: object
-      required: [id, userId, name, email, unit, modalityThai, modalityJiu, bollacha, scholarship, createdAt]
+      required: [id, userId, name, email, role, unit, modalityThai, modalityJiu, bollacha, scholarship, createdAt]
       properties:
         id:
           type: integer
@@ -1082,6 +1194,9 @@ components:
           type: string
         email:
           type: string
+        role:
+          type: string
+          enum: [student, teacher, admin]
         unit:
           type: string
           enum: [matriz, panobianco, upfitness]

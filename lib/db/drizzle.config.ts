@@ -20,5 +20,6 @@ export default defineConfig({
     "email_verification_tokens",
     "payment_reminders_sent",
     "password_reset_tokens",
+    "health_declarations",
   ],
 });

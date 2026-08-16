@@ -4,8 +4,8 @@
 // continua decidindo sozinha SE e COMO aplicar a checagem (self, master-only,
 // etc.) — este módulo só centraliza a leitura da sessão e a busca do requester.
 // =============================================================================
-import { eq } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
+import { db, usersTable, healthDeclarationsTable } from "@workspace/db";
 
 // Lê o id do usuário autenticado a partir da sessão (cookie ou Bearer, já
 // populada por bearerAuth). Ausente = não autenticado.
@@ -29,6 +29,29 @@ export async function getRequester(
 // "Mestre" = professor ou admin — mesma definição usada em todo o front (isMaster).
 export function isMasterRole(role: string): boolean {
   return role === "teacher" || role === "admin";
+}
+
+// Indica se o usuário já preencheu o termo de saúde e responsabilidade — usado
+// para computar "profileComplete" no User serializado e no gate de navegação
+// (contas criadas antes desse termo existir precisam preenchê-lo antes de usar
+// o app). Uma única linha por usuário (FK única em health_declarations.user_id).
+export async function hasHealthDeclaration(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: healthDeclarationsTable.id })
+    .from(healthDeclarationsTable)
+    .where(eq(healthDeclarationsTable.userId, userId));
+  return !!row;
+}
+
+// Versão em lote de hasHealthDeclaration, para não disparar N queries ao
+// serializar uma listagem de usuários.
+export async function getHealthDeclarationUserIds(userIds: number[]): Promise<Set<number>> {
+  if (userIds.length === 0) return new Set();
+  const rows = await db
+    .select({ userId: healthDeclarationsTable.userId })
+    .from(healthDeclarationsTable)
+    .where(inArray(healthDeclarationsTable.userId, userIds));
+  return new Set(rows.map(r => r.userId));
 }
 
 // Campos de graduação: só professor/admin pode alterá-los. Mesmos nomes em

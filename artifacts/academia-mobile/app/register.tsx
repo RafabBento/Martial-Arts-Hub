@@ -31,6 +31,36 @@ const UNITS = [
 
 type Unit = "matriz" | "panobianco" | "upfitness";
 
+// Calcula a idade a partir da data de nascimento (YYYY-MM-DD), na data atual.
+function calculateAge(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+// Só compara telefones se ambos estiverem preenchidos (evita falso-positivo
+// de "iguais" enquanto um dos dois ainda está sendo digitado).
+function samePhone(a: string, b: string): boolean {
+  if (!a.trim() || !b.trim()) return false;
+  const digits = (s: string) => s.replace(/\D/g, "");
+  return digits(a) === digits(b);
+}
+
+// Linha de checkbox reutilizada nas perguntas do termo de saúde.
+function CheckRow({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <TouchableOpacity style={styles.checkRow} onPress={onToggle} activeOpacity={0.7}>
+      <Ionicons name={checked ? "checkbox" : "square-outline"} size={20} color={checked ? "#dc2626" : "rgba(255,255,255,0.5)"} />
+      <Text style={[styles.checkLabel, { fontFamily: "Inter_400Regular" }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -46,9 +76,27 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [unit, setUnit] = useState<Unit>("matriz");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [modalityThai, setModalityThai] = useState(false);
   const [modalityJiu, setModalityJiu] = useState(false);
   const [error, setError] = useState("");
+
+  // Termo de saúde e responsabilidade.
+  const [hasInjury, setHasInjury] = useState(false);
+  const [injuryDetails, setInjuryDetails] = useState("");
+  const [hasCondition, setHasCondition] = useState(false);
+  const [conditionDetails, setConditionDetails] = useState("");
+  const [takesMedication, setTakesMedication] = useState(false);
+  const [medicationDetails, setMedicationDetails] = useState("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
+  const [imageConsent, setImageConsent] = useState(false);
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("");
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
+
+  const isMinor = !!birthDate && calculateAge(birthDate) < 18;
 
   // Padding superior: fixo no web, área segura (status bar/notch) no celular.
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -56,12 +104,38 @@ export default function RegisterScreen() {
   // Valida os campos, cria a conta e faz login automático. Modalidades só são
   // enviadas para alunos (professores não treinam como aluno).
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError("Preencha nome, e-mail e senha.");
+    if (!name.trim() || !email.trim() || !password.trim() || !phone.trim() || !birthDate.trim()) {
+      setError("Preencha nome, e-mail, senha, telefone e data de nascimento.");
       return;
     }
     if (password.length < 6) {
       setError("Senha deve ter ao menos 6 caracteres.");
+      return;
+    }
+    if (!emergencyContactName.trim() || !emergencyContactPhone.trim()) {
+      setError("Preencha o nome e telefone do contato de emergência.");
+      return;
+    }
+    if (samePhone(emergencyContactPhone, phone)) {
+      setError("O contato de emergência não pode ter o mesmo telefone do próprio usuário.");
+      return;
+    }
+    if (isMinor) {
+      if (!guardianName.trim() || !guardianPhone.trim()) {
+        setError("Para menores de idade, informe o nome e telefone do responsável.");
+        return;
+      }
+      if (samePhone(guardianPhone, phone)) {
+        setError("O telefone do responsável não pode ser o mesmo do usuário.");
+        return;
+      }
+      if (samePhone(guardianPhone, emergencyContactPhone)) {
+        setError("O telefone do responsável não pode ser o mesmo do contato de emergência.");
+        return;
+      }
+    }
+    if (!declarationAccepted) {
+      setError("É necessário aceitar a declaração final para se cadastrar.");
       return;
     }
     setError("");
@@ -73,8 +147,22 @@ export default function RegisterScreen() {
           password,
           role,
           unit,
+          phone: phone.trim(),
+          birthDate: birthDate.trim(),
           modalityThai: role === "student" ? modalityThai : false,
           modalityJiu: role === "student" ? modalityJiu : false,
+          hasInjury,
+          injuryDetails: hasInjury ? injuryDetails.trim() || undefined : undefined,
+          hasCondition,
+          conditionDetails: hasCondition ? conditionDetails.trim() || undefined : undefined,
+          takesMedication,
+          medicationDetails: takesMedication ? medicationDetails.trim() || undefined : undefined,
+          emergencyContactName: emergencyContactName.trim(),
+          emergencyContactPhone: emergencyContactPhone.trim(),
+          imageConsent,
+          guardianName: isMinor ? guardianName.trim() : undefined,
+          guardianPhone: isMinor ? guardianPhone.trim() : undefined,
+          declarationAccepted,
         },
       });
       await login(data.user, data.token);
@@ -170,6 +258,37 @@ export default function RegisterScreen() {
             </View>
           </View>
 
+          {/* Telefone */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>TELEFONE</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="call-outline" size={18} color="rgba(255,255,255,0.5)" />
+              <TextInput
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                placeholder="(11) 99999-0000"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+            </View>
+          </View>
+
+          {/* Data de nascimento */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>DATA DE NASCIMENTO</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="calendar-outline" size={18} color="rgba(255,255,255,0.5)" />
+              <TextInput
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                placeholder="AAAA-MM-DD"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={birthDate}
+                onChangeText={setBirthDate}
+              />
+            </View>
+          </View>
+
           {/* Perfil */}
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>PERFIL</Text>
@@ -233,6 +352,116 @@ export default function RegisterScreen() {
             </View>
           )}
 
+          {/* Termo de saúde e responsabilidade — obrigatório para todos os perfis */}
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { fontFamily: "Inter_600SemiBold" }]}>SAÚDE E RESPONSABILIDADE</Text>
+
+            <CheckRow label="Possui alguma lesão ou limitação?" checked={hasInjury} onToggle={() => setHasInjury(v => !v)} />
+            {hasInjury && (
+              <View style={[styles.inputWrap, { alignItems: "flex-start" }]}>
+                <TextInput
+                  style={[styles.input, { fontFamily: "Inter_400Regular", minHeight: 60 }]}
+                  placeholder="Descreva a lesão ou limitação"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  value={injuryDetails}
+                  onChangeText={setInjuryDetails}
+                  multiline
+                />
+              </View>
+            )}
+
+            <CheckRow label="Possui alguma doença ou condição que deveríamos saber?" checked={hasCondition} onToggle={() => setHasCondition(v => !v)} />
+            {hasCondition && (
+              <View style={[styles.inputWrap, { alignItems: "flex-start" }]}>
+                <TextInput
+                  style={[styles.input, { fontFamily: "Inter_400Regular", minHeight: 60 }]}
+                  placeholder="Descreva a doença ou condição"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  value={conditionDetails}
+                  onChangeText={setConditionDetails}
+                  multiline
+                />
+              </View>
+            )}
+
+            <CheckRow label="Faz uso de medicamento contínuo?" checked={takesMedication} onToggle={() => setTakesMedication(v => !v)} />
+            {takesMedication && (
+              <View style={[styles.inputWrap, { alignItems: "flex-start" }]}>
+                <TextInput
+                  style={[styles.input, { fontFamily: "Inter_400Regular", minHeight: 60 }]}
+                  placeholder="Qual(is) medicamento(s)"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  value={medicationDetails}
+                  onChangeText={setMedicationDetails}
+                  multiline
+                />
+              </View>
+            )}
+
+            <Text style={[styles.sublabel, { fontFamily: "Inter_600SemiBold" }]}>Contato de emergência</Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.5)" />
+              <TextInput
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                placeholder="Nome completo"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                value={emergencyContactName}
+                onChangeText={setEmergencyContactName}
+              />
+            </View>
+            <View style={styles.inputWrap}>
+              <Ionicons name="call-outline" size={18} color="rgba(255,255,255,0.5)" />
+              <TextInput
+                style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                placeholder="(11) 99999-0000"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="phone-pad"
+                value={emergencyContactPhone}
+                onChangeText={setEmergencyContactPhone}
+              />
+            </View>
+            <Text style={styles.hint}>Não pode ser o mesmo telefone do próprio usuário</Text>
+
+            <CheckRow label="Autoriza o uso de imagens?" checked={imageConsent} onToggle={() => setImageConsent(v => !v)} />
+
+            {isMinor && (
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <Text style={[styles.sublabel, { fontFamily: "Inter_600SemiBold" }]}>Dados do responsável (menor de idade)</Text>
+                <View style={styles.inputWrap}>
+                  <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.5)" />
+                  <TextInput
+                    style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                    placeholder="Nome completo do responsável"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    value={guardianName}
+                    onChangeText={setGuardianName}
+                  />
+                </View>
+                <View style={styles.inputWrap}>
+                  <Ionicons name="call-outline" size={18} color="rgba(255,255,255,0.5)" />
+                  <TextInput
+                    style={[styles.input, { fontFamily: "Inter_400Regular" }]}
+                    placeholder="(11) 99999-0000"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    keyboardType="phone-pad"
+                    value={guardianPhone}
+                    onChangeText={setGuardianPhone}
+                  />
+                </View>
+              </View>
+            )}
+
+            <View style={{ marginTop: 8 }}>
+              <CheckRow
+                label={isMinor
+                  ? "Li e declaro que estou deixando meu filho treinar com a Front."
+                  : "Declaro que li e que as informações acima são verdadeiras."}
+                checked={declarationAccepted}
+                onToggle={() => setDeclarationAccepted(v => !v)}
+              />
+            </View>
+          </View>
+
           {/* Botão */}
           <TouchableOpacity
             style={[styles.btn, { backgroundColor: colors.primary }]}
@@ -282,6 +511,10 @@ const styles = StyleSheet.create({
   unitInfo: { flex: 1 },
   unitLabel: { fontSize: 14 },
   unitAddress: { fontSize: 12, marginTop: 1 },
+  checkRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
+  checkLabel: { flex: 1, fontSize: 14, color: "#fff" },
+  sublabel: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 4 },
+  hint: { fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: -4 },
   btn: { borderRadius: 12, paddingVertical: 16, alignItems: "center", marginTop: 4 },
   btnText: { color: "#fff", fontSize: 15, letterSpacing: 1 },
   loginLink: { alignItems: "center", paddingVertical: 4 },

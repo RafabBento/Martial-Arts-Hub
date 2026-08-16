@@ -8,11 +8,12 @@ import {
   useGetStudent, getGetStudentQueryKey,
   useListAttendance, getListAttendanceQueryKey,
   useUpdateStudent,
+  useUpdateUser,
   getListStudentsQueryKey,
   registerProfilePhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2, ScanFace, ShieldAlert, Award } from "lucide-react";
+import { ArrowLeft, Camera, CheckCircle, XCircle, Shield, ImagePlus, Loader2, ScanFace, ShieldAlert, Award, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FaceEnrollModal } from "@/components/FaceEnrollModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -158,6 +159,24 @@ export default function StudentDetail() {
   );
 
   const updateStudentMutation = useUpdateStudent();
+  const updateUserMutation = useUpdateUser();
+
+  // Promove o aluno a administrador: papel "admin" passa a ter todos os
+  // privilégios de mestre (inclusive rotas restritas a admin).
+  const handlePromoteToAdmin = () => {
+    if (!studentId) return;
+    updateUserMutation.mutate(
+      { id: studentId, data: { role: "admin" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(studentId) });
+          queryClient.invalidateQueries({ queryKey: getListStudentsQueryKey() });
+          toast({ title: "Usuário promovido a administrador" });
+        },
+        onError: () => toast({ title: "Erro ao promover usuário", variant: "destructive" }),
+      }
+    );
+  };
 
   // Atualiza um campo de graduação genérico (faixa, cor ou grau) e revalida os dados.
   const handleGradeUpdate = (field: string, value: string | number | boolean | null) => {
@@ -337,6 +356,29 @@ export default function StudentDetail() {
               </div>
             ) : null}
           </div>
+
+          {/* Promover a administrador: master-only. Dá ao usuário todos os
+              privilégios de mestre, inclusive rotas restritas a admin. */}
+          {isMaster && (
+            <div className="w-full pt-3 border-t border-border">
+              {student.role === "admin" ? (
+                <div className="flex items-center justify-center gap-2 text-sm text-primary">
+                  <Crown size={14} /> Administrador
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={updateUserMutation.isPending}
+                  onClick={handlePromoteToAdmin}
+                >
+                  <Crown size={14} />
+                  Promover a Administrador
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Coluna direita: alternador de modalidade, graduações e histórico */}

@@ -5,10 +5,13 @@
  * Academia Fight Club API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserUpdateRole } from "./userUpdateRole";
 import type { UserUpdateUnit } from "./userUpdateUnit";
 
 export interface UserUpdate {
   name?: string;
+  /** Somente professor/admin pode alterar o papel de um usuário. */
+  role?: UserUpdateRole;
   unit?: UserUpdateUnit;
   phone?: string;
   profilePhotoUrl?: string;

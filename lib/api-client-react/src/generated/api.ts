@@ -24,6 +24,7 @@ import type {
   AuthResponse,
   BulkAttendanceInput,
   BulkAttendanceResult,
+  CompleteProfileInput,
   DashboardStats,
   EnrollFaceInput,
   EnrollFaceResult,
@@ -624,6 +625,96 @@ export const useResendVerification = <
   TContext
 > => {
   return useMutation(getResendVerificationMutationOptions(options));
+};
+
+/**
+ * Used to backfill the health declaration (and phone/birthDate) for
+accounts created before that questionnaire existed. Self only — the
+logged-in user completes their own profile.
+
+ * @summary Complete the health/liability declaration for an existing account
+ */
+export const getCompleteProfileUrl = () => {
+  return `/api/auth/complete-profile`;
+};
+
+export const completeProfile = async (
+  completeProfileInput: CompleteProfileInput,
+  options?: RequestInit,
+): Promise<User> => {
+  return customFetch<User>(getCompleteProfileUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(completeProfileInput),
+  });
+};
+
+export const getCompleteProfileMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeProfile>>,
+    TError,
+    { data: BodyType<CompleteProfileInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeProfile>>,
+  TError,
+  { data: BodyType<CompleteProfileInput> },
+  TContext
+> => {
+  const mutationKey = ["completeProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeProfile>>,
+    { data: BodyType<CompleteProfileInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return completeProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeProfile>>
+>;
+export type CompleteProfileMutationBody = BodyType<CompleteProfileInput>;
+export type CompleteProfileMutationError = ErrorType<void>;
+
+/**
+ * @summary Complete the health/liability declaration for an existing account
+ */
+export const useCompleteProfile = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeProfile>>,
+    TError,
+    { data: BodyType<CompleteProfileInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeProfile>>,
+  TError,
+  { data: BodyType<CompleteProfileInput> },
+  TContext
+> => {
+  return useMutation(getCompleteProfileMutationOptions(options));
 };
 
 /**

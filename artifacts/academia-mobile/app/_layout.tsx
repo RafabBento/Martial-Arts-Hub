@@ -10,7 +10,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -33,15 +33,25 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
-  // Sempre que o estado de autenticação muda, decide se redireciona para login.
-  // Enquanto ainda está carregando a sessão (isLoading) não faz nada.
+  // Sempre que o estado de autenticação muda, decide se redireciona para login
+  // ou, com usuário logado mas sem o termo de saúde preenchido (contas criadas
+  // antes desse questionário existir, inclusive mestres/admins), bloqueia a
+  // navegação mandando para complete-profile. Reavalia a cada troca de rota
+  // (pathname na lista de dependências) para não deixar o usuário "escapar"
+  // do gate navegando pela gaveta lateral. Enquanto ainda está carregando a
+  // sessão (isLoading) não faz nada.
   React.useEffect(() => {
     if (isLoading) return;
     if (!user) {
       router.replace("/login");
+    } else if (!user.profileComplete && pathname !== "/complete-profile") {
+      // Cast: rota nova, o .expo/types/router.d.ts (gerado automaticamente
+      // pelo `expo start`) só passa a conhecê-la depois do próximo dev server.
+      router.replace("/complete-profile" as any);
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, pathname]);
 
   // Enquanto a sessão é restaurada, não renderiza nada (evita "piscar" telas).
   if (isLoading) return null;
@@ -53,6 +63,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
+      <Stack.Screen name="complete-profile" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="student/[id]" />
       <Stack.Screen name="session/[id]" />
