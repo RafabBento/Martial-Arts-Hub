@@ -20,6 +20,11 @@ export interface User {
 created before that questionnaire existed).
  */
   profileComplete: boolean;
+  /** True once a reference face descriptor has been enrolled (any
+role) — required to use the app, same gate pattern as
+profileComplete.
+ */
+  faceRegistered: boolean;
   /** @nullable */
   phone?: string | null;
   /** @nullable */

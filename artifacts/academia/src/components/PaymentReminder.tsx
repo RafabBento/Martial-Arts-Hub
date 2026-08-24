@@ -1,9 +1,11 @@
 // Componente sem UI própria que exibe um toast lembrando o usuário do
 // vencimento da mensalidade. Compara o dia de pagamento do usuário com a data
-// atual e mostra mensagens diferentes quando faltam 0 a 3 dias. Dispara no
+// atual e mostra mensagens diferentes quando faltam 0 a 3 dias — mas não
+// dispara se o aluno já pagou (ou é isento) o mês corrente. Dispara no
 // máximo uma vez por sessão (controlado via sessionStorage), salvo no modo de
 // teste (?testReminder=true) usado para visualizar o aviso.
 import { useState, useEffect, useRef } from "react";
+import { useListPayments, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,9 +22,21 @@ export function PaymentReminder() {
   // Guard para garantir que o lembrete só dispare uma vez por montagem.
   const fired = useRef(false);
 
+  // Status de pagamento do mês atual — usado para não incomodar quem já
+  // pagou (ou é isento) com o lembrete de vencimento.
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const { data: payments } = useListPayments(
+    { month, year },
+    { query: { enabled: !!user, queryKey: getListPaymentsQueryKey({ month, year }) } }
+  );
+  const alreadyPaid = payments?.find(p => p.studentId === user?.id)?.paid ?? false;
+
   useEffect(() => {
-    // Sem usuário ou já disparado nesta instância: não faz nada.
+    // Sem usuário, já pago/isento este mês, ou já disparado nesta instância: não faz nada.
     if (!user || fired.current) return;
+    if (alreadyPaid && !isTest) return;
 
     // Modo de teste: dispara o toast de "dia de pagamento" imediatamente,
     // ignorando a checagem de data e o controle de sessão.
@@ -72,7 +86,7 @@ export function PaymentReminder() {
         toast({ title, description, duration: 8000 });
       }, 1500);
     }
-  }, [user, isTest, toast]);
+  }, [user, isTest, toast, alreadyPaid]);
 
   // Componente puramente lateral (efeito de toast); não renderiza nenhuma UI.
   return null;

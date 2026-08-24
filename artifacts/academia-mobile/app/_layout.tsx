@@ -36,12 +36,12 @@ function RootLayoutNav() {
   const pathname = usePathname();
 
   // Sempre que o estado de autenticação muda, decide se redireciona para login
-  // ou, com usuário logado mas sem o termo de saúde preenchido (contas criadas
-  // antes desse questionário existir, inclusive mestres/admins), bloqueia a
-  // navegação mandando para complete-profile. Reavalia a cada troca de rota
-  // (pathname na lista de dependências) para não deixar o usuário "escapar"
-  // do gate navegando pela gaveta lateral. Enquanto ainda está carregando a
-  // sessão (isLoading) não faz nada.
+  // ou, com usuário logado mas com algum gate obrigatório pendente (termo de
+  // saúde e/ou rosto cadastrado — contas criadas antes de existirem, inclusive
+  // mestres/admins), bloqueia a navegação mandando para a tela do gate.
+  // Reavalia a cada troca de rota (pathname na lista de dependências) para não
+  // deixar o usuário "escapar" navegando pela gaveta lateral. Enquanto ainda
+  // está carregando a sessão (isLoading) não faz nada.
   React.useEffect(() => {
     if (isLoading) return;
     if (!user) {
@@ -50,6 +50,8 @@ function RootLayoutNav() {
       // Cast: rota nova, o .expo/types/router.d.ts (gerado automaticamente
       // pelo `expo start`) só passa a conhecê-la depois do próximo dev server.
       router.replace("/complete-profile" as any);
+    } else if (user.profileComplete && !user.faceRegistered && pathname !== "/complete-face") {
+      router.replace("/complete-face" as any);
     }
   }, [user, isLoading, pathname]);
 
@@ -64,6 +66,7 @@ function RootLayoutNav() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="complete-profile" />
+      <Stack.Screen name="complete-face" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="student/[id]" />
       <Stack.Screen name="session/[id]" />

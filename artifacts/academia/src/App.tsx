@@ -20,6 +20,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import CompleteProfile from "./pages/CompleteProfile";
+import CompleteFaceEnrollment from "./pages/CompleteFaceEnrollment";
 import VerifyEmail from "./pages/VerifyEmail";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -75,6 +76,12 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   // mostra só a tela de preenchimento, fora do Layout (sem navegação visível).
   if (!user.profileComplete) {
     return <CompleteProfile />;
+  }
+
+  // Rosto ainda não cadastrado (obrigatório para todos — usado no reconhecimento
+  // automático de presença): bloqueia igual ao termo de saúde acima.
+  if (!user.faceRegistered) {
+    return <CompleteFaceEnrollment />;
   }
 
   // Usuário autenticado: renderiza a página dentro do layout com sidebar/cabeçalho.

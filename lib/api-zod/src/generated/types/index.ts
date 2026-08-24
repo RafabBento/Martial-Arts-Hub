@@ -21,6 +21,8 @@ export * from "./completeProfileInput";
 export * from "./dashboardStats";
 export * from "./enrollFaceInput";
 export * from "./enrollFaceResult";
+export * from "./enrollModalityInput";
+export * from "./enrollModalityInputModality";
 export * from "./errorEnvelope";
 export * from "./forgotPasswordInput";
 export * from "./getAttendanceSummaryParams";

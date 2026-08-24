@@ -4,9 +4,9 @@
 // Professores/admins podem editar suas próprias graduações.
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
+import { useUpdateUser, useListAttendance, useGetStudent, useListPayments, useEnrollModality, registerProfilePhoto, getListAttendanceQueryKey, getListUsersQueryKey, getGetStudentQueryKey, getListPaymentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy, Loader2, ScanFace } from "lucide-react";
+import { User, Camera, Save, Shield, Gift, CreditCard, CheckCircle2, Clock, Copy, Loader2, ScanFace, Plus } from "lucide-react";
 import { uploadImageToStorage } from "../lib/uploadImage";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { FaceEnrollModal } from "../components/FaceEnrollModal";
@@ -219,6 +219,133 @@ function StudentPaymentCard({ userId, paymentDay }: { userId: number; paymentDay
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// Botão + formulário inline para o aluno adicionar uma modalidade que ainda
+// não pratica, escolhendo a graduação inicial (mesma lógica da tela de
+// cadastro). Depois de confirmado, a graduação só pode ser alterada por um
+// mestre (regra aplicada no backend, POST /students/:id/enroll-modality).
+function EnrollModalityCard({
+  studentId,
+  modality,
+  onEnrolled,
+}: {
+  studentId: number;
+  modality: "thai" | "jiu";
+  onEnrolled: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [thaiGrade, setThaiGrade] = useState("");
+  const [jiuGrade, setJiuGrade] = useState("");
+  const [jiuDegree, setJiuDegree] = useState(0);
+  const [bollacha, setBollacha] = useState(false);
+  const enrollMutation = useEnrollModality();
+
+  const handleConfirm = () => {
+    const thaiKey = thaiGrade ? PRAJIED_LABELS[thaiGrade] : undefined;
+    const thaiColor = thaiKey ? PRAJIED_MAP[thaiKey]?.primary?.replace("bg-", "").split("-")[0] : undefined;
+    const jiuOpt = JIU_GRADE_OPTIONS.find((o) => o.value === jiuGrade);
+
+    enrollMutation.mutate(
+      {
+        id: studentId,
+        data: modality === "thai"
+          ? { modality: "thai", thaiGrade: thaiGrade || undefined, thaiGradeColor: thaiColor || undefined }
+          : { modality: "jiu", jiuGrade: jiuGrade || undefined, jiuGradeColor: jiuOpt?.color || undefined, jiuDegree: jiuGrade ? jiuDegree : undefined, bollacha },
+      },
+      {
+        onSuccess: () => {
+          toast({ title: modality === "thai" ? "Muay Thai adicionado ao seu perfil!" : "Jiu-Jitsu adicionado ao seu perfil!" });
+          setOpen(false);
+          onEnrolled();
+        },
+        onError: (err: any) => toast({
+          title: "Erro ao adicionar modalidade",
+          description: err?.data?.error,
+          variant: "destructive",
+        }),
+      }
+    );
+  };
+
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" className="gap-2 w-full" onClick={() => setOpen(true)}>
+        <Plus size={14} /> Cadastrar {modality === "thai" ? "Muay Thai" : "Jiu-Jitsu"}
+      </Button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {modality === "thai" ? (
+        <select
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          value={thaiGrade}
+          onChange={(e) => setThaiGrade(e.target.value)}
+        >
+          <option value="">Prajied (opcional)</option>
+          {PRAJIED_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      ) : (
+        <>
+          <select
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            value={jiuGrade}
+            onChange={(e) => setJiuGrade(e.target.value)}
+          >
+            <option value="">Faixa (opcional)</option>
+            {JIU_GRADE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+          </select>
+          {jiuGrade && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Graus</span>
+              <div className="flex gap-1">
+                {[0, 1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setJiuDegree(n)}
+                    className={`h-7 w-7 rounded-md border text-xs font-semibold transition-colors ${
+                      jiuDegree === n
+                        ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <label
+              className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-colors ${!bollacha ? "border-blue-500/50 bg-blue-500/10" : "border-border"}`}
+              onClick={() => setBollacha(false)}
+            >
+              Apenas Front Artes Marciais
+            </label>
+            <label
+              className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer text-xs transition-colors ${bollacha ? "border-blue-500/50 bg-blue-500/10" : "border-border"}`}
+              onClick={() => setBollacha(true)}
+            >
+              Front + Bollacha Wrestling BJJ
+            </label>
+          </div>
+        </>
+      )}
+      <div className="flex gap-2">
+        <Button size="sm" onClick={handleConfirm} disabled={enrollMutation.isPending}>
+          {enrollMutation.isPending ? "Salvando..." : "Confirmar"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Depois de cadastrada, a graduação só pode ser alterada por um mestre.
+      </p>
     </div>
   );
 }
@@ -692,17 +819,17 @@ export default function Profile() {
 
       {/* Graduação — visível para todos */}
       {user.role === "student" ? (
-        (studentData?.modalityThai || studentData?.modalityJiu) && (
+        studentData && (
           <div className="bg-card border border-border rounded-lg p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Shield size={18} className="text-primary" />
               <h2 className="font-bold text-lg uppercase tracking-wide">Minha Graduação</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {studentData.modalityThai && (
-                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
-                  <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
-                  {studentData.thaiGrade ? (
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-red-500/20">
+                <span className="text-xs font-bold uppercase tracking-widest text-red-400">Muay Thai</span>
+                {studentData.modalityThai ? (
+                  studentData.thaiGrade ? (
                     <>
                       <PrajiedStripe grade={studentData.thaiGrade} />
                       <p className="font-semibold text-sm">{studentData.thaiGrade}</p>
@@ -710,13 +837,19 @@ export default function Profile() {
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">Não atribuído</p>
-                  )}
-                </div>
-              )}
-              {studentData.modalityJiu && (
-                <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
-                  <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
-                  {studentData.jiuGrade ? (
+                  )
+                ) : (
+                  <EnrollModalityCard
+                    studentId={user.id}
+                    modality="thai"
+                    onEnrolled={() => queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(user.id) })}
+                  />
+                )}
+              </div>
+              <div className="bg-muted/40 rounded-lg p-4 space-y-2 border border-blue-500/20">
+                <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Jiu-Jitsu</span>
+                {studentData.modalityJiu ? (
+                  studentData.jiuGrade ? (
                     <>
                       <JiuBeltWithDegree color={studentData.jiuGradeColor} degree={studentData.jiuDegree} />
                       <p className="font-semibold text-sm">Faixa {studentData.jiuGrade}</p>
@@ -726,9 +859,15 @@ export default function Profile() {
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">Não atribuída</p>
-                  )}
-                </div>
-              )}
+                  )
+                ) : (
+                  <EnrollModalityCard
+                    studentId={user.id}
+                    modality="jiu"
+                    onEnrolled={() => queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(user.id) })}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )

@@ -28,6 +28,7 @@ import type {
   DashboardStats,
   EnrollFaceInput,
   EnrollFaceResult,
+  EnrollModalityInput,
   ErrorEnvelope,
   ForgotPasswordInput,
   GetAttendanceSummaryParams,
@@ -1500,6 +1501,99 @@ export const useUpdateStudent = <
   TContext
 > => {
   return useMutation(getUpdateStudentMutationOptions(options));
+};
+
+/**
+ * Lets a student add a modality (Muay Thai or Jiu-Jitsu) they don't
+already practice, choosing their initial grade themselves — the same
+one-time choice available at registration. Self or master; fails with
+400 if the student already practices that modality (grade fields are
+master-only from then on, same rule as PATCH /students/{id}).
+
+ * @summary Self-service enrollment in a modality not yet practiced
+ */
+export const getEnrollModalityUrl = (id: number) => {
+  return `/api/students/${id}/enroll-modality`;
+};
+
+export const enrollModality = async (
+  id: number,
+  enrollModalityInput: EnrollModalityInput,
+  options?: RequestInit,
+): Promise<StudentProfile> => {
+  return customFetch<StudentProfile>(getEnrollModalityUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(enrollModalityInput),
+  });
+};
+
+export const getEnrollModalityMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollModality>>,
+    TError,
+    { id: number; data: BodyType<EnrollModalityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof enrollModality>>,
+  TError,
+  { id: number; data: BodyType<EnrollModalityInput> },
+  TContext
+> => {
+  const mutationKey = ["enrollModality"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof enrollModality>>,
+    { id: number; data: BodyType<EnrollModalityInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return enrollModality(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EnrollModalityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof enrollModality>>
+>;
+export type EnrollModalityMutationBody = BodyType<EnrollModalityInput>;
+export type EnrollModalityMutationError = ErrorType<void>;
+
+/**
+ * @summary Self-service enrollment in a modality not yet practiced
+ */
+export const useEnrollModality = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof enrollModality>>,
+    TError,
+    { id: number; data: BodyType<EnrollModalityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof enrollModality>>,
+  TError,
+  { id: number; data: BodyType<EnrollModalityInput> },
+  TContext
+> => {
+  return useMutation(getEnrollModalityMutationOptions(options));
 };
 
 /**

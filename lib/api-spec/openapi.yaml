@@ -378,6 +378,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/StudentProfile"
 
+  /students/{id}/enroll-modality:
+    post:
+      operationId: enrollModality
+      tags: [students]
+      summary: Self-service enrollment in a modality not yet practiced
+      description: |
+        Lets a student add a modality (Muay Thai or Jiu-Jitsu) they don't
+        already practice, choosing their initial grade themselves — the same
+        one-time choice available at registration. Self or master; fails with
+        400 if the student already practices that modality (grade fields are
+        master-only from then on, same rule as PATCH /students/{id}).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollModalityInput"
+      responses:
+        "200":
+          description: Updated student profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentProfile"
+        "400":
+          description: Bad request (already practices this modality)
+        "403":
+          description: Forbidden
+
   /sessions:
     get:
       operationId: listSessions
@@ -1089,7 +1124,7 @@ components:
 
     User:
       type: object
-      required: [id, name, email, role, unit, emailVerified, profileComplete, createdAt]
+      required: [id, name, email, role, unit, emailVerified, profileComplete, faceRegistered, createdAt]
       properties:
         id:
           type: integer
@@ -1111,6 +1146,12 @@ components:
             True once the health/liability declaration has been filled out
             (at registration, or via /auth/complete-profile for accounts
             created before that questionnaire existed).
+        faceRegistered:
+          type: boolean
+          description: |
+            True once a reference face descriptor has been enrolled (any
+            role) — required to use the app, same gate pattern as
+            profileComplete.
         phone:
           type: ["string", "null"]
         profilePhotoUrl:
@@ -1252,6 +1293,35 @@ components:
           type: string
         jiuDegree:
           type: integer
+
+    EnrollModalityInput:
+      type: object
+      required: [modality]
+      description: |
+        Graduação inicial é opcional (mesma regra da tela de cadastro) — se
+        omitida, fica em branco até um mestre atribuir depois.
+      properties:
+        modality:
+          type: string
+          enum: [thai, jiu]
+        thaiGrade:
+          type: string
+          nullable: true
+        thaiGradeColor:
+          type: string
+          nullable: true
+        jiuGrade:
+          type: string
+          nullable: true
+        jiuGradeColor:
+          type: string
+          nullable: true
+        jiuDegree:
+          type: integer
+          nullable: true
+        bollacha:
+          type: boolean
+          nullable: true
 
     TrainingSession:
       type: object

@@ -17,7 +17,7 @@ import {
 import { createHash, randomBytes } from "crypto";
 import { sendEmail } from "../lib/email";
 import { verificationEmail, passwordResetEmail, healthDeclarationEmail } from "../lib/emailTemplates";
-import { getSessionUserId, hasHealthDeclaration } from "../lib/authz";
+import { getSessionUserId, getUserGateFlags, hasFaceRegistered } from "../lib/authz";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -114,9 +114,10 @@ function validateHealthFields(input: {
 
 // Monta a representação pública do usuário enviada ao cliente. Note que o
 // passwordHash NUNCA é incluído; datas viram ISO string e campos opcionais
-// são normalizados para null. profileComplete precisa ser calculado à parte
-// (consulta a health_declarations) e passado explicitamente por quem chama.
-function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean) {
+// são normalizados para null. profileComplete/faceRegistered precisam ser
+// calculados à parte (consultas a health_declarations/student_profiles) e
+// passados explicitamente por quem chama.
+function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean, faceRegistered: boolean) {
   return {
     id: user.id,
     name: user.name,
@@ -125,6 +126,7 @@ function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: bo
     unit: user.unit,
     emailVerified: user.emailVerified,
     profileComplete,
+    faceRegistered,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -258,8 +260,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 
   // Acabamos de gravar o termo de saúde nesta mesma requisição: já sabemos
-  // que o perfil está completo, sem precisar de outra consulta.
-  res.status(201).json({ user: serializeUser(user, true), token });
+  // que o perfil está completo. O rosto ainda não foi cadastrado — isso é
+  // feito depois, no gate de navegação (obrigatório para liberar o app).
+  res.status(201).json({ user: serializeUser(user, true, false), token });
 });
 
 // POST /auth/login — valida credenciais e abre a sessão.
@@ -285,7 +288,8 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   (req.session as unknown as Record<string, unknown>).userId = user.id;
   (req.session as unknown as Record<string, unknown>).token = token;
 
-  res.json({ user: serializeUser(user, await hasHealthDeclaration(user.id)), token });
+  const loginFlags = await getUserGateFlags(user.id);
+  res.json({ user: serializeUser(user, loginFlags.profileComplete, loginFlags.faceRegistered), token });
 });
 
 // POST /auth/logout — destrói a sessão atual (cookie deixa de autenticar).
@@ -309,7 +313,8 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
+  const meFlags = await getUserGateFlags(user.id);
+  res.json(serializeUser(user, meFlags.profileComplete, meFlags.faceRegistered));
 });
 
 // POST /auth/complete-profile — preenche retroativamente o termo de saúde e
@@ -394,7 +399,7 @@ router.post("/auth/complete-profile", async (req, res): Promise<void> => {
     logger.error({ err, userId }, "Falha ao emitir e-mail de confirmação do termo de saúde (complete-profile)");
   }
 
-  res.json(serializeUser(user, true));
+  res.json(serializeUser(user, true, await hasFaceRegistered(userId)));
 });
 
 // POST /auth/verify-email — confirma o e-mail a partir do token enviado no

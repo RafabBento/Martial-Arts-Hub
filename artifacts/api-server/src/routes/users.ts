@@ -13,16 +13,19 @@ import {
   UpdateUserBody,
   DeleteUserParams,
 } from "@workspace/api-zod";
-import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields, hasHealthDeclaration, getHealthDeclarationUserIds } from "../lib/authz";
+import {
+  getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields,
+  getUserGateFlags, getHealthDeclarationUserIds, getFaceRegisteredUserIds,
+} from "../lib/authz";
 
 const router: IRouter = Router();
 
 // Representação pública do usuário (sem passwordHash); datas em ISO e opcionais
-// normalizados para null. Mesma forma usada nas rotas de auth. profileComplete
-// precisa ser calculado à parte (consulta a health_declarations) — importante
+// normalizados para null. Mesma forma usada nas rotas de auth.
+// profileComplete/faceRegistered precisam ser calculados à parte — importante
 // manter aqui igual ao de auth.ts, porque Profile.tsx faz setUser(response)
 // direto com o retorno de PATCH /users/:id.
-function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean) {
+function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: boolean, faceRegistered: boolean) {
   return {
     id: user.id,
     name: user.name,
@@ -31,6 +34,7 @@ function serializeUser(user: typeof usersTable.$inferSelect, profileComplete: bo
     unit: user.unit,
     emailVerified: user.emailVerified,
     profileComplete,
+    faceRegistered,
     phone: user.phone ?? null,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     birthDate: user.birthDate ?? null,
@@ -81,9 +85,13 @@ router.get("/users", async (req, res): Promise<void> => {
   }
 
   const users = await dbQuery;
-  // Uma única consulta em lote em vez de N (ver getHealthDeclarationUserIds).
-  const withDeclaration = await getHealthDeclarationUserIds(users.map(u => u.id));
-  res.json(users.map(u => serializeUser(u, withDeclaration.has(u.id))));
+  // Uma única consulta em lote em vez de N por flag (ver get*UserIds em authz.ts).
+  const ids = users.map(u => u.id);
+  const [withDeclaration, withFace] = await Promise.all([
+    getHealthDeclarationUserIds(ids),
+    getFaceRegisteredUserIds(ids),
+  ]);
+  res.json(users.map(u => serializeUser(u, withDeclaration.has(u.id), withFace.has(u.id))));
 });
 
 // GET /users/:id — obtém um único usuário pelo id. Self ou master.
@@ -110,7 +118,8 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
+  const getFlags = await getUserGateFlags(user.id);
+  res.json(serializeUser(user, getFlags.profileComplete, getFlags.faceRegistered));
 });
 
 // PATCH /users/:id — atualização parcial dos dados de um usuário. Self ou
@@ -167,7 +176,8 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(serializeUser(user, await hasHealthDeclaration(user.id)));
+  const patchFlags = await getUserGateFlags(user.id);
+  res.json(serializeUser(user, patchFlags.profileComplete, patchFlags.faceRegistered));
 });
 
 // DELETE /users/:id — remove um usuário pelo id. Master-only.

@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useUpdateUser,
   useUpdateStudent,
+  useEnrollModality,
   useGetStudent,
   useResendVerification,
   getListUsersQueryKey,
@@ -170,6 +171,7 @@ export default function ProfileScreen() {
   // Mutações para atualizar dados do usuário e do aluno (plano Bollacha).
   const updateUserMutation = useUpdateUser();
   const updateStudentMutation = useUpdateStudent();
+  const enrollModalityMutation = useEnrollModality();
   const resendVerificationMutation = useResendVerification();
 
   // Professores/admins têm permissões e exibição diferentes dos alunos.
@@ -341,6 +343,28 @@ export default function ProfileScreen() {
     );
   };
 
+  // Aluno adiciona uma modalidade que ainda não pratica, escolhendo a
+  // graduação inicial (ou pulando). Depois de cadastrada, só um mestre pode
+  // alterar — mesma regra aplicada no backend.
+  const handleEnrollModality = (modality: "thai" | "jiu", data: { thaiGrade?: string; thaiGradeColor?: string; jiuGrade?: string; jiuGradeColor?: string; jiuDegree?: number }) => {
+    if (!user) return;
+    enrollModalityMutation.mutate(
+      { id: user.id, data: { modality, ...data } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetStudentQueryKey(user.id) });
+          refetchStudent();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast(modality === "thai" ? "Muay Thai adicionado ao seu perfil!" : "Jiu-Jitsu adicionado ao seu perfil!");
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { data?: { error?: string } })?.data?.error;
+          showToast(msg ?? "Erro ao adicionar modalidade");
+        },
+      }
+    );
+  };
+
   // Copia a chave PIX (e-mail) para a área de transferência.
   const copyPix = async () => {
     await Clipboard.setStringAsync("frontrecebimento@gmail.com");
@@ -369,7 +393,9 @@ export default function ProfileScreen() {
   const jiuGradeColor = isTeacherOrAdmin ? (user as any).jiuGradeColor : studentData?.jiuGradeColor;
   const jiuDegree = isTeacherOrAdmin ? (user as any).jiuDegree : studentData?.jiuDegree;
   const currentThaiEntry = PRAJIED_GRADES.find(p => p.label === thaiGrade || p.value === thaiGrade);
-  const showGraduation = isTeacherOrAdmin || hasThai || hasJiu;
+  // Sempre exibida: aluno sem uma modalidade vê o botão de cadastrar; com ela,
+  // vê a graduação (ou "Não atribuído" até um mestre definir).
+  const showGraduation = true;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -752,63 +778,85 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.gradGrid}>
-              {(isTeacherOrAdmin || hasThai) && (
-                <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.thai + "40" }]}>
-                  <Text style={[styles.gradModality, { color: colors.thai, fontFamily: "Inter_700Bold" }]}>MUAY THAI</Text>
-                  {thaiGrade ? (
-                    <>
-                      <PrajiedStripe grade={thaiGrade} />
-                      <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                        {currentThaiEntry?.label ?? thaiGrade}
-                      </Text>
-                      <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Prajied</Text>
-                    </>
-                  ) : (
-                    <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuído</Text>
-                  )}
-                  {isTeacherOrAdmin && (
-                    <TouchableOpacity
-                      style={[styles.gradEditBtn, { borderColor: colors.thai + "60" }]}
-                      onPress={() => setThaiPickerOpen(true)}
-                      disabled={updateUserMutation.isPending}
-                    >
-                      <Ionicons name="pencil-outline" size={12} color={colors.thai} />
-                      <Text style={[styles.gradEditText, { color: colors.thai, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
+              <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.thai + "40" }]}>
+                <Text style={[styles.gradModality, { color: colors.thai, fontFamily: "Inter_700Bold" }]}>MUAY THAI</Text>
+                {!isTeacherOrAdmin && !hasThai ? (
+                  <TouchableOpacity
+                    style={[styles.gradEnrollBtn, { borderColor: colors.thai + "60" }]}
+                    onPress={() => setThaiPickerOpen(true)}
+                    disabled={enrollModalityMutation.isPending}
+                  >
+                    <Ionicons name="add-circle-outline" size={14} color={colors.thai} />
+                    <Text style={[styles.gradEditText, { color: colors.thai, fontFamily: "Inter_500Medium" }]}>Cadastrar</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {thaiGrade ? (
+                      <>
+                        <PrajiedStripe grade={thaiGrade} />
+                        <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                          {currentThaiEntry?.label ?? thaiGrade}
+                        </Text>
+                        <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Prajied</Text>
+                      </>
+                    ) : (
+                      <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuído</Text>
+                    )}
+                    {isTeacherOrAdmin && (
+                      <TouchableOpacity
+                        style={[styles.gradEditBtn, { borderColor: colors.thai + "60" }]}
+                        onPress={() => setThaiPickerOpen(true)}
+                        disabled={updateUserMutation.isPending}
+                      >
+                        <Ionicons name="pencil-outline" size={12} color={colors.thai} />
+                        <Text style={[styles.gradEditText, { color: colors.thai, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </View>
 
-              {(isTeacherOrAdmin || hasJiu) && (
-                <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.jiu + "40" }]}>
-                  <Text style={[styles.gradModality, { color: colors.jiu, fontFamily: "Inter_700Bold" }]}>JIU-JITSU</Text>
-                  {jiuGrade ? (
-                    <>
-                      {jiuGradeColor && <JiuBeltStripe color={jiuGradeColor} degree={jiuDegree} />}
-                      <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                        Faixa {jiuGrade}
-                      </Text>
-                      {(jiuDegree ?? 0) > 0 ? (
-                        <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{jiuDegree}º grau</Text>
-                      ) : (
-                        <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Faixa</Text>
-                      )}
-                    </>
-                  ) : (
-                    <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuída</Text>
-                  )}
-                  {isTeacherOrAdmin && (
-                    <TouchableOpacity
-                      style={[styles.gradEditBtn, { borderColor: colors.jiu + "60" }]}
-                      onPress={() => { setJiuDegreeDraft(jiuDegree ?? 0); setJiuGradePickerOpen(true); }}
-                      disabled={updateUserMutation.isPending}
-                    >
-                      <Ionicons name="pencil-outline" size={12} color={colors.jiu} />
-                      <Text style={[styles.gradEditText, { color: colors.jiu, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
+              <View style={[styles.gradBox, { backgroundColor: colors.background, borderColor: colors.jiu + "40" }]}>
+                <Text style={[styles.gradModality, { color: colors.jiu, fontFamily: "Inter_700Bold" }]}>JIU-JITSU</Text>
+                {!isTeacherOrAdmin && !hasJiu ? (
+                  <TouchableOpacity
+                    style={[styles.gradEnrollBtn, { borderColor: colors.jiu + "60" }]}
+                    onPress={() => { setJiuDegreeDraft(0); setJiuGradePickerOpen(true); }}
+                    disabled={enrollModalityMutation.isPending}
+                  >
+                    <Ionicons name="add-circle-outline" size={14} color={colors.jiu} />
+                    <Text style={[styles.gradEditText, { color: colors.jiu, fontFamily: "Inter_500Medium" }]}>Cadastrar</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {jiuGrade ? (
+                      <>
+                        {jiuGradeColor && <JiuBeltStripe color={jiuGradeColor} degree={jiuDegree} />}
+                        <Text style={[styles.gradValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                          Faixa {jiuGrade}
+                        </Text>
+                        {(jiuDegree ?? 0) > 0 ? (
+                          <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{jiuDegree}º grau</Text>
+                        ) : (
+                          <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Faixa</Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={[styles.gradSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Não atribuída</Text>
+                    )}
+                    {isTeacherOrAdmin && (
+                      <TouchableOpacity
+                        style={[styles.gradEditBtn, { borderColor: colors.jiu + "60" }]}
+                        onPress={() => { setJiuDegreeDraft(jiuDegree ?? 0); setJiuGradePickerOpen(true); }}
+                        disabled={updateUserMutation.isPending}
+                      >
+                        <Ionicons name="pencil-outline" size={12} color={colors.jiu} />
+                        <Text style={[styles.gradEditText, { color: colors.jiu, fontFamily: "Inter_500Medium" }]}>Alterar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -823,11 +871,22 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Picker prajied (Muay Thai) — mestre */}
+      {/* Picker prajied (Muay Thai) — mestre altera; aluno sem a modalidade cadastra pela 1ª vez */}
       <Modal visible={thaiPickerOpen} transparent animationType="slide" onRequestClose={() => setThaiPickerOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setThaiPickerOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Prajied — Muay Thai</Text>
+            {!isTeacherOrAdmin && (
+              <TouchableOpacity
+                style={[styles.skipRow, { borderColor: colors.border }]}
+                onPress={() => {
+                  handleEnrollModality("thai", {});
+                  setThaiPickerOpen(false);
+                }}
+              >
+                <Text style={[styles.skipText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Cadastrar sem graduação por agora</Text>
+              </TouchableOpacity>
+            )}
             <ScrollView style={{ maxHeight: 380 }}>
               {PRAJIED_GRADES.map((g) => {
                 const selected = g.label === thaiGrade || g.value === thaiGrade;
@@ -836,7 +895,11 @@ export default function ProfileScreen() {
                     key={g.value}
                     style={[styles.sheetRow, { borderColor: selected ? colors.thai : colors.border, backgroundColor: selected ? colors.thai + "15" : "transparent" }]}
                     onPress={() => {
-                      handleMasterGrade({ thaiGrade: g.label, thaiGradeColor: g.primary });
+                      if (isTeacherOrAdmin) {
+                        handleMasterGrade({ thaiGrade: g.label, thaiGradeColor: g.primary });
+                      } else {
+                        handleEnrollModality("thai", { thaiGrade: g.label, thaiGradeColor: g.primary });
+                      }
                       setThaiPickerOpen(false);
                     }}
                   >
@@ -851,11 +914,22 @@ export default function ProfileScreen() {
         </Pressable>
       </Modal>
 
-      {/* Picker faixa (Jiu-Jitsu) — mestre */}
+      {/* Picker faixa (Jiu-Jitsu) — mestre altera; aluno sem a modalidade cadastra pela 1ª vez */}
       <Modal visible={jiuGradePickerOpen} transparent animationType="slide" onRequestClose={() => setJiuGradePickerOpen(false)}>
         <Pressable style={styles.sheetBackdrop} onPress={() => setJiuGradePickerOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]} onPress={(e) => e.stopPropagation()}>
             <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Faixa — Jiu-Jitsu</Text>
+            {!isTeacherOrAdmin && (
+              <TouchableOpacity
+                style={[styles.skipRow, { borderColor: colors.border }]}
+                onPress={() => {
+                  handleEnrollModality("jiu", {});
+                  setJiuGradePickerOpen(false);
+                }}
+              >
+                <Text style={[styles.skipText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Cadastrar sem graduação por agora</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.degreeRow}>
               <Text style={[styles.degreeLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>Graus</Text>
               {[0, 1, 2, 3, 4].map((n) => {
@@ -879,7 +953,11 @@ export default function ProfileScreen() {
                   key={label}
                   style={[styles.sheetRow, { borderColor: selected ? colors.jiu : colors.border, backgroundColor: selected ? colors.jiu + "15" : "transparent" }]}
                   onPress={() => {
-                    handleMasterGrade({ jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "", jiuDegree: jiuDegreeDraft });
+                    if (isTeacherOrAdmin) {
+                      handleMasterGrade({ jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "", jiuDegree: jiuDegreeDraft });
+                    } else {
+                      handleEnrollModality("jiu", { jiuGrade: label, jiuGradeColor: colorEntry?.value ?? "", jiuDegree: jiuDegreeDraft });
+                    }
                     setJiuGradePickerOpen(false);
                   }}
                 >
@@ -1059,6 +1137,9 @@ const styles = StyleSheet.create({
   gradSub: { fontSize: 11 },
   gradEditBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, marginTop: 2 },
   gradEditText: { fontSize: 12 },
+  gradEnrollBtn: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  skipRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 1, marginBottom: 4 },
+  skipText: { fontSize: 13 },
 
   sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: 18, gap: 8 },

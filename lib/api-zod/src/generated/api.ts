@@ -81,6 +81,11 @@ export const LoginResponse = zod.object({
       .describe(
         "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
       ),
+    faceRegistered: zod
+      .boolean()
+      .describe(
+        "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
+      ),
     phone: zod.string().nullish(),
     profilePhotoUrl: zod.string().nullish(),
     birthDate: zod.string().nullish(),
@@ -118,6 +123,11 @@ export const GetMeResponse = zod.object({
     .boolean()
     .describe(
       "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
+  faceRegistered: zod
+    .boolean()
+    .describe(
+      "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
     ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
@@ -201,6 +211,11 @@ export const CompleteProfileResponse = zod.object({
     .describe(
       "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
     ),
+  faceRegistered: zod
+    .boolean()
+    .describe(
+      "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -263,6 +278,11 @@ export const ListUsersResponseItem = zod.object({
     .describe(
       "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
     ),
+  faceRegistered: zod
+    .boolean()
+    .describe(
+      "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
+    ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
   birthDate: zod.string().nullish(),
@@ -296,6 +316,11 @@ export const GetUserResponse = zod.object({
     .boolean()
     .describe(
       "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
+  faceRegistered: zod
+    .boolean()
+    .describe(
+      "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
     ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
@@ -349,6 +374,11 @@ export const UpdateUserResponse = zod.object({
     .boolean()
     .describe(
       "True once the health\/liability declaration has been filled out\n(at registration, or via \/auth\/complete-profile for accounts\ncreated before that questionnaire existed).\n",
+    ),
+  faceRegistered: zod
+    .boolean()
+    .describe(
+      "True once a reference face descriptor has been enrolled (any\nrole) — required to use the app, same gate pattern as\nprofileComplete.\n",
     ),
   phone: zod.string().nullish(),
   profilePhotoUrl: zod.string().nullish(),
@@ -462,6 +492,58 @@ export const UpdateStudentBody = zod.object({
 });
 
 export const UpdateStudentResponse = zod.object({
+  id: zod.number(),
+  userId: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["student", "teacher", "admin"]),
+  unit: zod.enum(["matriz", "panobianco", "upfitness"]),
+  profilePhotoUrl: zod.string().nullish(),
+  modalityThai: zod.boolean(),
+  modalityJiu: zod.boolean(),
+  bollacha: zod.boolean(),
+  scholarship: zod
+    .boolean()
+    .describe("Bolsista — isento de mensalidade permanentemente."),
+  thaiGrade: zod.string().nullish(),
+  jiuGrade: zod.string().nullish(),
+  thaiGradeColor: zod.string().nullish(),
+  jiuGradeColor: zod.string().nullish(),
+  jiuDegree: zod.number().nullish(),
+  hasFaceDescriptor: zod.boolean().optional(),
+  totalAttendanceThai: zod.number().optional(),
+  totalAttendanceJiu: zod.number().optional(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * Lets a student add a modality (Muay Thai or Jiu-Jitsu) they don't
+already practice, choosing their initial grade themselves — the same
+one-time choice available at registration. Self or master; fails with
+400 if the student already practices that modality (grade fields are
+master-only from then on, same rule as PATCH /students/{id}).
+
+ * @summary Self-service enrollment in a modality not yet practiced
+ */
+export const EnrollModalityParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EnrollModalityBody = zod
+  .object({
+    modality: zod.enum(["thai", "jiu"]),
+    thaiGrade: zod.string().nullish(),
+    thaiGradeColor: zod.string().nullish(),
+    jiuGrade: zod.string().nullish(),
+    jiuGradeColor: zod.string().nullish(),
+    jiuDegree: zod.number().nullish(),
+    bollacha: zod.boolean().nullish(),
+  })
+  .describe(
+    "Graduação inicial é opcional (mesma regra da tela de cadastro) — se\nomitida, fica em branco até um mestre atribuir depois.\n",
+  );
+
+export const EnrollModalityResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
   name: zod.string(),

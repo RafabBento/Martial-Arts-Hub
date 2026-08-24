@@ -4,8 +4,8 @@
 // continua decidindo sozinha SE e COMO aplicar a checagem (self, master-only,
 // etc.) — este módulo só centraliza a leitura da sessão e a busca do requester.
 // =============================================================================
-import { eq, inArray } from "drizzle-orm";
-import { db, usersTable, healthDeclarationsTable } from "@workspace/db";
+import { eq, inArray, isNotNull, and } from "drizzle-orm";
+import { db, usersTable, healthDeclarationsTable, studentProfilesTable } from "@workspace/db";
 
 // Lê o id do usuário autenticado a partir da sessão (cookie ou Bearer, já
 // populada por bearerAuth). Ausente = não autenticado.
@@ -52,6 +52,40 @@ export async function getHealthDeclarationUserIds(userIds: number[]): Promise<Se
     .from(healthDeclarationsTable)
     .where(inArray(healthDeclarationsTable.userId, userIds));
   return new Set(rows.map(r => r.userId));
+}
+
+// Indica se o usuário já tem um rosto de referência cadastrado (qualquer
+// papel — student_profiles é criada automaticamente na primeira vez que
+// professor/admin também cadastram o rosto, ver routes/face.ts). Usado para
+// computar "faceRegistered" no User serializado e no gate de navegação
+// (reconhecimento facial é obrigatório para todos: sem rosto cadastrado, não
+// entra no app).
+export async function hasFaceRegistered(userId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: studentProfilesTable.id })
+    .from(studentProfilesTable)
+    .where(and(eq(studentProfilesTable.userId, userId), isNotNull(studentProfilesTable.faceDescriptor)));
+  return !!row;
+}
+
+// Versão em lote de hasFaceRegistered, mesmo motivo de getHealthDeclarationUserIds.
+export async function getFaceRegisteredUserIds(userIds: number[]): Promise<Set<number>> {
+  if (userIds.length === 0) return new Set();
+  const rows = await db
+    .select({ userId: studentProfilesTable.userId })
+    .from(studentProfilesTable)
+    .where(and(inArray(studentProfilesTable.userId, userIds), isNotNull(studentProfilesTable.faceDescriptor)));
+  return new Set(rows.map(r => r.userId));
+}
+
+// Calcula os dois flags de gate de navegação de uma vez (evita duas consultas
+// sequenciais espalhadas pelas rotas de auth/users).
+export async function getUserGateFlags(userId: number): Promise<{ profileComplete: boolean; faceRegistered: boolean }> {
+  const [profileComplete, faceRegistered] = await Promise.all([
+    hasHealthDeclaration(userId),
+    hasFaceRegistered(userId),
+  ]);
+  return { profileComplete, faceRegistered };
 }
 
 // Campos de graduação: só professor/admin pode alterá-los. Mesmos nomes em

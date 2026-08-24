@@ -129,6 +129,11 @@ export interface User {
 created before that questionnaire existed).
  */
   profileComplete: boolean;
+  /** True once a reference face descriptor has been enrolled (any
+role) — required to use the app, same gate pattern as
+profileComplete.
+ */
+  faceRegistered: boolean;
   /** @nullable */
   phone?: string | null;
   /** @nullable */
@@ -271,6 +276,29 @@ export interface StudentProfileUpdate {
   thaiGradeColor?: string;
   jiuGradeColor?: string;
   jiuDegree?: number;
+}
+
+export type EnrollModalityInputModality =
+  (typeof EnrollModalityInputModality)[keyof typeof EnrollModalityInputModality];
+
+export const EnrollModalityInputModality = {
+  thai: "thai",
+  jiu: "jiu",
+} as const;
+
+/**
+ * Graduação inicial é opcional (mesma regra da tela de cadastro) — se
+omitida, fica em branco até um mestre atribuir depois.
+
+ */
+export interface EnrollModalityInput {
+  modality: EnrollModalityInputModality;
+  thaiGrade?: string | null;
+  thaiGradeColor?: string | null;
+  jiuGrade?: string | null;
+  jiuGradeColor?: string | null;
+  jiuDegree?: number | null;
+  bollacha?: boolean | null;
 }
 
 export type TrainingSessionModality =

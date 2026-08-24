@@ -13,6 +13,7 @@ import {
   GetStudentParams,
   UpdateStudentParams,
   UpdateStudentBody,
+  EnrollModalityBody,
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
 import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields } from "../lib/authz";
@@ -289,6 +290,7 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     userId: user.id,
     name: user.name,
     email: user.email,
+    role: user.role,
     unit: user.unit,
     profilePhotoUrl: user.profilePhotoUrl ?? null,
     modalityThai: profile.modalityThai,
@@ -307,5 +309,92 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
   });
 });
 
+// POST /students/:id/enroll-modality — o próprio aluno adiciona uma
+// modalidade que ainda não pratica, escolhendo a graduação inicial (mesma
+// escolha única disponível no cadastro). Self ou master; falha com 400 se o
+// aluno já pratica essa modalidade — a partir daí a graduação só pode ser
+// alterada por um mestre (mesma regra do PATCH /students/:id).
+router.post("/students/:id/enroll-modality", async (req, res): Promise<void> => {
+  const params = UpdateStudentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const body = EnrollModalityBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const requester = await getRequester(getSessionUserId(req));
+  if (!requester) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  const isMaster = isMasterRole(requester.role);
+  if (!isMaster && requester.id !== params.data.id) {
+    res.status(403).json({ error: "Você só pode editar os próprios dados" });
+    return;
+  }
+
+  const [profile] = await db.select().from(studentProfilesTable).where(eq(studentProfilesTable.userId, params.data.id));
+  if (!profile) {
+    res.status(404).json({ error: "Student not found" });
+    return;
+  }
+
+  const { modality, thaiGrade, thaiGradeColor, jiuGrade, jiuGradeColor, jiuDegree, bollacha } = body.data;
+
+  if (modality === "thai" && profile.modalityThai) {
+    res.status(400).json({ error: "Você já pratica Muay Thai." });
+    return;
+  }
+  if (modality === "jiu" && profile.modalityJiu) {
+    res.status(400).json({ error: "Você já pratica Jiu-Jitsu." });
+    return;
+  }
+
+  const updateData = modality === "thai"
+    ? { modalityThai: true, thaiGrade: thaiGrade ?? null, thaiGradeColor: thaiGradeColor ?? null }
+    : {
+        modalityJiu: true,
+        jiuGrade: jiuGrade ?? null,
+        jiuGradeColor: jiuGradeColor ?? null,
+        jiuDegree: jiuDegree ?? null,
+        ...(bollacha != null ? { bollacha } : {}),
+      };
+
+  const [updated] = await db
+    .update(studentProfilesTable)
+    .set(updateData)
+    .where(eq(studentProfilesTable.userId, params.data.id))
+    .returning();
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
+
+  res.json({
+    id: updated.id,
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    unit: user.unit,
+    profilePhotoUrl: user.profilePhotoUrl ?? null,
+    modalityThai: updated.modalityThai,
+    modalityJiu: updated.modalityJiu,
+    bollacha: updated.bollacha,
+    scholarship: updated.scholarship,
+    thaiGrade: updated.thaiGrade ?? null,
+    jiuGrade: updated.jiuGrade ?? null,
+    jiuDegree: updated.jiuDegree ?? null,
+    thaiGradeColor: updated.thaiGradeColor ?? null,
+    jiuGradeColor: updated.jiuGradeColor ?? null,
+    hasFaceDescriptor: updated.faceDescriptor !== null,
+    totalAttendanceThai: 0,
+    totalAttendanceJiu: 0,
+    createdAt: user.createdAt.toISOString(),
+  });
+});
 
 export default router;
