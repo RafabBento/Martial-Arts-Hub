@@ -6,6 +6,7 @@
 // lugar de qualquer rota quando user.faceRegistered é false (depois do gate
 // de termo de saúde, ver CompleteProfile.tsx).
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLogout } from "@workspace/api-client-react";
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export default function CompleteFaceEnrollment() {
   const { user, setUser } = useAuth();
   const [enrollOpen, setEnrollOpen] = useState(false);
   const logoutMutation = useLogout();
+  const queryClient = useQueryClient();
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, { onSuccess: () => setUser(null) });
@@ -55,8 +57,10 @@ export default function CompleteFaceEnrollment() {
         title="Cadastro facial obrigatório"
         onClose={() => setEnrollOpen(false)}
         onDone={(result) => {
+          // Refaz /me em vez de assumir sucesso localmente — garante que o
+          // gate de navegação reflete o que o servidor realmente tem salvo.
           if (result.anglesStored > 0) {
-            setUser({ ...user, faceRegistered: true });
+            queryClient.invalidateQueries({ queryKey: ["me"] });
           }
         }}
       />

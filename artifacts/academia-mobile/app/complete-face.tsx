@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getMe } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { FaceEnrollModal } from "@/components/FaceEnrollModal";
@@ -64,8 +65,12 @@ export default function CompleteFaceScreen() {
         onClose={() => setEnrollOpen(false)}
         onDone={(result) => {
           if (result.anglesStored > 0) {
-            setUser({ ...user, faceRegistered: true });
-            router.replace("/(tabs)");
+            // Refaz /me em vez de assumir sucesso localmente — garante que o
+            // gate de navegação reflete o que o servidor realmente tem salvo.
+            getMe().then((freshUser) => {
+              setUser(freshUser);
+              router.replace("/(tabs)");
+            });
           }
         }}
       />
