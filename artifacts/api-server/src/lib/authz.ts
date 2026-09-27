@@ -5,7 +5,7 @@
 // etc.) — este módulo só centraliza a leitura da sessão e a busca do requester.
 // =============================================================================
 import { eq, inArray, isNotNull, and } from "drizzle-orm";
-import { db, usersTable, healthDeclarationsTable, studentProfilesTable } from "@workspace/db";
+import { db, usersTable, healthDeclarationsTable, studentProfilesTable, studentFaceDescriptorsTable } from "@workspace/db";
 
 // Lê o id do usuário autenticado a partir da sessão (cookie ou Bearer, já
 // populada por bearerAuth). Ausente = não autenticado.
@@ -60,22 +60,42 @@ export async function getHealthDeclarationUserIds(userIds: number[]): Promise<Se
 // computar "faceRegistered" no User serializado e no gate de navegação
 // (reconhecimento facial é obrigatório para todos: sem rosto cadastrado, não
 // entra no app).
+//
+// Existem duas fontes: o campo legado studentProfilesTable.faceDescriptor
+// (1 descritor, preenchido por POST /face/profile-photo) e a tabela
+// student_face_descriptors (N ângulos, preenchida por POST /face/enroll —
+// o fluxo de cadastro obrigatório de fato usado pelos usuários). É preciso
+// checar as duas: checar só a primeira fazia o gate considerar "não
+// cadastrado" quem só passou pelo /face/enroll, pedindo o cadastro de novo
+// a cada login.
 export async function hasFaceRegistered(userId: number): Promise<boolean> {
-  const [row] = await db
-    .select({ id: studentProfilesTable.id })
-    .from(studentProfilesTable)
-    .where(and(eq(studentProfilesTable.userId, userId), isNotNull(studentProfilesTable.faceDescriptor)));
-  return !!row;
+  const [profileRows, descriptorRows] = await Promise.all([
+    db
+      .select({ id: studentProfilesTable.id })
+      .from(studentProfilesTable)
+      .where(and(eq(studentProfilesTable.userId, userId), isNotNull(studentProfilesTable.faceDescriptor))),
+    db
+      .select({ id: studentFaceDescriptorsTable.id })
+      .from(studentFaceDescriptorsTable)
+      .where(eq(studentFaceDescriptorsTable.userId, userId)),
+  ]);
+  return profileRows.length > 0 || descriptorRows.length > 0;
 }
 
 // Versão em lote de hasFaceRegistered, mesmo motivo de getHealthDeclarationUserIds.
 export async function getFaceRegisteredUserIds(userIds: number[]): Promise<Set<number>> {
   if (userIds.length === 0) return new Set();
-  const rows = await db
-    .select({ userId: studentProfilesTable.userId })
-    .from(studentProfilesTable)
-    .where(and(inArray(studentProfilesTable.userId, userIds), isNotNull(studentProfilesTable.faceDescriptor)));
-  return new Set(rows.map(r => r.userId));
+  const [profileRows, descriptorRows] = await Promise.all([
+    db
+      .select({ userId: studentProfilesTable.userId })
+      .from(studentProfilesTable)
+      .where(and(inArray(studentProfilesTable.userId, userIds), isNotNull(studentProfilesTable.faceDescriptor))),
+    db
+      .select({ userId: studentFaceDescriptorsTable.userId })
+      .from(studentFaceDescriptorsTable)
+      .where(inArray(studentFaceDescriptorsTable.userId, userIds)),
+  ]);
+  return new Set([...profileRows.map(r => r.userId), ...descriptorRows.map(r => r.userId)]);
 }
 
 // Calcula os dois flags de gate de navegação de uma vez (evita duas consultas

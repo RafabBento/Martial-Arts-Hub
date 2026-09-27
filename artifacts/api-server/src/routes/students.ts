@@ -16,7 +16,7 @@ import {
   EnrollModalityBody,
 } from "@workspace/api-zod";
 import { sql } from "drizzle-orm";
-import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields } from "../lib/authz";
+import { getSessionUserId, getRequester, isMasterRole, GRADE_FIELDS, stripFields, hasFaceRegistered, getFaceRegisteredUserIds } from "../lib/authz";
 
 // Unidades (filiais) válidas da academia.
 type Unit = "matriz" | "panobianco" | "upfitness";
@@ -80,7 +80,6 @@ router.get("/students", async (req, res): Promise<void> => {
       jiuDegree: studentProfilesTable.jiuDegree,
       thaiGradeColor: studentProfilesTable.thaiGradeColor,
       jiuGradeColor: studentProfilesTable.jiuGradeColor,
-      faceDescriptor: studentProfilesTable.faceDescriptor,
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
@@ -95,6 +94,10 @@ router.get("/students", async (req, res): Promise<void> => {
   }
 
   const students = await joinQuery;
+
+  // Rosto cadastrado: considera tanto o campo legado (faceDescriptor) quanto
+  // os ângulos gravados por /face/enroll (ver hasFaceRegistered em authz.ts).
+  const faceRegisteredIds = await getFaceRegisteredUserIds(students.map(s => s.userId));
 
   // Presenças de Muay Thai agregadas por aluno. Regra: sessões de sábado
   // (EXTRACT(DOW)=6) contam em dobro; nas demais, conta 1.
@@ -142,7 +145,7 @@ router.get("/students", async (req, res): Promise<void> => {
     jiuDegree: s.jiuDegree ?? null,
     thaiGradeColor: s.thaiGradeColor ?? null,
     jiuGradeColor: s.jiuGradeColor ?? null,
-    hasFaceDescriptor: s.faceDescriptor !== null,
+    hasFaceDescriptor: faceRegisteredIds.has(s.userId),
     totalAttendanceThai: thaiMap.get(s.userId) ?? 0,
     totalAttendanceJiu: jiuMap.get(s.userId) ?? 0,
     createdAt: s.createdAt.toISOString(),
@@ -187,7 +190,6 @@ router.get("/students/:id", async (req, res): Promise<void> => {
       jiuDegree: studentProfilesTable.jiuDegree,
       thaiGradeColor: studentProfilesTable.thaiGradeColor,
       jiuGradeColor: studentProfilesTable.jiuGradeColor,
-      faceDescriptor: studentProfilesTable.faceDescriptor,
       createdAt: usersTable.createdAt,
     })
     .from(usersTable)
@@ -215,6 +217,8 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     .innerJoin(trainingSessionsTable, eq(attendanceTable.sessionId, trainingSessionsTable.id))
     .where(and(eq(attendanceTable.studentId, student.userId), eq(trainingSessionsTable.modality, "jiu")));
 
+  const hasFace = await hasFaceRegistered(student.userId);
+
   res.json({
     id: student.id,
     userId: student.userId,
@@ -232,7 +236,7 @@ router.get("/students/:id", async (req, res): Promise<void> => {
     jiuDegree: student.jiuDegree ?? null,
     thaiGradeColor: student.thaiGradeColor ?? null,
     jiuGradeColor: student.jiuGradeColor ?? null,
-    hasFaceDescriptor: student.faceDescriptor !== null,
+    hasFaceDescriptor: hasFace,
     totalAttendanceThai: thaiCount[0]?.count ?? 0,
     totalAttendanceJiu: jiuCount[0]?.count ?? 0,
     createdAt: student.createdAt.toISOString(),
@@ -284,6 +288,7 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
   }
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
+  const hasFace = await hasFaceRegistered(params.data.id);
 
   res.json({
     id: profile.id,
@@ -302,7 +307,7 @@ router.patch("/students/:id", async (req, res): Promise<void> => {
     jiuDegree: profile.jiuDegree ?? null,
     thaiGradeColor: profile.thaiGradeColor ?? null,
     jiuGradeColor: profile.jiuGradeColor ?? null,
-    hasFaceDescriptor: profile.faceDescriptor !== null,
+    hasFaceDescriptor: hasFace,
     totalAttendanceThai: 0,
     totalAttendanceJiu: 0,
     createdAt: user.createdAt.toISOString(),
@@ -372,6 +377,7 @@ router.post("/students/:id/enroll-modality", async (req, res): Promise<void> => 
     .returning();
 
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, params.data.id));
+  const hasFace = await hasFaceRegistered(params.data.id);
 
   res.json({
     id: updated.id,
@@ -390,7 +396,7 @@ router.post("/students/:id/enroll-modality", async (req, res): Promise<void> => 
     jiuDegree: updated.jiuDegree ?? null,
     thaiGradeColor: updated.thaiGradeColor ?? null,
     jiuGradeColor: updated.jiuGradeColor ?? null,
-    hasFaceDescriptor: updated.faceDescriptor !== null,
+    hasFaceDescriptor: hasFace,
     totalAttendanceThai: 0,
     totalAttendanceJiu: 0,
     createdAt: user.createdAt.toISOString(),
